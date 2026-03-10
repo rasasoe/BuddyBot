@@ -1,0 +1,111 @@
+# Waypoint Database for BuddyBot Navigation
+#
+# This file defines semantic waypoints that can be referenced by name.
+# Each waypoint includes pose information and optional navigation parameters.
+#
+# Coordinate System: map frame (from SLAM/localization)
+# Units: meters, radians
+#
+# Integration Notes:
+# - Poses should be obtained from SLAM mapping process
+# - Update coordinates after map changes
+# - Test all waypoints for reachability and safety
+
+waypoints:
+  # Living room waypoints
+  living_room_center:
+    pose:
+      x: 2.0
+      y: 0.0
+      theta: 0.0
+    description: "Center of living room"
+    approach_distance: 0.5
+
+  living_room_sofa:
+    pose:
+      x: 1.5
+      y: -1.0
+      theta: 1.57  # 90 degrees
+    description: "Near sofa area"
+    approach_distance: 0.3
+
+  # Kitchen waypoints
+  kitchen:
+    pose:
+      x: 4.0
+      y: 2.0
+      theta: 0.0
+    description: "Kitchen counter area"
+    approach_distance: 0.8
+
+  kitchen_table:
+    pose:
+      x: 3.5
+      y: 1.5
+      theta: 0.78  # 45 degrees
+    description: "Kitchen dining table"
+    approach_distance: 0.5
+
+  # Bedroom waypoints
+  bedroom:
+    pose:
+      x: -1.0
+      y: 3.0
+      theta: 3.14  # 180 degrees
+    description: "Bedroom entrance"
+    approach_distance: 0.6
+
+  # Door waypoints
+  front_door:
+    pose:
+      x: 0.0
+      y: -2.0
+      theta: 1.57
+    description: "Front door area"
+    approach_distance: 0.2
+
+  back_door:
+    pose:
+      x: 5.0
+      y: -1.0
+      theta: -1.57  # -90 degrees
+    description: "Back door area"
+    approach_distance: 0.2
+
+  # Utility waypoints
+  charging_station:
+    pose:
+      x: -2.0
+      y: 0.0
+      theta: 0.0
+    description: "Robot charging station"
+    approach_distance: 0.1
+
+  home_base:
+    pose:
+      x: 0.0
+      y: 0.0
+      theta: 0.0
+    description: "Home base position"
+    approach_distance: 0.0
+
+# Semantic destination mapping
+# Maps high-level commands to waypoint sequences
+destinations:
+  greet_guest:
+    sequence: ["front_door", "living_room_center"]
+    description: "Greet guest at front door then move to living room"
+
+  serve_kitchen:
+    sequence: ["kitchen", "kitchen_table"]
+    description: "Move to kitchen then dining area"
+
+  return_home:
+    sequence: ["home_base"]
+    description: "Return to home base position"
+
+# Navigation constraints
+constraints:
+  max_speed: 0.5  # m/s
+  max_turn_rate: 1.0  # rad/s
+  safety_margin: 0.3  # meters from obstacles

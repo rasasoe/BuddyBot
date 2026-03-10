@@ -1,0 +1,46 @@
+# BuddyBot Vision Configuration
+
+# Camera settings
+camera:
+  device: '/dev/video0'
+  width: 640
+  height: 480
+  fps: 30.0
+  publish_rate: 30.0
+  frame_id: 'camera_link'
+
+# Person detector settings
+detector:
+  model_config: 'models/mobilenet_ssd_v2_coco.pbtxt'
+  model_weights: 'models/mobilenet_ssd_v2_coco.pb'
+  confidence_threshold: 0.5
+  detection_interval: 5  # Process every N frames
+  input_size: [300, 300]
+  mean_values: [127.5, 127.5, 127.5]
+  scale_factor: 0.007843
+  publish_debug_image: false
+  person_class_id: 15  # COCO dataset person class
+
+# Follow controller settings
+follow_controller:
+  image_width: 640
+  image_height: 480
+  center_x_gain: 0.002      # Angular velocity gain for center offset
+  height_gain: 0.0005       # Linear velocity gain for box height
+  target_height_ratio: 0.6   # Target box height as fraction of image
+  max_linear_velocity: 0.3   # m/s
+  max_angular_velocity: 0.5  # rad/s
+  deadzone_center: 20        # pixels, ignore small center offsets
+  deadzone_height: 10        # pixels, ignore small height changes
+
+# Time-to-collision settings
+ttc:
+  ttc_threshold: 2.0         # seconds
+  min_features: 50           # minimum features to track
+  max_features: 100          # maximum features to track
+  feature_quality: 0.3       # corner quality threshold
+  feature_min_distance: 7    # min distance between features
+  flow_win_size: 15          # optical flow window size
+  flow_max_level: 2          # optical flow pyramid levels
+  motion_threshold: 0.5      # minimum motion to consider
+  processing_interval: 3     # process every N frames

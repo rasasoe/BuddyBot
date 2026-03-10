@@ -3,20 +3,23 @@
 <package format="3">
   <name>buddybot_nav</name>
   <version>0.0.0</version>
-  <description>Navigation stack for BuddyBot: SLAM, waypoint navigation</description>
+  <description>LiDAR-based navigation stack for BuddyBot with waypoint management</description>
   <maintainer email="todo@todo.com">Your Name</maintainer>
   <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
 
-  <depend>rclcpp</depend>
   <depend>rclpy</depend>
-  <depend>nav2_bringup</depend>
-  <depend>slam_toolbox</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
   <depend>buddybot_msgs</depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
   </export>
 </package>

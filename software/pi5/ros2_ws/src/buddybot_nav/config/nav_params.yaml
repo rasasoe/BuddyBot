@@ -1,0 +1,134 @@
+# Navigation Parameters for BuddyBot
+#
+# This file contains configuration parameters for the navigation stack.
+# These parameters control SLAM, localization, and path planning behavior.
+#
+# Integration with Nav2:
+# - These parameters would typically be passed to Nav2 components
+# - Update based on robot capabilities and environment testing
+# - Tune for optimal performance vs. safety trade-offs
+
+# SLAM Configuration
+slam:
+  # SLAM Toolbox parameters (when using slam_toolbox)
+  map_frame: "map"
+  odom_frame: "odom"
+  base_frame: "base_link"
+
+  # Map update settings
+  map_update_interval: 1.0  # seconds
+  map_resolution: 0.05  # meters per pixel
+
+  # LiDAR processing
+  lidar_topic: "/scan"
+  lidar_min_range: 0.1  # meters
+  lidar_max_range: 10.0  # meters
+
+# Localization Configuration
+localization:
+  # AMCL parameters (when using AMCL)
+  use_amcl: true
+  amcl_topic: "/amcl_pose"
+
+  # Particle filter settings
+  particle_count: 200
+  update_min_d: 0.1  # meters
+  update_min_a: 0.2  # radians
+
+# Path Planning Configuration
+planner:
+  # Global planner settings
+  global_planner: "NavfnPlanner"
+  global_costmap_topic: "/global_costmap/costmap"
+
+  # Local planner settings
+  local_planner: "DWAPlannerROS"
+  local_costmap_topic: "/local_costmap/costmap"
+
+  # Planning parameters
+  planner_frequency: 5.0  # Hz
+  controller_frequency: 10.0  # Hz
+
+# Costmap Configuration
+costmap:
+  # Global costmap
+  global:
+    width: 20.0   # meters
+    height: 20.0  # meters
+    resolution: 0.05  # meters/cell
+
+    # Layer configuration
+    static_layer:
+      enabled: true
+      map_topic: "/map"
+
+    obstacle_layer:
+      enabled: true
+      scan_topic: "/scan"
+      obstacle_range: 3.0
+      raytrace_range: 3.5
+
+  # Local costmap
+  local:
+    width: 6.0   # meters
+    height: 6.0  # meters
+    resolution: 0.05  # meters/cell
+
+    # Layer configuration (similar to global)
+    obstacle_layer:
+      enabled: true
+      scan_topic: "/scan"
+      obstacle_range: 2.5
+      raytrace_range: 3.0
+
+# Robot Configuration
+robot:
+  # Physical properties
+  footprint: [[-0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0.3, -0.3]]
+  robot_radius: 0.3  # meters (for circular approximation)
+
+  # Velocity limits
+  max_vel_x: 0.5      # m/s forward
+  min_vel_x: -0.2     # m/s backward
+  max_vel_theta: 1.0  # rad/s rotation
+  min_vel_theta: -1.0 # rad/s rotation
+
+  # Acceleration limits
+  acc_lim_x: 0.5      # m/s^2
+  acc_lim_theta: 1.0  # rad/s^2
+
+# Safety Configuration
+safety:
+  # Emergency stop integration
+  emergency_stop_topic: "/system/safety_active"
+  safety_timeout: 0.5  # seconds
+
+  # Recovery behaviors
+  recovery_enabled: true
+  recovery_timeout: 30.0  # seconds
+
+# Navigation Modes
+modes:
+  # Normal navigation
+  normal:
+    speed_scale: 1.0
+    tolerance_xy: 0.1    # meters
+    tolerance_yaw: 0.1   # radians
+
+  # Conservative navigation (near obstacles)
+  conservative:
+    speed_scale: 0.5
+    tolerance_xy: 0.05
+    tolerance_yaw: 0.05
+
+  # Fast navigation (open areas)
+  fast:
+    speed_scale: 1.2
+    tolerance_xy: 0.15
+    tolerance_yaw: 0.15
+
+# Integration Notes:
+# - These parameters need tuning for specific environments
+# - Test navigation performance in different lighting/conditions
+# - Adjust safety margins based on LiDAR reliability
+# - Monitor CPU usage and adjust frequencies accordingly

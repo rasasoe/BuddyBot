@@ -60,16 +60,34 @@ def control_loop():
     current_time = utime.ticks_ms()
 
     # 1. Parse incoming commands
-    command = uart_protocol.parse_command()
-    if command:
-        vx, vy, wz = command
-        # Clamp commands to safe ranges (-1.0 to 1.0)
-        vx = max(-1.0, min(1.0, vx))
-        vy = max(-1.0, min(1.0, vy))
-        wz = max(-1.0, min(1.0, wz))
-
-        system_state.update_targets(vx, vy, wz)
-        watchdog.feed()  # Valid command received
+    command_type, params = uart_protocol.parse_command()
+    if command_type:
+        if command_type == 'HB':
+            # Heartbeat - just acknowledge
+            uart_protocol.send_ack('HB')
+            watchdog.feed()  # Valid command received
+        elif command_type == 'CMD':
+            # Velocity command
+            vx = params['vx']
+            vy = params['vy']
+            wz = params['wz']
+            system_state.update_targets(vx, vy, wz)
+            uart_protocol.send_ack('CMD')
+            watchdog.feed()  # Valid command received
+        elif command_type == 'BRAKE':
+            # Emergency brake
+            safety_system.activate_emergency_stop()
+            uart_protocol.send_ack('BRAKE')
+            uart_protocol.send_safety_event('brake_command')
+        elif command_type == 'CLEAR':
+            # Clear emergency stop
+            safety_system.clear_emergency_stop()
+            uart_protocol.send_ack('CLEAR')
+        elif command_type == 'MODE':
+            # Mode change
+            mode = params['mode']
+            system_state.set_mode(mode)
+            uart_protocol.send_ack('MODE')
 
     # 2. Check safety systems
     safety_system.check_emergency_stop_pin()
@@ -112,13 +130,15 @@ def control_loop():
     # 7. Send status report periodically
     system_state.loop_count += 1
     if system_state.loop_count % STATUS_REPORT_INTERVAL == 0:
-        status = system_state.get_status_dict()
-        status['emergency_stop'] = safety_system.is_emergency_stop_active()
-        uart_protocol.send_status(
-            status['battery_voltage'],
-            status['encoder_counts'],
-            status['emergency_stop']
-        )
+        # Send status report
+        estop = safety_system.is_emergency_stop_active()
+        timeout = watchdog.is_timed_out()
+        mode = system_state.get_mode()
+        uart_protocol.send_status(estop, timeout, mode)
+
+        # Send RPM summary (placeholder values for now)
+        # TODO: Calculate actual RPM from encoders
+        uart_protocol.send_rpm(0, 0, 0)
 
 def main():
     """Main function - initialize and run control loop"""

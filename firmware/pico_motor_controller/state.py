@@ -32,6 +32,9 @@ class SystemState:
         self.last_loop_time = 0
         self.loop_count = 0
 
+        # Operating mode
+        self.mode = 'NORMAL'  # NORMAL, SAFE, MANUAL
+
     def update_targets(self, vx, vy, wz):
         """Update velocity targets"""
         self.target_vx = vx
@@ -50,12 +53,23 @@ class SystemState:
         """Update battery voltage"""
         self.battery_voltage = voltage
 
+    def set_mode(self, mode):
+        """Set operating mode"""
+        valid_modes = ['NORMAL', 'SAFE', 'MANUAL']
+        if mode in valid_modes:
+            self.mode = mode
+
+    def get_mode(self):
+        """Get current operating mode"""
+        return self.mode
+
     def get_status_dict(self):
         """Get status as dictionary for reporting"""
         return {
             'battery_voltage': self.battery_voltage,
             'encoder_counts': self.encoder_counts.copy(),
-            'emergency_stop': False  # This will be set by safety system
+            'emergency_stop': False,  # This will be set by safety system
+            'mode': self.mode
         }
 
 # Create system state instance

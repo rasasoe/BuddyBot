@@ -1,0 +1,33 @@
+from setuptools import setup
+import os
+from glob import glob
+
+package_name = 'buddybot_vision'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name), glob('config/*.yaml')),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='Your Name',
+    maintainer_email='todo@todo.com',
+    description='Vision systems for BuddyBot: camera capture, person detection, following, TTC',
+    license='Apache-2.0',
+    tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'camera_node = buddybot_vision.camera_node:main',
+            'detector_node = buddybot_vision.detector_node:main',
+            'follow_controller_node = buddybot_vision.follow_controller_node:main',
+            'ttc_node = buddybot_vision.ttc_node:main',
+        ],
+    },
+)
