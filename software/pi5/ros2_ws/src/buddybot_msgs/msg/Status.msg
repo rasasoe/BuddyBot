@@ -1,0 +1,5 @@
+float32 battery_voltage
+int32 left_encoder
+int32 right_encoder
+int32 back_encoder
+bool emergency_stop
