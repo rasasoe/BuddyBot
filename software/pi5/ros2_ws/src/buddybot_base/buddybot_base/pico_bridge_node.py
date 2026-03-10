@@ -52,7 +52,7 @@ class PicoBridgeNode(Node):
         super().__init__('pico_bridge_node')
 
         # Declare parameters with defaults
-        self.declare_parameter('serial_port', '/dev/ttyACM0')
+        self.declare_parameter('serial_port', '/dev/ttyAMA0')
         self.declare_parameter('serial_baudrate', 115200)
         self.declare_parameter('heartbeat_interval', 1.0)
         self.declare_parameter('status_timeout', 5.0)
@@ -110,10 +110,9 @@ class PicoBridgeNode(Node):
 
         # Connect to Pico
         if self.serial_manager.connect():
-            self.get_logger().info(f"Connected to Pico serial device {self.serial_port}")
             self.serial_manager.start_receive_thread()
         else:
-            self.get_logger().error("Failed to connect to Pico on startup; receive loop will retry using SerialManager backoff")
+            self.get_logger().error("Failed to connect to Pico on startup")
 
         self.get_logger().info("Pico Bridge Node initialized")
         self._log_startup_info()
@@ -167,7 +166,7 @@ class PicoBridgeNode(Node):
         try:
             heartbeat_msg = self.protocol.format_heartbeat()
             if self.serial_manager.send_message(heartbeat_msg):
-                self.get_logger().info("Heartbeat active")
+                self.get_logger().debug("Heartbeat sent")
             else:
                 self.get_logger().warn("Failed to send heartbeat - serial disconnected")
 
@@ -250,9 +249,9 @@ class PicoBridgeNode(Node):
         try:
             rpm_msg = Float32MultiArray()
             rpm_msg.data = [
-                params.get('m0', 0.0),
                 params.get('m1', 0.0),
-                params.get('m2', 0.0)
+                params.get('m2', 0.0),
+                params.get('m3', 0.0)
             ]
 
             self.rpm_publisher.publish(rpm_msg)
@@ -288,7 +287,7 @@ class PicoBridgeNode(Node):
         """
         time_since_last_status = time.time() - self.last_status_time
         if time_since_last_status > self.status_timeout:
-            self.get_logger().warn(f"No Pico status for {time_since_last_status:.1f}s")
+            self.get_logger().warn(".1f")
 
     def destroy_node(self):
         """Clean shutdown of the node."""
