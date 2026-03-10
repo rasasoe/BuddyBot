@@ -1,26 +1,26 @@
 # BuddyBot
 
-A safe, autonomous home assistant robot featuring Brain vs Spinal Cord architecture, built with Raspberry Pi 5 and Raspberry Pi Pico for reliable human-robot interaction.
+안전하고 자율적인 홈 어시스턴트 로봇으로, Brain vs Spinal Cord 아키텍처를 특징으로 하며, 라즈베리 파이 5와 라즈베리 파이 피코를 사용하여 신뢰할 수 있는 인간-로봇 상호작용을 구현합니다.
 
-## Overview
+## 개요
 
-BuddyBot is a capstone project demonstrating advanced robotics engineering principles through a modular, safety-first autonomous robot. The system implements a "Brain vs Spinal Cord" architecture that separates high-level cognitive functions (Pi 5) from low-level safety-critical motor control (Pico), ensuring fail-safe operation even during system failures. Using ROS 2 Jazzy on Ubuntu 24.04, BuddyBot integrates LiDAR-based navigation, computer vision, and local AI processing for natural human-robot interaction.
+BuddyBot은 모듈식, 안전 우선의 자율 로봇을 통해 고급 로보틱스 엔지니어링 원칙을 시연하는 졸업 프로젝트입니다. 이 시스템은 "Brain vs Spinal Cord" 아키텍처를 구현하여 고수준 인지 기능(Pi 5)을 저수준 안전-critical 모터 제어(Pico)로부터 분리하여 시스템 실패 시에도 fail-safe 작동을 보장합니다. Ubuntu 24.04에서 ROS 2 Jazzy를 사용하여 BuddyBot은 LiDAR 기반 네비게이션, 컴퓨터 비전, 로컬 AI 처리를 자연스러운 인간-로봇 상호작용을 위해 통합합니다.
 
-## Key Features
+## 주요 기능
 
-- **Autonomous Navigation**: LiDAR-based SLAM with semantic waypoint management
-- **Person Following**: Real-time computer vision tracking with smooth pursuit algorithms
-- **Multi-Modal Safety**: Hardware, firmware, and software safety layers with emergency stop
-- **Command Arbitration**: Priority-based multiplexing prevents conflicting movement commands
-- **Omnidirectional Movement**: 3-wheel holonomic drive for smooth, precise navigation
-- **Local AI Processing**: On-device computer vision and decision making
-- **Voice Integration**: Natural language command processing (planned)
+- **자율 네비게이션**: 의미적 웨이포인트 관리를 갖춘 LiDAR 기반 SLAM
+- **사람 추적**: 부드러운 추적 알고리즘을 갖춘 실시간 컴퓨터 비전 추적
+- **다중 모달 안전**: 비상 정지를 갖춘 하드웨어, 펌웨어, 소프트웨어 안전 계층
+- **명령 중재**: 충돌하는 이동 명령을 방지하는 우선순위 기반 멀티플렉싱
+- **전방향 이동**: 부드럽고 정확한 네비게이션을 위한 3륜 홀로노믹 드라이브
+- **로컬 AI 처리**: 온디바이스 컴퓨터 비전 및 의사결정
+- **음성 통합**: 자연어 명령 처리 (계획됨)
 
-## System Architecture
+## 시스템 아키텍처
 
-### Brain vs Spinal Cord Design
+### Brain vs Spinal Cord 설계
 
-BuddyBot implements a distributed architecture separating cognition from control:
+BuddyBot은 인지와 제어를 분리하는 분산 아키텍처를 구현합니다:
 
 ```
 ┌─────────────────┐    UART     ┌─────────────────┐
@@ -37,167 +37,167 @@ BuddyBot implements a distributed architecture separating cognition from control
          └─ Camera (Vision)            └─ Encoders
 ```
 
-### Command Priority Hierarchy
+### 명령 우선순위 계층
 
-1. **E-STOP** (Hardware/Firmware): Physical emergency stop, watchdog timeout
-2. **Manual** (Human): Direct joystick/keyboard control
-3. **Safety** (Autonomous): Collision avoidance, obstacle detection
-4. **Navigation** (Autonomous): Waypoint following, path planning
-5. **Follow** (Autonomous): Person tracking
-6. **Idle** (Default): Stationary safe state
+1. **E-STOP** (하드웨어/펌웨어): 물리적 비상 정지, 워치독 타임아웃
+2. **수동** (인간): 직접 조이스틱/키보드 제어
+3. **안전** (자율): 충돌 회피, 장애물 감지
+4. **네비게이션** (자율): 웨이포인트 추종, 경로 계획
+5. **추적** (자율): 사람 추적
+6. **대기** (기본값): 정지 안전 상태
 
-## Repository Structure
+## 저장소 구조
 
 ```
 BuddyBot/
-├── firmware/           # Pico microcontroller code
+├── firmware/           # Pico 마이크로컨트롤러 코드
 │   └── pico_motor_controller/
-├── software/           # ROS 2 workspace
+├── software/           # ROS 2 워크스페이스
 │   └── pi5/
 │       └── ros2_ws/
-│           └── src/    # ROS 2 packages
-│               ├── buddybot_base/      # Pi 5 ↔ Pico communication
-│               ├── buddybot_vision/    # Computer vision pipeline
-│               ├── buddybot_nav/       # Navigation and mapping
-│               ├── buddybot_system/    # Command arbitration & safety
-│               ├── buddybot_voice/     # Voice interface (planned)
-│               └── buddybot_bringup/   # System launch configuration
-├── docs/              # Documentation
-├── tools/             # Development utilities
-└── README.md          # This file
+│           └── src/    # ROS 2 패키지
+│               ├── buddybot_base/      # Pi 5 ↔ Pico 통신
+│               ├── buddybot_vision/    # 컴퓨터 비전 파이프라인
+│               ├── buddybot_nav/       # 네비게이션 및 매핑
+│               ├── buddybot_system/    # 명령 중재 및 안전
+│               ├── buddybot_voice/     # 음성 인터페이스 (계획됨)
+│               └── buddybot_bringup/   # 시스템 기동 구성
+├── docs/              # 문서
+├── tools/             # 개발 유틸리티
+└── README.md          # 이 파일
 ```
 
-## Hardware Stack
+## 하드웨어 스택
 
-### Core Components
-- **Raspberry Pi 5**: Main computer running ROS 2 and AI processing
-- **Raspberry Pi Pico**: Real-time motor control and safety systems
-- **LiDAR Sensor**: 2D laser scanner for navigation and mapping
-- **Camera**: RGB camera for computer vision and person tracking
-- **Omniwheel Drive**: 3-wheel holonomic base for smooth movement
+### 핵심 컴포넌트
+- **라즈베리 파이 5**: ROS 2 및 AI 처리를 실행하는 메인 컴퓨터
+- **라즈베리 파이 피코**: 실시간 모터 제어 및 안전 시스템
+- **LiDAR 센서**: 네비게이션 및 매핑을 위한 2D 레이저 스캐너
+- **카메라**: 컴퓨터 비전 및 사람 추적을 위한 RGB 카메라
+- **옴니휠 드라이브**: 부드러운 이동을 위한 3륜 홀로노믹 베이스
 
-### Peripheral Interfaces
-- **UART**: Deterministic communication between Pi 5 and Pico
-- **USB**: Camera and sensor connections
-- **GPIO**: Motor drivers and safety interlocks
-- **Power Management**: Battery monitoring and distribution
+### 주변 인터페이스
+- **UART**: Pi 5와 Pico 간 결정론적 통신
+- **USB**: 카메라 및 센서 연결
+- **GPIO**: 모터 드라이버 및 안전 인터록
+- **전력 관리**: 배터리 모니터링 및 분배
 
-## Software Stack
+## 소프트웨어 스택
 
 ### ROS 2 Jazzy (Ubuntu 24.04)
-- **Middleware**: ROS 2 for inter-process communication
-- **Navigation**: Nav2 stack with SLAM and path planning
-- **Vision**: OpenCV with custom computer vision pipelines
-- **Safety**: Multi-layer safety monitoring and control
+- **미들웨어**: 프로세스 간 통신을 위한 ROS 2
+- **네비게이션**: SLAM 및 경로 계획을 갖춘 Nav2 스택
+- **비전**: 맞춤형 컴퓨터 비전 파이프라인을 갖춘 OpenCV
+- **안전**: 다중 계층 안전 모니터링 및 제어
 
-### Python Packages
-- **buddybot_base**: UART communication bridge
-- **buddybot_vision**: Person detection and following
-- **buddybot_nav**: Waypoint navigation and mapping
-- **buddybot_system**: Command multiplexing and safety supervision
+### Python 패키지
+- **buddybot_base**: UART 통신 브리지
+- **buddybot_vision**: 사람 감지 및 추적
+- **buddybot_nav**: 웨이포인트 네비게이션 및 매핑
+- **buddybot_system**: 명령 멀티플렉싱 및 안전 감독
 
-### Pico Firmware
-- **Motor Control**: PID-based omnidirectional control
-- **Safety Systems**: Watchdog timer and emergency stop
-- **Communication**: UART protocol implementation
+### Pico 펌웨어
+- **모터 제어**: PID 기반 전방향 제어
+- **안전 시스템**: 워치독 타이머 및 비상 정지
+- **통신**: UART 프로토콜 구현
 
-## Development Status
+## 개발 상태
 
-### Completed ✅
-- Brain vs Spinal Cord architecture implementation
-- UART communication protocol between Pi 5 and Pico
-- Basic motor control with PID algorithms
-- Computer vision person detection (MobileNet-SSD)
-- Command arbitration system with priority multiplexing
-- Navigation waypoint management
-- System mode management (IDLE/MANUAL/FOLLOW/NAVIGATION)
-- Multi-layer safety systems
+### 완료 ✅
+- Brain vs Spinal Cord 아키텍처 구현
+- Pi 5와 Pico 간 UART 통신 프로토콜
+- PID 알고리즘을 갖춘 기본 모터 제어
+- 컴퓨터 비전 사람 감지 (MobileNet-SSD)
+- 우선순위 멀티플렉싱을 갖춘 명령 중재 시스템
+- 네비게이션 웨이포인트 관리
+- 시스템 모드 관리 (대기/수동/추적/네비게이션)
+- 다중 계층 안전 시스템
 
-### In Progress 🚧
-- Full Nav2 navigation stack integration
-- Voice command processing
-- Multi-sensor fusion (LiDAR + Camera)
-- Advanced safety system testing
+### 진행 중 🚧
+- 전체 Nav2 네비게이션 스택 통합
+- 음성 명령 처리
+- 다중 센서 융합 (LiDAR + 카메라)
+- 고급 안전 시스템 테스트
 
-### Planned 📋
-- Cloud integration for remote monitoring
-- Multi-robot coordination capabilities
-- Learning systems for behavior adaptation
-- Commercial deployment preparation
+### 계획됨 📋
+- 원격 모니터링을 위한 클라우드 통합
+- 다중 로봇 조율 기능
+- 행동 적응을 위한 학습 시스템
+- 상용 배포 준비
 
-## Quick Start
+## 빠른 시작
 
-### Prerequisites
+### 사전 요구사항
 - Ubuntu 24.04 LTS
 - ROS 2 Jazzy Jalisco
-- Raspberry Pi 5 and Pico hardware
-- LiDAR and camera sensors
+- 라즈베리 파이 5 및 Pico 하드웨어
+- LiDAR 및 카메라 센서
 
-### Pi 5 Setup (ROS 2)
+### Pi 5 설정 (ROS 2)
 ```bash
-# Clone repository
+# 저장소 클론
 git clone https://github.com/rasasoe/BuddyBot.git
 cd BuddyBot
 
-# Run setup script
+# 설정 스크립트 실행
 ./tools/setup.sh
 
-# Build ROS 2 packages
+# ROS 2 패키지 빌드
 cd software/pi5/ros2_ws
 colcon build
 
-# Source workspace
+# 워크스페이스 소스
 source install/setup.bash
 
-# Test basic functionality
+# 기본 기능 테스트
 ros2 run buddybot_base pico_bridge_node
 ```
 
-### Pico Setup (Firmware)
+### Pico 설정 (펌웨어)
 ```bash
-# Navigate to firmware directory
+# 펌웨어 디렉토리로 이동
 cd BuddyBot/firmware/pico_motor_controller
 
-# Build and flash firmware (using appropriate Pico toolchain)
-# Implementation depends on your Pico development setup
+# 펌웨어 빌드 및 플래시 (적절한 Pico 개발 설정 사용)
+# 구현은 Pico 개발 설정에 따라 다름
 ```
 
-### Basic System Test
+### 기본 시스템 테스트
 ```bash
-# Launch vision system
+# 비전 시스템 기동
 ros2 launch buddybot_vision vision.launch.py
 
-# Launch navigation
+# 네비게이션 기동
 ros2 launch buddybot_nav nav.launch.py
 
-# Launch system control
+# 시스템 제어 기동
 ros2 launch buddybot_system system.launch.py
 ```
 
-## Roadmap
+## 로드맵
 
-### Phase 1: Foundation (Completed)
-- [x] Brain vs Spinal Cord architecture
-- [x] UART communication protocol
-- [x] Basic motor control and safety
-- [x] Computer vision integration
+### 1단계: 기초 (완료)
+- [x] Brain vs Spinal Cord 아키텍처
+- [x] UART 통신 프로토콜
+- [x] 기본 모터 제어 및 안전
+- [x] 컴퓨터 비전 통합
 
-### Phase 2: Autonomous Behaviors (In Progress)
-- [x] Person following
-- [x] Waypoint navigation
-- [ ] Full Nav2 integration
-- [ ] Voice commands
+### 2단계: 자율 동작 (진행 중)
+- [x] 사람 추적
+- [x] 웨이포인트 네비게이션
+- [ ] 전체 Nav2 통합
+- [ ] 음성 명령
 
-### Phase 3: System Integration (Q2 2026)
-- [ ] Multi-sensor fusion
-- [ ] Advanced safety testing
-- [ ] Performance optimization
-- [ ] User interface development
+### 3단계: 시스템 통합 (2026년 2분기)
+- [ ] 다중 센서 융합
+- [ ] 고급 안전 테스트
+- [ ] 성능 최적화
+- [ ] 사용자 인터페이스 개발
 
-### Phase 4: Advanced Features (Q3-Q4 2026)
-- [ ] Cloud connectivity
-- [ ] Multi-robot coordination
-- [ ] Learning capabilities
+### 4단계: 고급 기능 (2026년 3-4분기)
+- [ ] 클라우드 연결성
+- [ ] 다중 로봇 조율
+- [ ] 학습 기능
 - [ ] Commercial deployment
 
 ## Safety Philosophy
