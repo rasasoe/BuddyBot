@@ -1,86 +1,152 @@
-"""Line-based USB serial protocol for Pi5 <-> Pico."""
+"""
+BuddyBot USB Serial Protocol
+
+This module handles text-based USB serial communication with the Raspberry Pi 5.
+Implements the line-based protocol specified in docs/uart_protocol.md
+Uses USB CDC serial interface instead of GPIO UART.
+"""
 
 import sys
-import uselect
-import utime
-
+import select
+from config import UART_BAUDRATE
 
 class UARTProtocol:
     def __init__(self):
+        # Use USB serial via stdin/stdout instead of GPIO UART
         self.buffer = ""
-        self.last_command_time = utime.ticks_ms()
-        self.poller = uselect.poll()
-        self.poller.register(sys.stdin, uselect.POLLIN)
+        self.last_command_time = 0
 
     def _send_message(self, message):
+        """Send a message with newline via USB serial"""
         try:
-            sys.stdout.write(message + "\n")
-        except Exception:
-            pass
+            print(message)  # USB serial output
+        except:
+            pass  # USB serial write failed
 
     def send_ack(self, command_type):
-        self._send_message("ACK,%s" % command_type)
+        """Send acknowledgment for a command"""
+        self._send_message(f"ACK,{command_type}")
 
     def send_status(self, estop, timeout, mode):
-        self._send_message(
-            "STAT,estop=%d,timeout=%d,mode=%s" % (1 if estop else 0, 1 if timeout else 0, mode)
-        )
+        """Send status report"""
+        self._send_message(f"STAT,estop={1 if estop else 0},timeout={1 if timeout else 0},mode={mode}")
 
-    def send_rpm(self, m0_rpm, m1_rpm, m2_rpm):
-        self._send_message("RPM,m0=%.2f,m1=%.2f,m2=%.2f" % (m0_rpm, m1_rpm, m2_rpm))
+    def send_rpm(self, m1_rpm, m2_rpm, m3_rpm):
+        """Send motor RPM summary"""
+        self._send_message(f"RPM,m1={m1_rpm},m2={m3_rpm},m3={m3_rpm}")
 
     def send_safety_event(self, reason):
-        self._send_message("SAFE,%s" % reason)
+        """Send safety event"""
+        self._send_message(f"SAFE,{reason}")
 
     def _parse_command(self, line):
-        parts = line.strip().split(',')
-        if not parts or not parts[0]:
+        """
+        Parse a command line
+        Returns: (command_type, params_dict) or (None, None) if invalid
+        """
+        line = line.strip()
+        if not line:
             return None, None
-        cmd = parts[0].upper()
 
-        if cmd == 'HB' and len(parts) == 1:
+    def send_ack(self, command_type):
+        """Send acknowledgment for a command"""
+        self._send_message(f"ACK,{command_type}")
+
+    def send_status(self, estop, timeout, mode):
+        """Send status report"""
+        self._send_message(f"STAT,estop={1 if estop else 0},timeout={1 if timeout else 0},mode={mode}")
+
+    def send_rpm(self, m1_rpm, m2_rpm, m3_rpm):
+        """Send motor RPM summary"""
+        self._send_message(f"RPM,m1={m1_rpm},m2={m2_rpm},m3={m3_rpm}")
+
+    def send_safety_event(self, reason):
+        """Send safety event"""
+        self._send_message(f"SAFE,{reason}")
+
+    def _parse_command(self, line):
+        """
+        Parse a command line
+        Returns: (command_type, params_dict) or (None, None) if invalid
+        """
+        line = line.strip()
+        if not line:
+            return None, None
+
+        parts = line.split(',')
+        if not parts:
+            return None, None
+
+        command = parts[0].upper()
+
+        # Parse parameters based on command type
+        if command == 'HB':
             return 'HB', {}
-        if cmd == 'CMD' and len(parts) == 4:
+        elif command == 'CMD' and len(parts) == 4:
             try:
-                vx = max(-1.0, min(1.0, float(parts[1])))
-                vy = max(-1.0, min(1.0, float(parts[2])))
-                wz = max(-1.0, min(1.0, float(parts[3])))
+                vx = float(parts[1])
+                vy = float(parts[2])
+                wz = float(parts[3])
+                # Clamp to valid range
+                vx = max(-1.0, min(1.0, vx))
+                vy = max(-1.0, min(1.0, vy))
+                wz = max(-1.0, min(1.0, wz))
                 return 'CMD', {'vx': vx, 'vy': vy, 'wz': wz}
             except ValueError:
                 return None, None
-        if cmd == 'BRAKE' and len(parts) == 1:
+        elif command == 'BRAKE':
             return 'BRAKE', {}
-        if cmd == 'CLEAR' and len(parts) == 1:
+        elif command == 'CLEAR':
             return 'CLEAR', {}
-        return None, None
+        elif command == 'MODE' and len(parts) == 2:
+            mode = parts[1].upper()
+            return 'MODE', {'mode': mode}
+        else:
+            return None, None
 
     def parse_command(self):
-        events = self.poller.poll(0)
-        if not events:
-            return None, None
+        """
+        Check for and parse incoming command via USB serial
+        Returns: (command_type, params_dict) or (None, None)
+        """
+        import utime
 
+        # Check if data is available on USB serial (stdin)
         try:
-            chunk = sys.stdin.read(1)
-        except Exception:
-            self.buffer = ""
-            return None, None
+            # Use select to check if data is available without blocking
+            import select
+            if select.select([sys.stdin], [], [], 0)[0]:
+                # Read available data
+                while True:
+                    try:
+                        char = sys.stdin.read(1)
+                        if not char:  # No more data
+                            break
+                        if char == '\n':
+                            # Process complete line
+                            command_type, params = self._parse_command(self.buffer)
+                            self.buffer = ""
+                            if command_type:
+                                self.last_command_time = utime.ticks_ms()
+                                return command_type, params
+                        else:
+                            self.buffer += char
+                            # Prevent buffer overflow
+                            if len(self.buffer) > 64:
+                                self.buffer = ""
+                    except:
+                        # Read error
+                        self.buffer = ""
+                        break
+        except:
+            # select not available or other error
+            pass
 
-        if not chunk:
-            return None, None
-
-        if chunk == '\n':
-            cmd, params = self._parse_command(self.buffer)
-            self.buffer = ""
-            if cmd:
-                self.last_command_time = utime.ticks_ms()
-                return cmd, params
-            return None, None
-
-        if chunk != '\r':
-            self.buffer += chunk
-            if len(self.buffer) > 96:
-                self.buffer = ""
         return None, None
 
+    def get_last_command_time(self):
+        """Get timestamp of last valid command (ms)"""
+        return self.last_command_time
 
+# Create UART protocol instance
 uart_protocol = UARTProtocol()

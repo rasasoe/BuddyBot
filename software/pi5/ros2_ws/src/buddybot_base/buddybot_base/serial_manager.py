@@ -38,7 +38,7 @@ class SerialManager:
     """
 
     def __init__(self,
-                 port: str = '/dev/ttyACM0',
+                 port: str = '/dev/ttyAMA0',
                  baudrate: int = 115200,
                  timeout: float = 0.1,
                  max_reconnect_attempts: int = 10,

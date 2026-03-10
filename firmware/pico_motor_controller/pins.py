@@ -1,82 +1,77 @@
-"""Hardware pin mapping for the real BuddyBot Pico wiring.
+"""
+BuddyBot Pico Pin Definitions
 
-Source of truth: existing lab wiring (do not remap without rewiring).
-Pi 5 <-> Pico communication is USB CDC serial (/dev/ttyACM0 on Pi 5),
-so GPIO UART pins are intentionally unused.
+This module defines all GPIO pin assignments for the motor controller.
+Based on actual hardware wiring for L298N motor drivers and encoders.
 """
 
 import machine
 
-# Motor 0
-MOTOR0_PWM_PIN = 2
-MOTOR0_IN1_PIN = 0
-MOTOR0_IN2_PIN = 1
-MOTOR0_ENCA_PIN = 3
-MOTOR0_ENCB_PIN = 14
+# Motor 1 (Left Front) - Connected to L298N Motor Driver 1
+MOTOR_LEFT_PWM_PIN = 0    # GP0 - PWM capable
+MOTOR_LEFT_DIR1_PIN = 1   # GP1 - Direction control
+MOTOR_LEFT_DIR2_PIN = 2   # GP2 - Direction control
 
-# Motor 1
-MOTOR1_PWM_PIN = 8
-MOTOR1_IN1_PIN = 6
-MOTOR1_IN2_PIN = 7
-MOTOR1_ENCA_PIN = 9
-MOTOR1_ENCB_PIN = 15
+# Motor 2 (Right Front) - Connected to L298N Motor Driver 2
+MOTOR_RIGHT_PWM_PIN = 4   # GP4 - PWM capable
+MOTOR_RIGHT_DIR1_PIN = 5  # GP5 - Direction control
+MOTOR_RIGHT_DIR2_PIN = 6  # GP6 - Direction control
 
-# Motor 2
-MOTOR2_PWM_PIN = 12
-MOTOR2_IN1_PIN = 10
-MOTOR2_IN2_PIN = 11
-MOTOR2_ENCA_PIN = 13
-MOTOR2_ENCB_PIN = 16
+# Motor 3 (Back) - Connected to L298N Motor Driver 3
+MOTOR_BACK_PWM_PIN = 8    # GP8 - PWM capable
+MOTOR_BACK_DIR1_PIN = 9   # GP9 - Direction control
+MOTOR_BACK_DIR2_PIN = 10  # GP10 - Direction control
 
-# I2C (reserved for expansion sensors)
-I2C_SDA_PIN = 20
-I2C_SCL_PIN = 21
+# Encoders - Connected to rotary encoders with pull-up resistors
+ENC_LEFT_A_PIN = 11   # GP11 - Left encoder A channel
+ENC_LEFT_B_PIN = 12   # GP12 - Left encoder B channel
+ENC_RIGHT_A_PIN = 13  # GP13 - Right encoder A channel
+ENC_RIGHT_B_PIN = 14  # GP14 - Right encoder B channel
+ENC_BACK_A_PIN = 15   # GP15 - Back encoder A channel
+ENC_BACK_B_PIN = 16   # GP16 - Back encoder B channel
 
-# Optional hardware E-STOP is not wired on current platform.
-# Keep None and enforce software safety layers (watchdog + BRAKE).
-EMERGENCY_STOP_PIN = None
+# Emergency Stop - Connected to normally-open emergency stop button with pull-up
+EMERGENCY_STOP_PIN = 17  # GP17 - Emergency stop input (active low)
 
-# Optional battery ADC input (not mandatory for bring-up)
-BATTERY_ADC_PIN = 26
+# Battery ADC - Connected to voltage divider for battery monitoring
+BATTERY_ADC_PIN = 26      # GP26/ADC0 - Battery voltage monitoring
 
+# Note: UART pins (GP16/GP17) are reserved for USB serial communication
+# Do not use GPIO UART for Pi 5 communication - use USB serial (/dev/ttyACM0)
 
-def _make_motor(pwm_pin: int, in1_pin: int, in2_pin: int):
-    return {
-        'pwm': machine.PWM(machine.Pin(pwm_pin)),
-        'dir1': machine.Pin(in1_pin, machine.Pin.OUT),
-        'dir2': machine.Pin(in2_pin, machine.Pin.OUT),
-    }
-
-
-def _make_encoder(a_pin: int, b_pin: int):
-    return {
-        'a': machine.Pin(a_pin, machine.Pin.IN, machine.Pin.PULL_UP),
-        'b': machine.Pin(b_pin, machine.Pin.IN, machine.Pin.PULL_UP),
-    }
-
-
+# Pin objects (initialized in motor_driver.py and encoder.py)
 motor_pins = {
-    'm0': _make_motor(MOTOR0_PWM_PIN, MOTOR0_IN1_PIN, MOTOR0_IN2_PIN),
-    'm1': _make_motor(MOTOR1_PWM_PIN, MOTOR1_IN1_PIN, MOTOR1_IN2_PIN),
-    'm2': _make_motor(MOTOR2_PWM_PIN, MOTOR2_IN1_PIN, MOTOR2_IN2_PIN),
+    'left': {
+        'pwm': machine.PWM(machine.Pin(MOTOR_LEFT_PWM_PIN)),
+        'dir1': machine.Pin(MOTOR_LEFT_DIR1_PIN, machine.Pin.OUT),
+        'dir2': machine.Pin(MOTOR_LEFT_DIR2_PIN, machine.Pin.OUT)
+    },
+    'right': {
+        'pwm': machine.PWM(machine.Pin(MOTOR_RIGHT_PWM_PIN)),
+        'dir1': machine.Pin(MOTOR_RIGHT_DIR1_PIN, machine.Pin.OUT),
+        'dir2': machine.Pin(MOTOR_RIGHT_DIR2_PIN, machine.Pin.OUT)
+    },
+    'back': {
+        'pwm': machine.PWM(machine.Pin(MOTOR_BACK_PWM_PIN)),
+        'dir1': machine.Pin(MOTOR_BACK_DIR1_PIN, machine.Pin.OUT),
+        'dir2': machine.Pin(MOTOR_BACK_DIR2_PIN, machine.Pin.OUT)
+    }
 }
-
-# Compatibility aliases for existing code paths.
-motor_pins['left'] = motor_pins['m0']
-motor_pins['right'] = motor_pins['m1']
-motor_pins['back'] = motor_pins['m2']
 
 encoder_pins = {
-    'm0': _make_encoder(MOTOR0_ENCA_PIN, MOTOR0_ENCB_PIN),
-    'm1': _make_encoder(MOTOR1_ENCA_PIN, MOTOR1_ENCB_PIN),
-    'm2': _make_encoder(MOTOR2_ENCA_PIN, MOTOR2_ENCB_PIN),
+    'left': {
+        'a': machine.Pin(ENC_LEFT_A_PIN, machine.Pin.IN),
+        'b': machine.Pin(ENC_LEFT_B_PIN, machine.Pin.IN)
+    },
+    'right': {
+        'a': machine.Pin(ENC_RIGHT_A_PIN, machine.Pin.IN),
+        'b': machine.Pin(ENC_RIGHT_B_PIN, machine.Pin.IN)
+    },
+    'back': {
+        'a': machine.Pin(ENC_BACK_A_PIN, machine.Pin.IN),
+        'b': machine.Pin(ENC_BACK_B_PIN, machine.Pin.IN)
+    }
 }
-encoder_pins['left'] = encoder_pins['m0']
-encoder_pins['right'] = encoder_pins['m1']
-encoder_pins['back'] = encoder_pins['m2']
 
-emergency_stop_pin = None
-if EMERGENCY_STOP_PIN is not None:
-    emergency_stop_pin = machine.Pin(EMERGENCY_STOP_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
-
+emergency_stop_pin = machine.Pin(EMERGENCY_STOP_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
 battery_adc = machine.ADC(machine.Pin(BATTERY_ADC_PIN))
