@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-UART Protocol Test Script
+USB Serial Protocol Test Script
 
-This script tests the text-based UART protocol implementation.
+This script tests the text-based USB serial protocol implementation.
 Can be used to simulate Pi 5 communication with Pico or test real hardware.
 """
 
@@ -11,15 +11,15 @@ import time
 import threading
 import sys
 
-class UARTTester:
-    def __init__(self, port='/dev/ttyUSB0', baud=115200):
+class USBSerialTester:
+    def __init__(self, port='/dev/ttyACM0', baud=115200):
         self.port = port
         self.baud = baud
         self.serial = None
         self.running = True
 
     def connect(self):
-        """Connect to serial port"""
+        """Connect to USB serial port"""
         try:
             self.serial = serial.Serial(self.port, self.baud, timeout=0.1)
             print(f"Connected to {self.port} at {self.baud} baud")
@@ -29,7 +29,7 @@ class UARTTester:
             return False
 
     def disconnect(self):
-        """Disconnect from serial port"""
+        """Disconnect from USB serial port"""
         if self.serial and self.serial.is_open:
             self.serial.close()
             print("Disconnected")
@@ -69,7 +69,7 @@ class UARTTester:
 
     def interactive_mode(self):
         """Interactive command mode"""
-        print("UART Protocol Test - Interactive Mode")
+        print("USB Serial Protocol Test - Interactive Mode")
         print("Available commands:")
         print("  hb           - Send heartbeat")
         print("  cmd vx vy wz - Send velocity command (e.g., cmd 0.5 0 0.2)")
@@ -123,7 +123,7 @@ class UARTTester:
 
     def demo_mode(self):
         """Automated demo sequence"""
-        print("UART Protocol Test - Demo Mode")
+        print("USB Serial Protocol Test - Demo Mode")
         print("Running automated test sequence...")
 
         # Start receive thread
@@ -168,14 +168,14 @@ class UARTTester:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description='UART Protocol Tester')
-    parser.add_argument('--port', default='/dev/ttyUSB0', help='Serial port (default: /dev/ttyUSB0)')
+    parser = argparse.ArgumentParser(description='USB Serial Protocol Tester')
+    parser.add_argument('--port', default='/dev/ttyACM0', help='USB serial port (default: /dev/ttyACM0)')
     parser.add_argument('--baud', type=int, default=115200, help='Baud rate (default: 115200)')
     parser.add_argument('--demo', action='store_true', help='Run automated demo instead of interactive mode')
 
     args = parser.parse_args()
 
-    tester = UARTTester(args.port, args.baud)
+    tester = USBSerialTester(args.port, args.baud)
 
     if not tester.connect():
         sys.exit(1)

@@ -1,27 +1,52 @@
 """
-BuddyBot UART Protocol
+BuddyBot USB Serial Protocol
 
-This module handles text-based UART communication with the Raspberry Pi 5.
+This module handles text-based USB serial communication with the Raspberry Pi 5.
 Implements the line-based protocol specified in docs/uart_protocol.md
+Uses USB CDC serial interface instead of GPIO UART.
 """
 
-import machine
-from config import UART_ID, UART_BAUDRATE, UART_TX_PIN, UART_RX_PIN
+import sys
+import select
+from config import UART_BAUDRATE
 
 class UARTProtocol:
     def __init__(self):
-        self.uart = machine.UART(UART_ID, baudrate=UART_BAUDRATE,
-                                tx=machine.Pin(UART_TX_PIN),
-                                rx=machine.Pin(UART_RX_PIN))
+        # Use USB serial via stdin/stdout instead of GPIO UART
         self.buffer = ""
         self.last_command_time = 0
 
     def _send_message(self, message):
-        """Send a message with newline"""
+        """Send a message with newline via USB serial"""
         try:
-            self.uart.write(message + '\n')
-        except OSError:
-            pass  # UART write failed
+            print(message)  # USB serial output
+        except:
+            pass  # USB serial write failed
+
+    def send_ack(self, command_type):
+        """Send acknowledgment for a command"""
+        self._send_message(f"ACK,{command_type}")
+
+    def send_status(self, estop, timeout, mode):
+        """Send status report"""
+        self._send_message(f"STAT,estop={1 if estop else 0},timeout={1 if timeout else 0},mode={mode}")
+
+    def send_rpm(self, m1_rpm, m2_rpm, m3_rpm):
+        """Send motor RPM summary"""
+        self._send_message(f"RPM,m1={m1_rpm},m2={m3_rpm},m3={m3_rpm}")
+
+    def send_safety_event(self, reason):
+        """Send safety event"""
+        self._send_message(f"SAFE,{reason}")
+
+    def _parse_command(self, line):
+        """
+        Parse a command line
+        Returns: (command_type, params_dict) or (None, None) if invalid
+        """
+        line = line.strip()
+        if not line:
+            return None, None
 
     def send_ack(self, command_type):
         """Send acknowledgment for a command"""
@@ -81,28 +106,41 @@ class UARTProtocol:
 
     def parse_command(self):
         """
-        Check for and parse incoming command
+        Check for and parse incoming command via USB serial
         Returns: (command_type, params_dict) or (None, None)
         """
-        # Read available data
-        while self.uart.any():
-            try:
-                char = self.uart.read(1).decode('utf-8')
-                if char == '\n':
-                    # Process complete line
-                    command_type, params = self._parse_command(self.buffer)
-                    self.buffer = ""
-                    if command_type:
-                        self.last_command_time = machine.time_pulse_us(machine.Pin(0), 1) // 1000
-                        return command_type, params
-                else:
-                    self.buffer += char
-                    # Prevent buffer overflow
-                    if len(self.buffer) > 64:
+        import utime
+
+        # Check if data is available on USB serial (stdin)
+        try:
+            # Use select to check if data is available without blocking
+            import select
+            if select.select([sys.stdin], [], [], 0)[0]:
+                # Read available data
+                while True:
+                    try:
+                        char = sys.stdin.read(1)
+                        if not char:  # No more data
+                            break
+                        if char == '\n':
+                            # Process complete line
+                            command_type, params = self._parse_command(self.buffer)
+                            self.buffer = ""
+                            if command_type:
+                                self.last_command_time = utime.ticks_ms()
+                                return command_type, params
+                        else:
+                            self.buffer += char
+                            # Prevent buffer overflow
+                            if len(self.buffer) > 64:
+                                self.buffer = ""
+                    except:
+                        # Read error
                         self.buffer = ""
-            except (UnicodeError, OSError):
-                # Invalid character or read error
-                self.buffer = ""
+                        break
+        except:
+            # select not available or other error
+            pass
 
         return None, None
 

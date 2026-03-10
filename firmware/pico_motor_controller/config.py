@@ -8,11 +8,13 @@ This module contains all configuration constants for the motor controller.
 CONTROL_LOOP_HZ = 50
 CONTROL_LOOP_PERIOD_MS = 1000 // CONTROL_LOOP_HZ  # 20ms for 50Hz
 
-# UART settings
-UART_ID = 0
+# UART settings - Using USB serial, not GPIO UART
+# Communication with Pi 5 is via USB serial (/dev/ttyACM0 on Pi 5)
+# No GPIO UART pins needed - Pico appears as USB CDC device
 UART_BAUDRATE = 115200
-UART_TX_PIN = 16
-UART_RX_PIN = 17
+
+# Note: UART_ID and UART_TX/RX pins are not used for USB serial communication
+# The Pico firmware communicates via USB serial interface
 
 # Watchdog timeout (ms)
 WATCHDOG_TIMEOUT_MS = 1000

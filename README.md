@@ -23,7 +23,7 @@ BuddyBot은 모듈식, 안전 우선의 자율 로봇을 통해 고급 로보틱
 BuddyBot은 인지와 제어를 분리하는 분산 아키텍처를 구현합니다:
 
 ```
-┌─────────────────┐    UART     ┌─────────────────┐
+┌─────────────────┐ USB Serial ┌─────────────────┐
 │   Raspberry Pi 5 │◄──────────►│  Raspberry Pico │
 │     (The Brain)  │            │ (The Spinal Cord)│
 │                  │            │                  │
@@ -76,8 +76,23 @@ BuddyBot/
 - **카메라**: 컴퓨터 비전 및 사람 추적을 위한 RGB 카메라
 - **옴니휠 드라이브**: 부드러운 이동을 위한 3륜 홀로노믹 베이스
 
+### 모터 제어 핀 매핑 (Pico)
+```
+모터 1 (왼쪽): PWM GP0, DIR1 GP1, DIR2 GP2
+모터 2 (오른쪽): PWM GP4, DIR1 GP5, DIR2 GP6
+모터 3 (뒤쪽): PWM GP8, DIR1 GP9, DIR2 GP10
+
+엔코더:
+왼쪽: A GP11, B GP12
+오른쪽: A GP13, B GP14
+뒤쪽: A GP15, B GP16
+
+안전: 비상 정지 GP17 (풀업, 액티브 로우)
+배터리: ADC GP26 (전압 분배기 필요)
+```
+
 ### 주변 인터페이스
-- **UART**: Pi 5와 Pico 간 결정론적 통신
+- **USB 시리얼**: Pi 5와 Pico 간 결정론적 통신 (/dev/ttyACM0)
 - **USB**: 카메라 및 센서 연결
 - **GPIO**: 모터 드라이버 및 안전 인터록
 - **전력 관리**: 배터리 모니터링 및 분배
@@ -91,7 +106,7 @@ BuddyBot/
 - **안전**: 다중 계층 안전 모니터링 및 제어
 
 ### Python 패키지
-- **buddybot_base**: UART 통신 브리지
+- **buddybot_base**: USB 시리얼 통신 브리지
 - **buddybot_vision**: 사람 감지 및 추적
 - **buddybot_nav**: 웨이포인트 네비게이션 및 매핑
 - **buddybot_system**: 명령 멀티플렉싱 및 안전 감독
@@ -99,7 +114,7 @@ BuddyBot/
 ### Pico 펌웨어
 - **모터 제어**: PID 기반 전방향 제어
 - **안전 시스템**: 워치독 타이머 및 비상 정지
-- **통신**: UART 프로토콜 구현
+- **통신**: USB 시리얼 프로토콜 구현
 
 ## 개발 상태
 
@@ -178,7 +193,7 @@ ros2 launch buddybot_system system.launch.py
 
 ### 1단계: 기초 (완료)
 - [x] Brain vs Spinal Cord 아키텍처
-- [x] UART 통신 프로토콜
+- [x] USB 시리얼 통신 프로토콜
 - [x] 기본 모터 제어 및 안전
 - [x] 컴퓨터 비전 통합
 
@@ -246,5 +261,5 @@ Apache 2.0 - See LICENSE file for details.
 
 - [System Architecture](docs/architecture.md)
 - [Safety Policy](docs/safety_policy.md)
-- [UART Protocol](docs/uart_protocol.md)
+- [USB Serial Protocol](docs/uart_protocol.md)
 - [Development Plan](docs/development_plan.md)
