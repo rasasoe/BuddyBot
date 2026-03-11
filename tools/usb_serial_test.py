@@ -75,7 +75,6 @@ class USBSerialTester:
         print("  cmd vx vy wz - Send velocity command (e.g., cmd 0.5 0 0.2)")
         print("  brake        - Send emergency brake")
         print("  clear        - Clear emergency stop")
-        print("  mode MODE    - Change mode (NORMAL, SAFE, MANUAL)")
         print("  quit         - Exit")
         print()
 
@@ -107,12 +106,6 @@ class USBSerialTester:
                         self.send_command(f"CMD,{vx:.3f},{vy:.3f},{wz:.3f}")
                     except ValueError:
                         print("Invalid velocity values")
-                elif cmd_type == 'mode' and len(parts) == 2:
-                    mode = parts[1].upper()
-                    if mode in ['NORMAL', 'SAFE', 'MANUAL']:
-                        self.send_command(f"MODE,{mode}")
-                    else:
-                        print("Invalid mode. Use NORMAL, SAFE, or MANUAL")
                 else:
                     print("Unknown command")
 
@@ -150,15 +143,7 @@ class USBSerialTester:
             self.send_command("CLEAR")
             time.sleep(2)
 
-            print("5. Changing to SAFE mode...")
-            self.send_command("MODE,SAFE")
-            time.sleep(2)
-
-            print("6. Changing back to NORMAL mode...")
-            self.send_command("MODE,NORMAL")
-            time.sleep(2)
-
-            print("Demo complete!")
+            print("5. Demo complete!")
 
         except KeyboardInterrupt:
             print("\nDemo interrupted")
