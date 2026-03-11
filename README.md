@@ -75,10 +75,19 @@ BuddyBot은 모듈식, 안전 우선의 자율 로봇을 통해 고급 로보틱
 
 ### Pico 실배선 핀 매핑 (Source of Truth)
 
-- Motor 0: PWM GP2, IN1 GP0, IN2 GP1, ENCA GP3, ENCB GP14
-- Motor 1: PWM GP8, IN1 GP6, IN2 GP7, ENCA GP9, ENCB GP15
-- Motor 2: PWM GP12, IN1 GP10, IN2 GP11, ENCA GP13, ENCB GP16
-- I2C: SDA GP20, SCL GP21
+| Channel | PWM | IN1 | IN2 | ENCA | ENCB |
+|---|---|---|---|---|---|
+| Motor 0 | GP2 | GP0 | GP1 | GP3 | GP14 |
+| Motor 1 | GP8 | GP6 | GP7 | GP9 | GP15 |
+| Motor 2 | GP12 | GP10 | GP11 | GP13 | GP16 |
+
+| Peripheral | Signal | Pin |
+|---|---|---|
+| I2C | SDA | GP20 |
+| I2C | SCL | GP21 |
+
+- 통신: USB Serial (`/dev/ttyACM0`) 고정
+- 주의: GP16은 Motor 2 ENCB로 사용 중이므로 GPIO UART로 재할당하지 않음
 
 > 상세 핀맵: `docs/pin_mapping.md`
 
