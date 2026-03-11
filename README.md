@@ -1,265 +1,250 @@
 # BuddyBot
 
-안전하고 자율적인 홈 어시스턴트 로봇으로, Brain vs Spinal Cord 아키텍처를 특징으로 하며, 라즈베리 파이 5와 라즈베리 파이 피코를 사용하여 신뢰할 수 있는 인간-로봇 상호작용을 구현합니다.
+안전하고 자율적인 홈 어시스턴트 로봇으로, **Brain vs Spinal Cord** 아키텍처를 특징으로 하며, Raspberry Pi 5 + Raspberry Pi Pico 기반으로 신뢰할 수 있는 인간-로봇 상호작용을 구현합니다.
+
+BuddyBot은 단순 기능 데모가 아니라, **캡스톤 발표/포트폴리오/실험실 재현성**까지 고려한 프로젝트입니다.
+
+---
 
 ## 개요
 
-BuddyBot은 모듈식, 안전 우선의 자율 로봇을 통해 고급 로보틱스 엔지니어링 원칙을 시연하는 졸업 프로젝트입니다. 이 시스템은 "Brain vs Spinal Cord" 아키텍처를 구현하여 고수준 인지 기능(Pi 5)을 저수준 안전-critical 모터 제어(Pico)로부터 분리하여 시스템 실패 시에도 fail-safe 작동을 보장합니다. Ubuntu 24.04에서 ROS 2 Jazzy를 사용하여 BuddyBot은 LiDAR 기반 네비게이션, 컴퓨터 비전, 로컬 AI 처리를 자연스러운 인간-로봇 상호작용을 위해 통합합니다.
+BuddyBot은 모듈식, 안전 우선의 자율 로봇을 통해 고급 로보틱스 엔지니어링 원칙을 시연하는 졸업 프로젝트입니다.  
+이 시스템은 "Brain vs Spinal Cord" 아키텍처를 구현하여 고수준 인지 기능(Pi 5)을 저수준 safety-critical 모터 제어(Pico)로부터 분리하고, 상위 계층 장애 시에도 fail-safe 정지를 보장합니다.
+
+- OS/미들웨어: Ubuntu 24.04 + ROS 2 Jazzy
+- 고수준 기능: LiDAR 기반 네비게이션, 비전 기반 사람 추적
+- 저수준 기능: 모터 구동, 엔코더 피드백, watchdog/브레이크 안전 계층
+
+---
 
 ## 주요 기능
 
-- **자율 네비게이션**: 의미적 웨이포인트 관리를 갖춘 LiDAR 기반 SLAM
-- **사람 추적**: 부드러운 추적 알고리즘을 갖춘 실시간 컴퓨터 비전 추적
-- **다중 모달 안전**: 비상 정지를 갖춘 하드웨어, 펌웨어, 소프트웨어 안전 계층
-- **명령 중재**: 충돌하는 이동 명령을 방지하는 우선순위 기반 멀티플렉싱
-- **전방향 이동**: 부드럽고 정확한 네비게이션을 위한 3륜 홀로노믹 드라이브
-- **로컬 AI 처리**: 온디바이스 컴퓨터 비전 및 의사결정
-- **음성 통합**: 자연어 명령 처리 (계획됨)
+- **자율 네비게이션**: LiDAR 기반 맵/경로 파이프라인
+- **사람 추적**: 실시간 비전 기반 follow 동작
+- **다중 계층 안전**: 하드웨어/펌웨어/소프트웨어 안전 모델
+- **명령 중재(command mux)**: 충돌 명령 우선순위 기반 중재
+- **전방향 이동**: 3륜 옴니휠 베이스
+- **로컬 처리**: 온디바이스 인지/의사결정
+- **확장성**: 음성 인터페이스/고급 기능 확장 고려
+
+---
 
 ## 시스템 아키텍처
 
 ### Brain vs Spinal Cord 설계
 
-BuddyBot은 인지와 제어를 분리하는 분산 아키텍처를 구현합니다:
-
-```
+```text
 ┌─────────────────┐ USB Serial ┌─────────────────┐
 │   Raspberry Pi 5 │◄──────────►│  Raspberry Pico │
-│     (The Brain)  │            │ (The Spinal Cord)│
+│     (The Brain)  │            │ (The Spinal Cord)
 │                  │            │                  │
 │ • ROS 2          │            │ • Motor Control  │
 │ • Computer Vision│            │ • Safety Systems │
 │ • Navigation     │            │ • Watchdog       │
-│ • AI Processing  │            │ • E-Stop         │
+│ • AI Processing  │            │ • E-Stop logic   │
 └─────────────────┘            └─────────────────┘
          │                              │
          ├─ LiDAR (Navigation)         ├─ Motors
          └─ Camera (Vision)            └─ Encoders
 ```
 
+### LiDAR / Vision 역할 분리
+
+- **LiDAR**: 전역 이동/맵/경로 계획
+- **Vision**: 사람 인식/추적, 근거리 상호작용
+- 두 명령 소스는 `buddybot_system`의 command mux에서 정책 기반으로 최종 `/cmd_vel_final`로 통합됩니다.
+
 ### 명령 우선순위 계층
 
-1. **E-STOP** (하드웨어/펌웨어): 물리적 비상 정지, 워치독 타임아웃
-2. **수동** (인간): 직접 조이스틱/키보드 제어
-3. **안전** (자율): 충돌 회피, 장애물 감지
-4. **네비게이션** (자율): 웨이포인트 추종, 경로 계획
-5. **추적** (자율): 사람 추적
-6. **대기** (기본값): 정지 안전 상태
+1. **E-STOP** (하드웨어/펌웨어)
+2. **Manual stop** (운영자)
+3. **Safety override** (안전 계층)
+4. **Follow/Nav** (자율 계층)
+5. **Idle** (기본 정지)
+
+---
+
+## 실제 하드웨어 고정 제약 (중요)
+
+다음 항목은 현재 저장소의 고정 조건입니다.
+
+1. **기존 실제 배선 유지**
+2. **Pi 5 ↔ Pico 통신은 USB Serial 유지** (`/dev/ttyACM0`)
+3. **GPIO UART 전환 금지** (이번 범위)
+4. 물리 미배선 항목은 과장 없이 TODO/소프트웨어 안전 계층으로 명시
+
+### Pico 실배선 핀 매핑 (Source of Truth)
+
+| Channel | PWM | IN1 | IN2 | ENCA | ENCB |
+|---|---|---|---|---|---|
+| Motor 0 | GP2 | GP0 | GP1 | GP3 | GP14 |
+| Motor 1 | GP8 | GP6 | GP7 | GP9 | GP15 |
+| Motor 2 | GP12 | GP10 | GP11 | GP13 | GP16 |
+
+| Peripheral | Signal | Pin |
+|---|---|---|
+| I2C | SDA | GP20 |
+| I2C | SCL | GP21 |
+
+- 통신: USB Serial (`/dev/ttyACM0`) 고정
+- 주의: GP16은 Motor 2 ENCB로 사용 중이므로 GPIO UART로 재할당하지 않음
+
+> 상세 핀맵: `docs/pin_mapping.md`
+
+---
 
 ## 저장소 구조
 
-```
+```text
 BuddyBot/
-├── firmware/           # Pico 마이크로컨트롤러 코드
-│   └── pico_motor_controller/
-├── software/           # ROS 2 워크스페이스
-│   └── pi5/
-│       └── ros2_ws/
-│           └── src/    # ROS 2 패키지
-│               ├── buddybot_base/      # Pi 5 ↔ Pico 통신
-│               ├── buddybot_vision/    # 컴퓨터 비전 파이프라인
-│               ├── buddybot_nav/       # 네비게이션 및 매핑
-│               ├── buddybot_system/    # 명령 중재 및 안전
-│               ├── buddybot_voice/     # 음성 인터페이스 (계획됨)
-│               └── buddybot_bringup/   # 시스템 기동 구성
-├── docs/              # 문서
-├── tools/             # 개발 유틸리티
-└── README.md          # 이 파일
+├── firmware/
+│   └── pico_motor_controller/       # Pico MicroPython (motor/safety)
+├── software/
+│   └── pi5/ros2_ws/src/             # ROS2 packages
+│       ├── buddybot_base/           # Pi5↔Pico serial bridge
+│       ├── buddybot_system/         # command mux / safety supervisor
+│       ├── buddybot_nav/            # navigation
+│       ├── buddybot_vision/         # vision/follow
+│       ├── buddybot_msgs/           # custom msgs
+│       └── buddybot_bringup/        # launch orchestration
+├── docs/
+│   ├── architecture.md
+│   ├── pin_mapping.md
+│   ├── bringup.md
+│   └── uart_protocol.md
+└── tools/
+    └── usb_serial_test.py
 ```
+
+---
 
 ## 하드웨어 스택
 
 ### 핵심 컴포넌트
-- **라즈베리 파이 5**: ROS 2 및 AI 처리를 실행하는 메인 컴퓨터
-- **라즈베리 파이 피코**: 실시간 모터 제어 및 안전 시스템
-- **LiDAR 센서**: 네비게이션 및 매핑을 위한 2D 레이저 스캐너
-- **카메라**: 컴퓨터 비전 및 사람 추적을 위한 RGB 카메라
-- **옴니휠 드라이브**: 부드러운 이동을 위한 3륜 홀로노믹 베이스
+- Raspberry Pi 5: ROS 2 및 AI 처리 메인 컴퓨터
+- Raspberry Pi Pico: 실시간 모터 제어 및 안전 계층
+- LiDAR: 네비게이션/맵핑용 2D 거리 센서
+- Camera: 사람 추적/근거리 인식
+- Omni-wheel base: 3륜 홀로노믹 이동
 
-### 모터 제어 핀 매핑 (Pico)
-```
-모터 1 (왼쪽): PWM GP0, DIR1 GP1, DIR2 GP2
-모터 2 (오른쪽): PWM GP4, DIR1 GP5, DIR2 GP6
-모터 3 (뒤쪽): PWM GP8, DIR1 GP9, DIR2 GP10
+### 인터페이스
+- **USB Serial**: Pi 5↔Pico 통신 (`/dev/ttyACM0`)
+- USB: 카메라/센서 연결
+- GPIO/PWM: 모터/엔코더/보조 I/O
 
-엔코더:
-왼쪽: A GP11, B GP12
-오른쪽: A GP13, B GP14
-뒤쪽: A GP15, B GP16
-
-안전: 비상 정지 GP17 (풀업, 액티브 로우)
-배터리: ADC GP26 (전압 분배기 필요)
-```
-
-### 주변 인터페이스
-- **USB 시리얼**: Pi 5와 Pico 간 결정론적 통신 (/dev/ttyACM0)
-- **USB**: 카메라 및 센서 연결
-- **GPIO**: 모터 드라이버 및 안전 인터록
-- **전력 관리**: 배터리 모니터링 및 분배
+---
 
 ## 소프트웨어 스택
 
 ### ROS 2 Jazzy (Ubuntu 24.04)
-- **미들웨어**: 프로세스 간 통신을 위한 ROS 2
-- **네비게이션**: SLAM 및 경로 계획을 갖춘 Nav2 스택
-- **비전**: 맞춤형 컴퓨터 비전 파이프라인을 갖춘 OpenCV
-- **안전**: 다중 계층 안전 모니터링 및 제어
+- 미들웨어: ROS 2
+- 네비게이션: Nav2 기반 구성
+- 비전: OpenCV/딥러닝 기반 파이프라인
+- 안전: supervisor + mux + Pico watchdog 계층
 
-### Python 패키지
-- **buddybot_base**: USB 시리얼 통신 브리지
-- **buddybot_vision**: 사람 감지 및 추적
-- **buddybot_nav**: 웨이포인트 네비게이션 및 매핑
-- **buddybot_system**: 명령 멀티플렉싱 및 안전 감독
+### 주요 패키지
+- `buddybot_base`: USB serial 통신 브리지
+- `buddybot_system`: 명령 중재/모드/안전 감독
+- `buddybot_nav`: 네비게이션 및 맵 기능
+- `buddybot_vision`: 사람 감지/추적
 
 ### Pico 펌웨어
-- **모터 제어**: PID 기반 전방향 제어
-- **안전 시스템**: 워치독 타이머 및 비상 정지
-- **통신**: USB 시리얼 프로토콜 구현
+- 모터 제어(PWM/방향)
+- 엔코더 피드백
+- watchdog timeout 안전 정지
+- 텍스트 기반 USB serial 프로토콜
+
+---
 
 ## 개발 상태
 
 ### 완료 ✅
-- Brain vs Spinal Cord 아키텍처 구현
-- Pi 5와 Pico 간 UART 통신 프로토콜
-- PID 알고리즘을 갖춘 기본 모터 제어
-- 컴퓨터 비전 사람 감지 (MobileNet-SSD)
-- 우선순위 멀티플렉싱을 갖춘 명령 중재 시스템
-- 네비게이션 웨이포인트 관리
-- 시스템 모드 관리 (대기/수동/추적/네비게이션)
-- 다중 계층 안전 시스템
+- Brain vs Spinal Cord 기본 구조
+- Pi5↔Pico USB serial 프로토콜
+- 기본 모터 제어 + safety stop
+- command mux 기반 명령 중재
+- 문서 기반 bring-up 체계
 
 ### 진행 중 🚧
-- 전체 Nav2 네비게이션 스택 통합
-- 음성 명령 처리
-- 다중 센서 융합 (LiDAR + 카메라)
-- 고급 안전 시스템 테스트
+- Nav2 통합 안정화
+- 비전/네비 연동 품질 개선
+- 고급 안전 검증 시나리오
 
-### 계획됨 📋
-- 원격 모니터링을 위한 클라우드 통합
-- 다중 로봇 조율 기능
-- 행동 적응을 위한 학습 시스템
-- 상용 배포 준비
+### 계획 📋
+- 원격 모니터링
+- 음성 명령 확장
+- 다중 센서 융합 고도화
+- 장기 운영 자동화
+
+---
 
 ## 빠른 시작
 
 ### 사전 요구사항
 - Ubuntu 24.04 LTS
-- ROS 2 Jazzy Jalisco
-- 라즈베리 파이 5 및 Pico 하드웨어
-- LiDAR 및 카메라 센서
+- ROS 2 Jazzy
+- Raspberry Pi 5 + Pico
+- LiDAR + Camera
 
-### Pi 5 설정 (ROS 2)
+### Pi 5 설정
+
 ```bash
-# 저장소 클론
 git clone https://github.com/rasasoe/BuddyBot.git
 cd BuddyBot
 
-# 설정 스크립트 실행
-./tools/setup.sh
-
-# ROS 2 패키지 빌드
 cd software/pi5/ros2_ws
 colcon build
-
-# 워크스페이스 소스
 source install/setup.bash
 
-# 기본 기능 테스트
 ros2 run buddybot_base pico_bridge_node
 ```
 
-### Pico 설정 (펌웨어)
-```bash
-# 펌웨어 디렉토리로 이동
-cd BuddyBot/firmware/pico_motor_controller
+### Pico 설정
 
-# 펌웨어 빌드 및 플래시 (적절한 Pico 개발 설정 사용)
-# 구현은 Pico 개발 설정에 따라 다름
+```bash
+cd firmware/pico_motor_controller
+# MicroPython 기준으로 파일 배포/플래시
+# 상세 절차는 docs/bringup.md 참고
 ```
 
-### 기본 시스템 테스트
-```bash
-# 비전 시스템 기동
-ros2 launch buddybot_vision vision.launch.py
+### 기본 bring-up 문서
+- `docs/bringup.md`
+- `docs/uart_protocol.md`
+- `docs/architecture.md`
 
-# 네비게이션 기동
-ros2 launch buddybot_nav nav.launch.py
-
-# 시스템 제어 기동
-ros2 launch buddybot_system system.launch.py
-```
-
-## 로드맵
-
-### 1단계: 기초 (완료)
-- [x] Brain vs Spinal Cord 아키텍처
-- [x] USB 시리얼 통신 프로토콜
-- [x] 기본 모터 제어 및 안전
-- [x] 컴퓨터 비전 통합
-
-### 2단계: 자율 동작 (진행 중)
-- [x] 사람 추적
-- [x] 웨이포인트 네비게이션
-- [ ] 전체 Nav2 통합
-- [ ] 음성 명령
-
-### 3단계: 시스템 통합 (2026년 2분기)
-- [ ] 다중 센서 융합
-- [ ] 고급 안전 테스트
-- [ ] 성능 최적화
-- [ ] 사용자 인터페이스 개발
-
-### 4단계: 고급 기능 (2026년 3-4분기)
-- [ ] 클라우드 연결성
-- [ ] 다중 로봇 조율
-- [ ] 학습 기능
-- [ ] Commercial deployment
+---
 
 ## Safety Philosophy
 
-**Safety First**: BuddyBot prioritizes human safety above all other system capabilities. The robot must never cause harm to humans or property, even at the expense of functionality.
+**Safety First**: BuddyBot은 기능보다 안전을 우선합니다.
 
-### Safety Principles
-- **Defense in Depth**: Multiple independent safety layers
-- **Fail-Safe Defaults**: Safest possible state when systems fail
-- **Transparent Operation**: Safety status always visible and logged
-- **Conservative Design**: Safety margins exceed requirements
+### 원칙
+- **Defense in Depth**: 다층 안전 장치
+- **Fail-Safe Defaults**: 실패 시 정지 상태
+- **Transparent Operation**: 상태/이벤트 가시화
+- **Conservative Design**: 검증된 경로 우선
 
-### Safety Layers
-1. **Hardware Layer**: Physical E-stop, motor driver safeties
-2. **Firmware Layer**: Pico watchdog, command validation
-3. **Software Layer**: ROS safety supervisor, collision detection
-4. **System Layer**: Command arbitration, mode management
+### 안전 계층
+1. Hardware layer
+2. Firmware layer (Pico watchdog, command validation)
+3. Software layer (ROS safety supervisor)
+4. System layer (command mux, mode management)
 
-### Safety Verification
-- **Testing**: Comprehensive safety system validation
-- **Monitoring**: Continuous safety status reporting
-- **Training**: Operator safety procedures and emergency protocols
-- **Documentation**: Complete safety analysis and procedures
+---
 
-## Contributing
+## 로드맵
 
-This is a capstone project demonstrating robotics engineering principles. Contributions should:
+1단계: 하드웨어 호환성 안정화 (완료)  
+2단계: 자율 동작 품질 개선 (진행 중)  
+3단계: 시스템 통합/검증 고도화  
+4단계: 발표/운영 자동화 및 확장
 
-1. Follow ROS 2 best practices and safety guidelines
-2. Include comprehensive testing, especially safety systems
-3. Update documentation for any architectural changes
-4. Maintain the Brain vs Spinal Cord separation of concerns
+---
 
-## License
-
-Apache 2.0 - See LICENSE file for details.
-
-## Acknowledgments
-
-- Raspberry Pi Foundation for hardware platforms
-- ROS 2 community for the robotics framework
-- Open source computer vision and navigation communities
-- Capstone project advisors and mentors
-
-## Documentation
+## 문서 링크
 
 - [System Architecture](docs/architecture.md)
-- [Safety Policy](docs/safety_policy.md)
+- [Pin Mapping](docs/pin_mapping.md)
+- [Bring-up Guide](docs/bringup.md)
 - [USB Serial Protocol](docs/uart_protocol.md)
-- [Development Plan](docs/development_plan.md)
+
