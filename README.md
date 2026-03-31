@@ -272,6 +272,17 @@ cd ~/BuddyBot/software/pi5/ros2_ws
 source install/setup.bash
 ```
 
+그래도 `ros2 run buddybot_panel panel_server` 에서 `No executable found`가 나오면:
+
+```bash
+cd ~/BuddyBot
+git pull
+cd ~/BuddyBot/software/pi5/ros2_ws
+rm -rf build install log
+cd ~/BuddyBot
+bash scripts/setup_pi5.sh
+```
+
 ### 5. 설치가 자꾸 꼬일 때 전체 점검만 먼저 하고 싶다면
 
 ```bash
