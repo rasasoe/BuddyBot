@@ -109,6 +109,7 @@ class PicoBridgeNode(Node):
         self.last_status_time = time.time()
         self.current_mode = 'NORMAL'
         self.emergency_stop_active = False
+        self.legacy_protocol_detected = False
 
         # Connect to Pico
         selected_port = self._connect_serial_with_fallback()
@@ -152,6 +153,8 @@ class PicoBridgeNode(Node):
 
             # Send command via UART
             command = self.protocol.format_command(vx, vy, wz)
+            if self.legacy_protocol_detected:
+                command = f"{vx:.3f},{vy:.3f},{wz * 57.2958:.2f}"
             if self.serial_manager.send_message(command):
                 self.last_cmd_vel_time = time.time()
                 self.get_logger().debug(f"Sent velocity command: vx={vx:.3f}, vy={vy:.3f}, wz={wz:.3f}")
@@ -193,6 +196,11 @@ class PicoBridgeNode(Node):
         try:
             self.get_logger().debug(f"Received from Pico: {line}")
 
+            if line.startswith("FEEDBACK:"):
+                self.legacy_protocol_detected = True
+                self._handle_legacy_feedback(line)
+                return
+
             # Parse the message
             parsed = self.protocol.parse_response(line)
             if not parsed:
@@ -223,6 +231,21 @@ class PicoBridgeNode(Node):
         except Exception as e:
             self.get_logger().error(f"Error processing serial message '{line}': {e}")
 
+    def _handle_legacy_feedback(self, line: str) -> None:
+        try:
+            payload = line.split(":", 1)[1]
+            parts = [float(item) for item in payload.split(",")]
+            while len(parts) < 3:
+                parts.append(0.0)
+
+            self.last_status_time = time.time()
+            self.current_mode = "LEGACY"
+
+            self._publish_status({"estop": False, "mode": "LEGACY"})
+            self._publish_rpm({"m0": parts[0], "m1": parts[1], "m2": parts[2]})
+        except Exception as e:
+            self.get_logger().warn(f"Failed to parse legacy FEEDBACK line '{line}': {e}")
+
     def _publish_status(self, params: dict) -> None:
         """
         Publish Pico status to ROS topic.
@@ -232,6 +255,7 @@ class PicoBridgeNode(Node):
         """
         try:
             status_msg = Status()
+            status_msg.battery_voltage = float(params.get('battery_voltage', 0.0))
             status_msg.emergency_stop = params.get('estop', False)
             status_msg.mode = params.get('mode', 'UNKNOWN')
 
@@ -333,6 +357,7 @@ def main(args=None):
     """Main entry point for the Pico Bridge Node."""
     rclpy.init(args=args)
 
+    node = None
     try:
         node = PicoBridgeNode()
         rclpy.spin(node)
@@ -341,7 +366,13 @@ def main(args=None):
     except Exception as e:
         logging.error(f"Fatal error in Pico Bridge Node: {e}")
     finally:
-        rclpy.shutdown()
+        if node is not None:
+            try:
+                node.destroy_node()
+            except Exception:
+                pass
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
