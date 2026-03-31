@@ -38,6 +38,7 @@ BuddyBot은 Raspberry Pi 5와 Raspberry Pi Pico를 사용하는 실제 로봇 �
 - `buddybot_vision`: 사람 추종 제어
 - `buddybot_nav`: waypoint manager, navigation
 - `buddybot_voice`: 서버컴 AI와 연결하는 voice bridge
+- `buddybot_panel`: Pi5 로컬 웹 UI
 
 ## 하드웨어 전제
 
@@ -67,6 +68,7 @@ git clone https://github.com/rasasoe/BuddyBot.git
 cd BuddyBot
 sudo apt update
 sudo apt install python3-serial
+python3 -m pip install fastapi uvicorn requests pyyaml
 cd software/pi5/ros2_ws
 colcon build
 source install/setup.bash
@@ -107,6 +109,28 @@ ros2 run buddybot_nav waypoint_manager_node
 ```bash
 ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SERVER_PC_IP:8000
 ```
+
+### 6. Pi5 로컬 웹 UI
+
+휴대폰이나 모니터에서 바로 접속할 수 있는 로컬 제어 패널:
+
+```bash
+ros2 run buddybot_panel panel_server
+```
+
+접속:
+
+- Pi5 로컬: `http://127.0.0.1:8090`
+- 휴대폰: `http://PI5_IP:8090`
+
+이 패널에서는 다음을 할 수 있습니다.
+
+- 수동 조작
+- 추종 시작/중지
+- 로컬 음성 명령
+- 체크포인트 저장
+- 체크포인트 이동
+- 서버 연결 시 Assistant Mode 전환
 
 ## Pico 설치
 
@@ -169,4 +193,3 @@ BuddyBot/
 현재 구조상 시스템 아키텍처와 통신 계층은 정리되어 있습니다.
 다만 실기 기준으로는 모터 방향 보정, 실제 odometry 계산, kiwi drive 운동학 검증이 계속 중요합니다.
 실주행 전에는 반드시 전진/후진/좌우/회전 캘리브레이션 테스트를 수행하세요.
-

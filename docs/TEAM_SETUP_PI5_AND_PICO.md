@@ -21,6 +21,7 @@ git clone https://github.com/rasasoe/BuddyBot.git
 cd BuddyBot
 sudo apt update
 sudo apt install python3-serial
+python3 -m pip install fastapi uvicorn requests pyyaml
 cd software/pi5/ros2_ws
 colcon build
 source install/setup.bash
@@ -62,6 +63,28 @@ Replace `SERVER_PC_IP` with the real server IP.
 ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SERVER_PC_IP:8000
 ```
 
+### 6. Pi5 local web panel
+
+```bash
+ros2 run buddybot_panel panel_server
+```
+
+Open from phone or browser:
+
+- `http://PI5_IP:8090`
+
+Standalone mode:
+
+- server PC not required
+- local voice command mode works
+- manual drive, follow toggle, waypoint go/save work
+
+Assistant mode:
+
+- enable from the Pi5 panel
+- set `http://SERVER_PC_IP:8000`
+- chat requests are forwarded to `BuddyBot-ai`
+
 ## Pico firmware deploy
 
 Install MicroPython UF2 on the Pico first.
@@ -99,4 +122,4 @@ Then copy these files from `firmware/pico_motor_controller/` to the Pico root:
    - follow on/off
    - voice chat
    - waypoint go
-
+6. Optionally run the Pi5 local panel and test from a phone browser.

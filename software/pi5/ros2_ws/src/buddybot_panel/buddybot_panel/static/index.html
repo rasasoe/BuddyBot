@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BuddyBot Pi5 Panel</title>
+  <style>
+    :root{--bg:#11161b;--panel:#1c242c;--line:#2e3a45;--txt:#f3f6f8;--muted:#9fb1bf;--primary:#1e8e7e;--accent:#c46a1c;--danger:#c13838}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top left,#173640,transparent 30%),linear-gradient(135deg,#101419,#182028);color:var(--txt);font-family:system-ui,sans-serif}
+    .shell{width:min(1200px,calc(100% - 20px));margin:0 auto;padding:18px 0}.hero,.grid{display:grid;gap:14px}.hero{grid-template-columns:1.5fr 1fr;margin-bottom:14px}.grid{grid-template-columns:1fr 1fr 1fr}
+    .panel{background:rgba(28,36,44,.9);border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 20px 40px rgba(0,0,0,.25)}
+    h1,h2,h3{margin:0 0 10px}.muted{color:var(--muted)}.status{display:grid;gap:10px}.status div,.waypoint-item{display:flex;justify-content:space-between;padding:10px 12px;background:#12181e;border-radius:14px}
+    button,input,select{font:inherit}.btns,.teleop,.waypoint-form{display:grid;gap:10px}.teleop-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    button{border:0;border-radius:14px;padding:12px 14px;color:#fff;background:var(--primary);font-weight:700}.secondary{background:#2c3740}.accent{background:var(--accent)}.danger{background:var(--danger)}
+    input,select{width:100%;padding:12px;border-radius:14px;border:1px solid var(--line);background:#0f1419;color:var(--txt)}
+    .chat{min-height:220px;max-height:280px;overflow:auto;padding:12px;background:#0f1419;border-radius:16px;border:1px solid var(--line)}
+    .msg{margin:0 0 10px;padding:10px 12px;border-radius:14px;line-height:1.4}.user{background:#173640;margin-left:30px}.bot{background:#2a1d13;margin-right:30px}
+    .chip{display:inline-block;padding:7px 11px;border-radius:999px;background:#0f1419;color:var(--muted);margin-right:8px}
+    @media (max-width:980px){.hero,.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <article class="panel">
+        <h1>BuddyBot Pi5 Local Panel</h1>
+        <p class="muted">휴대폰이나 모니터로 접속해서 기본 제어를 수행하고, 필요할 때만 서버컴 AI 비서 모드를 켤 수 있습니다.</p>
+        <div>
+          <span class="chip" id="mode-chip">mode: standalone</span>
+          <span class="chip" id="server-chip">server: offline</span>
+          <span class="chip" id="ros-chip">ros2: mock</span>
+        </div>
+      </article>
+      <article class="panel status" id="status-box"></article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h2>Drive</h2>
+        <div class="teleop">
+          <button onclick="manual('forward')">앞으로</button>
+          <div class="teleop-row">
+            <button onclick="manual('left')">좌회전</button>
+            <button class="danger" onclick="manual('stop')">정지</button>
+            <button onclick="manual('right')">우회전</button>
+          </div>
+          <button onclick="manual('backward')">뒤로</button>
+        </div>
+        <div class="btns" style="margin-top:12px">
+          <button class="accent" onclick="setFollow(true)">추종 시작</button>
+          <button class="secondary" onclick="setFollow(false)">추종 중지</button>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Voice / Assistant</h2>
+        <div class="btns">
+          <button id="voice-btn">음성 듣기</button>
+          <button class="secondary" onclick="toggleAssistant()">Assistant Mode 토글</button>
+        </div>
+        <input id="server-url" value="http://127.0.0.1:8000" />
+        <div class="chat" id="chat-log"></div>
+        <div class="btns" style="grid-template-columns:1fr auto">
+          <input id="chat-input" placeholder="예: 앞으로 가, 따라와, 주방으로 가" />
+          <button onclick="sendChat()">보내기</button>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Waypoints</h2>
+        <select id="waypoint-select"></select>
+        <div class="btns">
+          <button class="accent" onclick="goWaypoint()">선택 위치로 이동</button>
+        </div>
+        <form class="waypoint-form" onsubmit="saveWaypoint(event)">
+          <input id="wp-name" placeholder="checkpoint name" />
+          <div class="teleop-row">
+            <input id="wp-x" type="number" step="0.1" placeholder="x" />
+            <input id="wp-y" type="number" step="0.1" placeholder="y" />
+            <input id="wp-theta" type="number" step="0.1" placeholder="theta" />
+          </div>
+          <button type="submit">체크포인트 저장</button>
+        </form>
+        <div id="waypoint-list" class="status" style="margin-top:12px"></div>
+      </article>
+    </section>
+  </main>
+  <script>
+    let assistantEnabled = false;
+    const chatLog = document.getElementById("chat-log");
+    const waypointSelect = document.getElementById("waypoint-select");
+    const waypointList = document.getElementById("waypoint-list");
+
+    function addMsg(role, text){
+      const div=document.createElement("div");
+      div.className=`msg ${role}`;
+      div.textContent=text;
+      chatLog.appendChild(div);
+      chatLog.scrollTop=chatLog.scrollHeight;
+    }
+
+    async function refreshStatus(){
+      const data = await (await fetch("/api/status")).json();
+      document.getElementById("mode-chip").textContent = `mode: ${data.mode}`;
+      document.getElementById("server-chip").textContent = `server: ${data.server_connected ? "online" : "offline"}`;
+      document.getElementById("ros-chip").textContent = `ros2: ${data.ros2_connected ? "connected" : "mock"}`;
+      document.getElementById("status-box").innerHTML = `
+        <div><span>추종</span><strong>${data.follow_enabled ? "켜짐" : "꺼짐"}</strong></div>
+        <div><span>마지막 명령</span><strong>${data.last_command}</strong></div>
+        <div><span>서버 URL</span><strong>${data.server_url}</strong></div>
+      `;
+      assistantEnabled = data.mode === "assistant";
+    }
+
+    async function refreshWaypoints(){
+      const data = await (await fetch("/api/waypoints")).json();
+      waypointSelect.innerHTML = "";
+      waypointList.innerHTML = "";
+      (data.items || []).forEach(item => {
+        const option = document.createElement("option");
+        option.value = item.name;
+        option.textContent = `${item.name} (${item.x}, ${item.y})`;
+        waypointSelect.appendChild(option);
+
+        const box = document.createElement("div");
+        box.className = "waypoint-item";
+        box.innerHTML = `<span>${item.name}</span><strong>${item.x}, ${item.y}</strong>`;
+        waypointList.appendChild(box);
+      });
+    }
+
+    async function manual(direction){
+      await fetch("/api/manual", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({direction, speed:0.35, duration:1.0})});
+      refreshStatus();
+    }
+
+    async function setFollow(enabled){
+      await fetch("/api/follow", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled})});
+      addMsg("bot", enabled ? "추종 모드 시작" : "추종 모드 중지");
+      refreshStatus();
+    }
+
+    async function toggleAssistant(){
+      const server_url = document.getElementById("server-url").value.trim();
+      const data = await (await fetch("/api/assistant", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled: !assistantEnabled, server_url})})).json();
+      addMsg("bot", data.mode === "assistant" ? "Assistant Mode 활성화" : "Standalone Mode 활성화");
+      refreshStatus();
+    }
+
+    async function sendChat(textArg){
+      const input = document.getElementById("chat-input");
+      const message = textArg || input.value.trim();
+      if(!message) return;
+      input.value = "";
+      addMsg("user", message);
+      const data = await (await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message})})).json();
+      addMsg("bot", data.response);
+      if("speechSynthesis" in window){
+        const u = new SpeechSynthesisUtterance(data.response);
+        u.lang = "ko-KR";
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      }
+    }
+
+    async function goWaypoint(){
+      const name = waypointSelect.value;
+      if(!name) return;
+      const data = await (await fetch("/api/go", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})})).json();
+      addMsg("bot", data.message);
+      refreshStatus();
+    }
+
+    async function saveWaypoint(event){
+      event.preventDefault();
+      const payload = {
+        name: document.getElementById("wp-name").value.trim(),
+        x: Number(document.getElementById("wp-x").value),
+        y: Number(document.getElementById("wp-y").value),
+        theta: Number(document.getElementById("wp-theta").value || 0),
+        description: "Pi5 local panel checkpoint"
+      };
+      if(!payload.name) return;
+      await fetch("/api/waypoints", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
+      addMsg("bot", `${payload.name} 체크포인트 저장 완료`);
+      event.target.reset();
+      refreshWaypoints();
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const voiceBtn = document.getElementById("voice-btn");
+    if(SpeechRecognition){
+      const rec = new SpeechRecognition();
+      rec.lang = "ko-KR";
+      rec.interimResults = false;
+      voiceBtn.onclick = () => { rec.start(); voiceBtn.textContent = "듣는 중..."; };
+      rec.onresult = (e) => sendChat(e.results[0][0].transcript);
+      rec.onend = () => voiceBtn.textContent = "음성 듣기";
+    } else {
+      voiceBtn.disabled = true;
+      voiceBtn.textContent = "브라우저 미지원";
+    }
+
+    addMsg("bot", "Pi5 로컬 패널이 준비됐습니다. 서버 없이도 기본 음성 명령 제어가 가능합니다.");
+    refreshStatus();
+    refreshWaypoints();
+    setInterval(refreshStatus, 5000);
+  </script>
+</body>
+</html>
