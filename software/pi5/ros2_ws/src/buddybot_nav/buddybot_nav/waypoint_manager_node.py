@@ -48,6 +48,7 @@ from nav_msgs.msg import Odometry
 import yaml
 import os
 import math
+import json
 from typing import Dict, Optional, Tuple
 
 
@@ -70,12 +71,14 @@ class WaypointManagerNode(Node):
 
         # Get parameters
         waypoint_config = self.get_parameter('waypoint_config').value
+        self.waypoint_config = waypoint_config
         self.navigation_timeout = self.get_parameter('navigation_timeout').value
         self.goal_tolerance = self.get_parameter('goal_tolerance').value
         self.use_sim_time = self.get_parameter('use_sim_time').value
 
         # Load waypoint database
-        self.waypoints = self._load_waypoints(waypoint_config)
+        self.config_data = self._load_waypoints(waypoint_config)
+        self.waypoints = self.config_data.get('waypoints', {})
 
         # Navigation state
         self.current_waypoint = None
@@ -105,6 +108,10 @@ class WaypointManagerNode(Node):
 
         self.create_subscription(
             String, '/system/current_mode', self.mode_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/waypoint_goal', self.waypoint_goal_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/waypoint_save', self.waypoint_save_callback, qos_profile)
 
         # Services
         self.create_service(
@@ -137,15 +144,16 @@ class WaypointManagerNode(Node):
                 if os.path.exists(package_share):
                     config_path = package_share
 
-            with open(config_path, 'r') as f:
-                waypoints = yaml.safe_load(f)
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f) or {}
 
+            waypoints = data.get('waypoints', {})
             self.get_logger().info(f"Loaded {len(waypoints)} waypoints from {config_path}")
-            return waypoints
+            return data
 
         except Exception as e:
             self.get_logger().error(f"Failed to load waypoints: {e}")
-            return {}
+            return {"waypoints": {}, "destinations": {}, "constraints": {}}
 
     def _log_available_waypoints(self):
         """Log all available waypoints."""
@@ -158,6 +166,46 @@ class WaypointManagerNode(Node):
             pose = data.get('pose', {})
             x, y = pose.get('x', 0.0), pose.get('y', 0.0)
             self.get_logger().info(f"  {name}: ({x:.2f}, {y:.2f})")
+
+    def waypoint_goal_callback(self, msg: String):
+        waypoint_name = msg.data.strip()
+        if not waypoint_name:
+            return
+        if waypoint_name not in self.waypoints:
+            self.get_logger().warn(f"Unknown waypoint from topic request: {waypoint_name}")
+            self._publish_navigation_status(f"unknown_waypoint:{waypoint_name}")
+            return
+        self._start_navigation(waypoint_name)
+
+    def waypoint_save_callback(self, msg: String):
+        try:
+            payload = json.loads(msg.data)
+            name = payload["name"]
+            self.config_data.setdefault("waypoints", {})
+            self.config_data["waypoints"][name] = {
+                "pose": {
+                    "x": float(payload.get("x", 0.0)),
+                    "y": float(payload.get("y", 0.0)),
+                    "theta": float(payload.get("theta", 0.0)),
+                },
+                "description": payload.get("description", f"{name} checkpoint"),
+                "approach_distance": float(payload.get("approach_distance", 0.5)),
+            }
+            self.waypoints = self.config_data["waypoints"]
+            self._save_waypoints()
+            self._publish_navigation_status(f"waypoint_saved:{name}")
+            self.get_logger().info(f"Saved waypoint '{name}'")
+        except Exception as exc:
+            self.get_logger().error(f"Failed to save waypoint from topic: {exc}")
+            self._publish_navigation_status("waypoint_save_failed")
+
+    def _save_waypoints(self):
+        config_path = self.waypoint_config
+        if not os.path.isabs(config_path):
+            config_path = os.path.join(
+                os.path.dirname(__file__), '..', 'config', 'waypoints.yaml')
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(self.config_data, f, allow_unicode=True, sort_keys=False)
 
     def waypoint_request_callback(self, request, response):
         """Handle waypoint navigation requests."""

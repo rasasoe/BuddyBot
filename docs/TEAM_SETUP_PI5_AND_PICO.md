@@ -1,0 +1,102 @@
+# BuddyBot Pi5 and Pico Setup
+
+## Role split
+
+- `BuddyBot-ai`: server PC
+- `BuddyBot`: Raspberry Pi 5
+- `firmware/pico_motor_controller`: Raspberry Pi Pico
+
+## Raspberry Pi 5 requirements
+
+- Ubuntu 24.04
+- ROS 2 Jazzy
+- Python serial package
+- USB connection to Pico
+- camera and LiDAR connected as needed
+
+## Pi 5 install
+
+```bash
+git clone https://github.com/rasasoe/BuddyBot.git
+cd BuddyBot
+sudo apt update
+sudo apt install python3-serial
+cd software/pi5/ros2_ws
+colcon build
+source install/setup.bash
+```
+
+## Pi 5 run order
+
+### 1. Pico bridge
+
+```bash
+ros2 run buddybot_base pico_bridge_node
+```
+
+### 2. System nodes
+
+```bash
+ros2 run buddybot_system command_mux_node
+ros2 run buddybot_system mode_manager_node
+ros2 run buddybot_system safety_supervisor_node
+```
+
+### 3. Follow / vision
+
+```bash
+ros2 run buddybot_vision follow_controller_node
+```
+
+### 4. Navigation / waypoint manager
+
+```bash
+ros2 run buddybot_nav waypoint_manager_node
+```
+
+### 5. Voice bridge to server PC
+
+Replace `SERVER_PC_IP` with the real server IP.
+
+```bash
+ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SERVER_PC_IP:8000
+```
+
+## Pico firmware deploy
+
+Install MicroPython UF2 on the Pico first.
+
+Then copy these files from `firmware/pico_motor_controller/` to the Pico root:
+
+- `main.py`
+- `config.py`
+- `pins.py`
+- `motor_driver.py`
+- `encoder.py`
+- `kinematics.py`
+- `pid.py`
+- `watchdog.py`
+- `safety.py`
+- `state.py`
+- `uart_protocol.py`
+
+`main.py` must exist at the Pico root for auto-start.
+
+## Hardware notes
+
+- Pi 5 <-> Pico uses USB serial, usually `/dev/ttyACM0`
+- source-of-truth pin mapping is in `docs/pin_mapping.md`
+- waypoint data is stored in `software/pi5/ros2_ws/src/buddybot_nav/config/waypoints.yaml`
+
+## Team handoff checklist
+
+1. Start the server PC app first.
+2. Confirm `http://SERVER_PC_IP:8000/health` works.
+3. Power the robot and connect Pico via USB.
+4. Start Pi 5 ROS2 nodes.
+5. Open the web GUI from the server PC and test:
+   - manual drive
+   - follow on/off
+   - voice chat
+   - waypoint go
+
