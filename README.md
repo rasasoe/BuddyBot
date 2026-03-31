@@ -1,14 +1,15 @@
 # BuddyBot
 
-`BuddyBot`은 실제 로봇 쪽 저장소입니다.
+`BuddyBot`은 실제 로봇 하드웨어 쪽 저장소입니다.
 
-이 레포는 라즈베리파이 5와 라즈베리파이 Pico에서 돌아가는 실제 제어 스택을 담고 있습니다.
+이 레포는 라즈베리파이 5와 라즈베리파이 Pico에서 돌아가는 실제 로봇 제어 스택을 담고 있습니다.
 
 포함 기능:
 - ROS 2 기반 로봇 스택
 - Pi5 <-> Pico 시리얼 브리지
 - 수동 조작
-- 사용자 추종
+- 카메라 기반 사용자 추종
+- LiDAR 기반 회피구동
 - LiDAR / waypoint navigation
 - Pi5 로컬 웹 UI
 - Pico 펌웨어
@@ -29,6 +30,7 @@
 - Pi5 로컬 웹 UI 접속
 - 수동 조작
 - 추종 상태 전환
+- LiDAR 기반 안전 우회
 - 체크포인트 저장 / 이동
 - 맵 클릭으로 좌표 확인
 - 현재 위치 기준 체크포인트 저장
@@ -45,7 +47,7 @@
 ## 주요 패키지
 
 - `buddybot_base`: Pi5 <-> Pico 시리얼 브리지
-- `buddybot_system`: command mux, mode manager, safety supervisor
+- `buddybot_system`: command mux, mode manager, safety supervisor, lidar avoidance
 - `buddybot_vision`: 사용자 추종 및 비전 제어
 - `buddybot_nav`: waypoint manager, navigation
 - `buddybot_voice`: Pi5에서 서버 AI로 연결되는 voice bridge
@@ -126,6 +128,7 @@ ros2 run buddybot_base pico_bridge_node
 ros2 run buddybot_system command_mux_node
 ros2 run buddybot_system mode_manager_node
 ros2 run buddybot_system safety_supervisor_node
+ros2 run buddybot_system lidar_avoidance_node
 ```
 
 ### 3. 추종 노드 실행
@@ -161,6 +164,20 @@ ros2 run buddybot_panel panel_server
 - 체크포인트 선택 이동
 - 로컬 텍스트 명령
 - 브라우저 음성 입력
+- command mux 상태를 통해 회피/안전 상태 간접 확인
+
+## 회피구동 동작 방식
+
+- 사용자 추종은 카메라 기반 제어를 사용합니다.
+- 장애물 회피는 LiDAR `/scan` 기반으로 동작합니다.
+- `lidar_avoidance_node`가 전방 장애물을 감지하면 `/cmd_vel_safety_override`를 발행합니다.
+- `command_mux_node`는 이 안전 override를 follow/nav/manual보다 높은 우선순위로 반영합니다.
+- 가까운 장애물은 정지 또는 후진+회전, 여유가 있는 장애물은 제자리 회전 우회로 처리합니다.
+
+즉:
+- 사람 추종: 카메라
+- 장애물 회피: LiDAR
+- 최종 주행 출력: command mux
 
 ## 미니맵 / 체크포인트 동작 방식
 
@@ -202,11 +219,11 @@ ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SE
 
 ### 서버컴 담당
 
-`BuddyBot-ai` 레포 설치 및 실행
+`BuddyBot-ai` 설치 및 실행
 
 ### Pi5 담당
 
-이 `BuddyBot` 레포 설치 및 ROS2 bringup
+이 `BuddyBot` 설치 및 ROS2 bringup
 
 ### Pico 담당
 
@@ -218,7 +235,7 @@ MicroPython 설치 후 `firmware/pico_motor_controller` 업로드
 
 1. `BuddyBot`만 받아도 오프라인 모드 시연 가능
 2. Pi5에서 `buddybot_panel`을 띄우면 휴대폰으로 접속 가능
-3. 수동 조작, 체크포인트 저장/이동, 맵 확인은 서버 없이 가능
+3. 수동 조작, 체크포인트 저장/이동, 맵 확인, LiDAR 회피 시연은 서버 없이 가능
 4. 서버컴이 붙으면 AI 비서 기능만 추가됨
 
 ## 중요한 현실적 주의사항
@@ -232,6 +249,7 @@ MicroPython 설치 후 `firmware/pico_motor_controller` 업로드
 - 오도메트리 검증
 - 추종 튜닝
 - 네비게이션 튜닝
+- LiDAR 회피 파라미터 튜닝
 
 즉:
 - 오프라인 시연 / 기능 테스트는 가능

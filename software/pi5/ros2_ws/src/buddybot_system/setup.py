@@ -26,6 +26,7 @@ setup(
             'command_mux_node = buddybot_system.command_mux_node:main',
             'mode_manager_node = buddybot_system.mode_manager_node:main',
             'safety_supervisor_node = buddybot_system.safety_supervisor_node:main',
+            'lidar_avoidance_node = buddybot_system.lidar_avoidance_node:main',
         ],
     },
 )
