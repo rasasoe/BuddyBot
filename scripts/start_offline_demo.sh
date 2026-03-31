@@ -60,6 +60,45 @@ start_node follow_controller ros2 run buddybot_vision follow_controller_node
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
 start_node panel ros2 run buddybot_panel panel_server
 
+for _ in {1..15}; do
+  if python3 - <<'PY'
+import socket
+s = socket.socket()
+try:
+    s.settimeout(0.5)
+    s.connect(("127.0.0.1", 8090))
+    print("ok")
+    raise SystemExit(0)
+except OSError:
+    raise SystemExit(1)
+finally:
+    s.close()
+PY
+  then
+    break
+  fi
+  sleep 1
+done
+
+if ! python3 - <<'PY'
+import socket
+s = socket.socket()
+try:
+    s.settimeout(0.5)
+    s.connect(("127.0.0.1", 8090))
+    raise SystemExit(0)
+except OSError:
+    raise SystemExit(1)
+finally:
+    s.close()
+PY
+then
+  echo "[demo] panel did not open on 127.0.0.1:8090"
+  echo "[demo] last panel log:"
+  tail -n 120 "$LOG_DIR/panel.log" || true
+  exit 1
+fi
+
 echo
 echo "[demo] offline demo is running"
 echo "[demo] panel url: http://127.0.0.1:8090"

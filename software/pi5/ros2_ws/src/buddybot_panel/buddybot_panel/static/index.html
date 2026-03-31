@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BuddyBot Pi5 Local Panel</title>
   <style>
     :root{--bg:#0f1519;--panel:rgba(24,31,37,.92);--line:rgba(149,172,187,.16);--text:#edf3f6;--muted:#98aab7;--primary:#158b7b;--accent:#c06922;--danger:#c63d3d;--chip:rgba(11,15,18,.66);--shadow:0 24px 60px rgba(0,0,0,.28)}
-    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top left,rgba(21,139,123,.18),transparent 24%),radial-gradient(circle at bottom right,rgba(192,105,34,.16),transparent 28%),linear-gradient(135deg,#0d1317 0%,#161f25 100%);color:var(--text);font-family:"IBM Plex Sans KR",system-ui,sans-serif}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top left,rgba(21,139,123,.18),transparent 24%),radial-gradient(circle at bottom right,rgba(192,105,34,.16),transparent 28%),linear-gradient(135deg,#0d1317 0%,#161f25 100%);color:var(--text);font-family:system-ui,sans-serif}
     .shell{width:min(1440px,calc(100% - 24px));margin:0 auto;padding:18px 0 28px}.hero,.grid{display:grid;gap:14px}.hero{grid-template-columns:1.6fr 1fr;margin-bottom:14px}.grid{grid-template-columns:1.15fr 1.3fr 1fr;align-items:start}
-    .panel{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:18px;box-shadow:var(--shadow);backdrop-filter:blur(14px)}h1,h2,h3,p{margin:0}h1{font-size:clamp(1.9rem,4.5vw,3.6rem);line-height:.96;margin-top:8px}h2{margin-bottom:10px;font-size:1.15rem}h3{margin-bottom:10px;font-size:1rem}.eyebrow,.muted{color:var(--muted)}.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.86rem}.lead,.small{color:var(--muted);line-height:1.5}.lead{margin-top:12px;max-width:760px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:18px;box-shadow:var(--shadow)}h1,h2,h3,p{margin:0}h1{font-size:clamp(1.9rem,4.5vw,3.6rem);line-height:.96;margin-top:8px}h2{margin-bottom:10px;font-size:1.15rem}h3{margin-bottom:10px;font-size:1rem}.eyebrow,.lead,.small{color:var(--muted);line-height:1.5}.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.86rem}.lead{margin-top:12px;max-width:760px}
     .status-list,.waypoint-list,.chat-log{display:grid;gap:10px}.status-item,.waypoint-item{display:flex;justify-content:space-between;gap:12px;padding:11px 13px;border-radius:16px;background:rgba(9,14,18,.48)}
     .map-panel{display:grid;gap:14px}.map-stage{position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--line);background:#eff3f5}#map-canvas{width:100%;height:430px;display:block;cursor:crosshair}.map-overlay{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}.chip{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:var(--chip);color:#fff;font-size:.88rem}
     .toolbar,.teleop,.chat-form,.assistant-row,.waypoint-form,.waypoint-actions{display:grid;gap:10px}.toolbar,.chat-form,.assistant-row{grid-template-columns:1fr auto}.teleop-row,.triple,.waypoint-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.waypoint-actions{grid-template-columns:1fr 1fr}
@@ -22,113 +22,118 @@
     <section class="hero">
       <article class="panel">
         <p class="eyebrow">BuddyBot Pi5 Local Panel</p>
-        <h1>오프라인에서도 바로 제어 가능한 버디봇 로컬 관제 화면</h1>
-        <p class="lead">휴대폰이나 Pi5 연결 모니터에서 접속해서 수동 조작, 추종 전환, 맵 확인, 체크포인트 저장/이동, 텍스트 명령, 브라우저 음성 입력까지 사용할 수 있습니다. 서버컴이 연결되면 Assistant Mode로 확장됩니다.</p>
+        <h1>Offline control panel for BuddyBot</h1>
+        <p class="lead">Use this page on Pi5 or a phone browser for manual driving, waypoint save/go, local commands, and optional assistant mode.</p>
       </article>
       <article class="panel status-list" id="status-box"></article>
     </section>
 
     <section class="grid">
       <article class="panel">
-        <h2>주행 제어</h2>
+        <h2>Drive</h2>
         <div class="teleop">
-          <button onclick="manual('forward')">앞으로</button>
+          <button onclick="manual('forward')">Forward</button>
           <div class="teleop-row">
-            <button onclick="manual('left')">좌회전</button>
-            <button class="danger" onclick="manual('stop')">정지</button>
-            <button onclick="manual('right')">우회전</button>
+            <button onclick="manual('left')">Turn Left</button>
+            <button class="danger" onclick="manual('stop')">Stop</button>
+            <button onclick="manual('right')">Turn Right</button>
           </div>
-          <button onclick="manual('backward')">뒤로</button>
+          <button onclick="manual('backward')">Backward</button>
         </div>
         <div class="waypoint-actions" style="margin-top:12px">
-          <button class="accent" onclick="setFollow(true)">추종 시작</button>
-          <button class="secondary" onclick="setFollow(false)">추종 중지</button>
+          <button class="accent" onclick="setFollow(true)">Follow On</button>
+          <button class="secondary" onclick="setFollow(false)">Follow Off</button>
         </div>
-        <div class="small" style="margin-top:12px">현재 follow 토글은 로컬 상태와 시연 흐름 기준입니다. 실제 추종 제어는 카메라/비전 노드가 함께 실행되어야 반영됩니다.</div>
       </article>
 
       <article class="panel map-panel">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
           <div>
-            <h2>미니맵 / 체크포인트</h2>
-            <p class="small" id="map-summary">맵과 현재 위치를 불러오는 중입니다.</p>
+            <h2>Map / Waypoints</h2>
+            <p class="small" id="map-summary">Loading map status...</p>
           </div>
-          <button class="secondary" onclick="refreshMap()">맵 새로고침</button>
+          <button class="secondary" onclick="refreshMap()">Refresh</button>
         </div>
 
         <div class="map-stage">
           <canvas id="map-canvas" width="820" height="430"></canvas>
           <div class="map-overlay">
-            <span class="chip" id="map-source-chip">맵: 준비 중</span>
-            <span class="chip" id="pose-chip">현재 위치: 없음</span>
+            <span class="chip" id="map-source-chip">Map: waiting</span>
+            <span class="chip" id="pose-chip">Pose: none</span>
           </div>
         </div>
 
         <div class="toolbar">
           <select id="waypoint-select"></select>
-          <button class="accent" onclick="goWaypoint()">선택 위치로 이동</button>
+          <button class="accent" onclick="goWaypoint()">Go</button>
         </div>
 
         <form class="waypoint-form" onsubmit="saveWaypoint(event)">
-          <h3>체크포인트 저장</h3>
-          <input id="wp-name" placeholder="예: kitchen_corner" />
+          <h3>Save waypoint</h3>
+          <input id="wp-name" placeholder="e.g. kitchen_corner" />
           <div class="triple">
             <input id="wp-x" type="number" step="0.01" placeholder="x" />
             <input id="wp-y" type="number" step="0.01" placeholder="y" />
             <input id="wp-theta" type="number" step="0.01" placeholder="theta" />
           </div>
           <div class="waypoint-actions">
-            <button type="button" class="secondary" onclick="fillCurrentPose()">현재 위치 채우기</button>
-            <button type="button" class="secondary" onclick="saveCurrentPoseWaypoint()">현재 위치로 바로 저장</button>
+            <button type="button" class="secondary" onclick="fillCurrentPose()">Use current pose</button>
+            <button type="button" class="secondary" onclick="saveCurrentPoseWaypoint()">Save current pose</button>
           </div>
-          <button type="submit">입력 좌표로 저장</button>
+          <button type="submit">Save typed waypoint</button>
         </form>
 
-        <div class="small">맵을 클릭하면 클릭한 좌표가 입력 칸에 들어갑니다. 로컬라이제이션이 켜져 있으면 현재 위치도 함께 표시됩니다.</div>
+        <div class="small">Click the map to copy x/y into the form.</div>
         <div class="waypoint-list" id="waypoint-list"></div>
       </article>
 
       <article class="panel">
-        <h2>로컬 명령 / Assistant</h2>
+        <h2>Local Commands</h2>
         <div class="assistant-row">
           <input id="server-url" value="http://127.0.0.1:8000" />
-          <button class="secondary" onclick="toggleAssistant()">모드 전환</button>
+          <button class="secondary" onclick="toggleAssistant()">Toggle Mode</button>
         </div>
         <div class="waypoint-actions" style="margin-top:10px">
-          <button id="voice-btn">음성 입력</button>
-          <button class="secondary" onclick="sendChat('지금 상태 알려줘')">상태 질의</button>
+          <button id="voice-btn">Voice</button>
+          <button class="secondary" onclick="sendChat('status')">Ask status</button>
         </div>
         <div class="chat-log" id="chat-log"></div>
         <div class="chat-form">
-          <input id="chat-input" placeholder="예: 전진, 추종 시작, 주방으로 가" />
-          <button onclick="sendChat()">보내기</button>
+          <input id="chat-input" placeholder="Try: forward, stop, follow, kitchen" />
+          <button onclick="sendChat()">Send</button>
         </div>
-        <div class="small">Assistant Mode가 켜져 있고 서버가 연결되면 BuddyBot-ai로 요청을 넘기고, 꺼져 있으면 Pi5 내부 로컬 명령 해석만 사용합니다.</div>
       </article>
     </section>
   </main>
+
   <script>
-    let assistantEnabled=false,lastMap=null,lastPose=null;const chatLog=document.getElementById("chat-log"),waypointSelect=document.getElementById("waypoint-select"),waypointList=document.getElementById("waypoint-list"),mapCanvas=document.getElementById("map-canvas"),mapCtx=mapCanvas.getContext("2d");
+    let assistantEnabled=false,lastMap=null,lastPose=null;
+    const chatLog=document.getElementById("chat-log");
+    const waypointSelect=document.getElementById("waypoint-select");
+    const waypointList=document.getElementById("waypoint-list");
+    const mapCanvas=document.getElementById("map-canvas");
+    const mapCtx=mapCanvas.getContext("2d");
+
     function addMsg(role,text){const div=document.createElement("div");div.className=`msg ${role}`;div.textContent=text;chatLog.appendChild(div);chatLog.scrollTop=chatLog.scrollHeight}
-    async function refreshStatus(){const data=await(await fetch("/api/status")).json();assistantEnabled=data.mode==="assistant";lastPose=data.pose||null;document.getElementById("status-box").innerHTML=`<div class="status-item"><span>운영 모드</span><strong>${data.mode}</strong></div><div class="status-item"><span>ROS2 연결</span><strong>${data.ros2_connected?"연결됨":"mock"}</strong></div><div class="status-item"><span>서버 연결</span><strong>${data.server_connected?"online":"offline"}</strong></div><div class="status-item"><span>추종 상태</span><strong>${data.follow_enabled?"활성":"비활성"}</strong></div><div class="status-item"><span>맵 수신</span><strong>${data.map_available?"수신 중":"합성 맵"}</strong></div><div class="status-item"><span>마지막 명령</span><strong>${data.last_command}</strong></div>`;document.getElementById("pose-chip").textContent=data.pose?`현재 위치: x=${data.pose.x}, y=${data.pose.y}, θ=${data.pose.theta}`:"현재 위치: 없음"}
-    async function refreshWaypoints(){const data=await(await fetch("/api/waypoints")).json();waypointSelect.innerHTML="";waypointList.innerHTML="";(data.items||[]).forEach((item)=>{const option=document.createElement("option");option.value=item.name;option.textContent=`${item.name} (${item.x}, ${item.y})`;waypointSelect.appendChild(option);const box=document.createElement("div");box.className="waypoint-item";box.innerHTML=`<span>${item.name}</span><strong>x=${item.x}, y=${item.y}, θ=${item.theta}</strong>`;waypointList.appendChild(box)});if(lastMap){drawMap(lastMap,data.items||[])}}
-    async function refreshMap(){const data=await(await fetch("/api/map")).json();const waypoints=await(await fetch("/api/waypoints")).json();lastMap=data;lastPose=data.pose||lastPose;document.getElementById("map-source-chip").textContent=data.source==="ros_map"?"맵: ROS OccupancyGrid":"맵: 웨이포인트 기반 합성 맵";document.getElementById("map-summary").textContent=data.source==="ros_map"?"라이다/맵 토픽을 받아 현재 지도를 그리고 있습니다. 맵 클릭으로 좌표를 바로 저장할 수 있습니다.":"실시간 맵 토픽이 없어서 체크포인트 기준 합성 맵을 보여주고 있습니다.";drawMap(data,waypoints.items||[])}
-    function drawMap(mapData,waypoints){const width=mapCanvas.width,height=mapCanvas.height;mapCtx.clearRect(0,0,width,height);const img=mapCtx.createImageData(width,height),srcWidth=mapData.width,srcHeight=mapData.height,cells=mapData.cells||[];for(let py=0;py<height;py++){for(let px=0;px<width;px++){const sx=Math.floor(px/width*srcWidth),sy=Math.floor((height-py-1)/height*srcHeight),value=cells[sy*srcWidth+sx]??0;let shade=240;if(value===-1){shade=210}else if(value>=65){shade=55}else if(value>0){shade=180}const idx=(py*width+px)*4;img.data[idx]=shade;img.data[idx+1]=shade;img.data[idx+2]=shade;img.data[idx+3]=255}}mapCtx.putImageData(img,0,0);waypoints.forEach((point,index)=>{const px=worldToCanvasX(point.x,mapData),py=worldToCanvasY(point.y,mapData);mapCtx.fillStyle=index===0?"#c06922":"#158b7b";mapCtx.beginPath();mapCtx.arc(px,py,7,0,Math.PI*2);mapCtx.fill();mapCtx.fillStyle="#0f1519";mapCtx.font="14px sans-serif";mapCtx.fillText(point.name,px+10,py-10)});if(lastPose){const px=worldToCanvasX(lastPose.x,mapData),py=worldToCanvasY(lastPose.y,mapData);mapCtx.fillStyle="#cc2020";mapCtx.beginPath();mapCtx.arc(px,py,8,0,Math.PI*2);mapCtx.fill();mapCtx.strokeStyle="#cc2020";mapCtx.lineWidth=3;mapCtx.beginPath();mapCtx.moveTo(px,py);mapCtx.lineTo(px+Math.cos(lastPose.theta||0)*16,py-Math.sin(lastPose.theta||0)*16);mapCtx.stroke()}}
+    async function refreshStatus(){const data=await (await fetch("/api/status")).json();assistantEnabled=data.mode==="assistant";lastPose=data.pose||null;document.getElementById("status-box").innerHTML=`<div class="status-item"><span>Mode</span><strong>${data.mode}</strong></div><div class="status-item"><span>ROS2</span><strong>${data.ros2_connected?"connected":"mock"}</strong></div><div class="status-item"><span>Server</span><strong>${data.server_connected?"online":"offline"}</strong></div><div class="status-item"><span>Follow</span><strong>${data.follow_enabled?"on":"off"}</strong></div><div class="status-item"><span>Map</span><strong>${data.map_available?"live":"synthetic"}</strong></div><div class="status-item"><span>Last command</span><strong>${data.last_command}</strong></div>`;document.getElementById("pose-chip").textContent=data.pose?`Pose: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta}`:"Pose: none"}
+    async function refreshWaypoints(){const data=await (await fetch("/api/waypoints")).json();waypointSelect.innerHTML="";waypointList.innerHTML="";(data.items||[]).forEach((item)=>{const option=document.createElement("option");option.value=item.name;option.textContent=`${item.name} (${item.x}, ${item.y})`;waypointSelect.appendChild(option);const box=document.createElement("div");box.className="waypoint-item";box.innerHTML=`<span>${item.name}</span><strong>x=${item.x}, y=${item.y}, th=${item.theta}</strong>`;waypointList.appendChild(box)});if(lastMap){drawMap(lastMap,data.items||[])}}
+    async function refreshMap(){const data=await (await fetch("/api/map")).json();const waypoints=await (await fetch("/api/waypoints")).json();lastMap=data;lastPose=data.pose||lastPose;document.getElementById("map-source-chip").textContent=data.source==="ros_map"?"Map: ROS OccupancyGrid":"Map: synthetic";document.getElementById("map-summary").textContent=data.source==="ros_map"?"Rendering ROS map data.":"Rendering synthetic map from waypoints.";drawMap(data,waypoints.items||[])}
+    function drawMap(mapData,waypoints){const width=mapCanvas.width,height=mapCanvas.height;mapCtx.clearRect(0,0,width,height);const img=mapCtx.createImageData(width,height),srcWidth=mapData.width,srcHeight=mapData.height,cells=mapData.cells||[];for(let py=0;py<height;py++){for(let px=0;px<width;px++){const sx=Math.floor(px/width*srcWidth),sy=Math.floor((height-py-1)/height*srcHeight),value=cells[sy*srcWidth+sx]??0;let shade=240;if(value===-1){shade=210}else if(value>=65){shade=55}else if(value>0){shade=180}const idx=(py*width+px)*4;img.data[idx]=shade;img.data[idx+1]=shade;img.data[idx+2]=shade;img.data[idx+3]=255}}mapCtx.putImageData(img,0,0);waypoints.forEach((point,index)=>{const px=worldToCanvasX(point.x,mapData),py=worldToCanvasY(point.y,mapData);mapCtx.fillStyle=index===0?"#c06922":"#158b7b";mapCtx.beginPath();mapCtx.arc(px,py,7,0,Math.PI*2);mapCtx.fill();mapCtx.fillStyle="#0f1519";mapCtx.font="14px sans-serif";mapCtx.fillText(point.name,px+10,py-10)});if(lastPose){const px=worldToCanvasX(lastPose.x,mapData),py=worldToCanvasY(lastPose.y,mapData);mapCtx.fillStyle="#cc2020";mapCtx.beginPath();mapCtx.arc(px,py,8,0,Math.PI*2);mapCtx.fill()}}
     function worldToCanvasX(x,mapData){return((x-mapData.origin.x)/(mapData.width*mapData.resolution))*mapCanvas.width}
     function worldToCanvasY(y,mapData){return mapCanvas.height-(((y-mapData.origin.y)/(mapData.height*mapData.resolution))*mapCanvas.height)}
     function canvasToWorld(x,y,mapData){return{x:mapData.origin.x+(x/mapCanvas.width)*(mapData.width*mapData.resolution),y:mapData.origin.y+((mapCanvas.height-y)/mapCanvas.height)*(mapData.height*mapData.resolution)}}
     async function manual(direction){await fetch("/api/manual",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({direction,speed:.35,duration:1})});refreshStatus()}
-    async function setFollow(enabled){await fetch("/api/follow",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});addMsg("bot",enabled?"추종 상태를 활성으로 바꿨습니다.":"추종 상태를 비활성으로 바꿨습니다.");refreshStatus()}
-    async function toggleAssistant(){const server_url=document.getElementById("server-url").value.trim(),data=await(await fetch("/api/assistant",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!assistantEnabled,server_url})})).json();addMsg("bot",data.mode==="assistant"?"Assistant Mode를 켰습니다.":"Standalone Mode로 전환했습니다.");refreshStatus()}
-    async function sendChat(textArg){const input=document.getElementById("chat-input");const message=(typeof textArg==="string"?textArg:input.value).trim();if(!message)return;input.value="";addMsg("user",message);const data=await(await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})})).json();addMsg("bot",data.response);if("speechSynthesis"in window){const utterance=new SpeechSynthesisUtterance(data.response);utterance.lang="ko-KR";speechSynthesis.cancel();speechSynthesis.speak(utterance)}}
-    async function goWaypoint(){const name=waypointSelect.value;if(!name)return;const data=await(await fetch("/api/go",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})})).json();addMsg("bot",data.message);refreshStatus()}
-    async function saveWaypoint(event){event.preventDefault();const payload={name:document.getElementById("wp-name").value.trim(),x:Number(document.getElementById("wp-x").value),y:Number(document.getElementById("wp-y").value),theta:Number(document.getElementById("wp-theta").value||0),description:"Pi5 local panel checkpoint"};if(!payload.name)return;await fetch("/api/waypoints",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});addMsg("bot",`${payload.name} 체크포인트를 저장했습니다.`);event.target.reset();refreshWaypoints();refreshMap()}
-    async function saveCurrentPoseWaypoint(){const name=document.getElementById("wp-name").value.trim();if(!name){addMsg("bot","현재 위치 저장을 하려면 먼저 이름을 입력해주세요.");return}await(await fetch("/api/waypoints/current",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,description:"saved from current pose"})})).json();addMsg("bot",`${name} 체크포인트를 현재 위치 기준으로 저장했습니다.`);refreshWaypoints();refreshMap()}
-    function fillCurrentPose(){if(!lastPose){addMsg("bot","현재 위치가 아직 없습니다. amcl_pose 또는 odom이 먼저 들어와야 합니다.");return}document.getElementById("wp-x").value=lastPose.x;document.getElementById("wp-y").value=lastPose.y;document.getElementById("wp-theta").value=lastPose.theta;addMsg("bot","현재 위치 좌표를 입력 칸에 채웠습니다.")}
-    mapCanvas.addEventListener("click",(event)=>{if(!lastMap)return;const rect=mapCanvas.getBoundingClientRect(),point=canvasToWorld(event.clientX-rect.left,event.clientY-rect.top,lastMap);document.getElementById("wp-x").value=point.x.toFixed(2);document.getElementById("wp-y").value=point.y.toFixed(2);addMsg("bot",`맵 클릭 좌표를 불러왔습니다. x=${point.x.toFixed(2)}, y=${point.y.toFixed(2)}`)});
-    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition,voiceBtn=document.getElementById("voice-btn");if(SpeechRecognition){const rec=new SpeechRecognition();rec.lang="ko-KR";rec.interimResults=false;voiceBtn.onclick=()=>{rec.start();voiceBtn.textContent="듣는 중..."};rec.onresult=(e)=>sendChat(e.results[0][0].transcript);rec.onend=()=>{voiceBtn.textContent="음성 입력"}}else{voiceBtn.disabled=true;voiceBtn.textContent="브라우저 음성 미지원"}
+    async function setFollow(enabled){await fetch("/api/follow",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});addMsg("bot",enabled?"Follow mode enabled.":"Follow mode disabled.");refreshStatus()}
+    async function toggleAssistant(){const server_url=document.getElementById("server-url").value.trim(),data=await (await fetch("/api/assistant",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!assistantEnabled,server_url})})).json();addMsg("bot",data.mode==="assistant"?"Assistant mode enabled.":"Standalone mode enabled.");refreshStatus()}
+    async function sendChat(textArg){const input=document.getElementById("chat-input");const message=(typeof textArg==="string"?textArg:input.value).trim();if(!message)return;input.value="";addMsg("user",message);const data=await (await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})})).json();addMsg("bot",data.response)}
+    async function goWaypoint(){const name=waypointSelect.value;if(!name)return;const data=await (await fetch("/api/go",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})})).json();addMsg("bot",data.message);refreshStatus()}
+    async function saveWaypoint(event){event.preventDefault();const payload={name:document.getElementById("wp-name").value.trim(),x:Number(document.getElementById("wp-x").value),y:Number(document.getElementById("wp-y").value),theta:Number(document.getElementById("wp-theta").value||0),description:"Pi5 local panel checkpoint"};if(!payload.name)return;await fetch("/api/waypoints",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});addMsg("bot",`${payload.name} saved.`);event.target.reset();refreshWaypoints();refreshMap()}
+    async function saveCurrentPoseWaypoint(){const name=document.getElementById("wp-name").value.trim();if(!name){addMsg("bot","Type a waypoint name first.");return}await (await fetch("/api/waypoints/current",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,description:"saved from current pose"})})).json();addMsg("bot",`${name} saved from current pose.`);refreshWaypoints();refreshMap()}
+    function fillCurrentPose(){if(!lastPose){addMsg("bot","Current pose not available yet.");return}document.getElementById("wp-x").value=lastPose.x;document.getElementById("wp-y").value=lastPose.y;document.getElementById("wp-theta").value=lastPose.theta;addMsg("bot","Filled pose fields from current robot pose.")}
+    mapCanvas.addEventListener("click",(event)=>{if(!lastMap)return;const rect=mapCanvas.getBoundingClientRect(),point=canvasToWorld(event.clientX-rect.left,event.clientY-rect.top,lastMap);document.getElementById("wp-x").value=point.x.toFixed(2);document.getElementById("wp-y").value=point.y.toFixed(2);addMsg("bot",`Map click -> x=${point.x.toFixed(2)}, y=${point.y.toFixed(2)}`)});
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;const voiceBtn=document.getElementById("voice-btn");if(SpeechRecognition){const rec=new SpeechRecognition();rec.lang="en-US";rec.interimResults=false;voiceBtn.onclick=()=>{rec.start();voiceBtn.textContent="Listening..."};rec.onresult=(e)=>sendChat(e.results[0][0].transcript);rec.onend=()=>{voiceBtn.textContent="Voice"}}else{voiceBtn.disabled=true;voiceBtn.textContent="Voice unsupported"}
     document.getElementById("chat-input").addEventListener("keydown",(event)=>{if(event.key==="Enter"){event.preventDefault();sendChat()}});
-    addMsg("bot","Pi5 로컬 패널이 준비되었습니다. 서버 없이도 수동조작, 체크포인트 저장, 이동 테스트를 할 수 있습니다.");refreshStatus();refreshWaypoints();refreshMap();setInterval(refreshStatus,5000);
+    addMsg("bot","BuddyBot local panel is ready.");refreshStatus();refreshWaypoints();refreshMap();setInterval(refreshStatus,5000);
   </script>
 </body>
 </html>

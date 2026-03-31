@@ -115,9 +115,8 @@ class PanelBridge:
         self._system_status = msg.data
 
     def _map_callback(self, msg: OccupancyGrid) -> None:
-        sampled = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
         with self._lock:
-            self._latest_map = sampled
+            self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
 
     def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
         self._update_pose(
@@ -161,6 +160,7 @@ class PanelBridge:
         sampled_width = max(1, math.ceil(width / step))
         sampled_height = max(1, math.ceil(height / step))
         sampled: List[int] = []
+
         for row in range(0, height, step):
             for col in range(0, width, step):
                 sampled.append(int(msg.data[row * width + col]))
@@ -240,7 +240,7 @@ class PanelBridge:
 
     def check_server(self) -> bool:
         try:
-            response = requests.get(f"{self.server_url}/health", timeout=1.2)
+            response = requests.get(f"{self.server_url}/health", timeout=1.0)
             return response.ok
         except requests.RequestException:
             return False
@@ -251,54 +251,55 @@ class PanelBridge:
                 response = requests.post(
                     f"{self.server_url}/chat",
                     json={"message": message},
-                    timeout=20,
+                    timeout=15,
                 )
                 response.raise_for_status()
-                return response.json().get("response", "응답이 비어 있습니다.")
+                return response.json().get("response", "No response received.")
             except requests.RequestException:
                 pass
         return self._handle_local_command(message)
 
     def _handle_local_command(self, message: str) -> str:
         text = message.lower().strip()
-        if any(keyword in text for keyword in ("정지", "멈춰", "stop", "스톱")):
+        if any(keyword in text for keyword in ("stop", "halt", "brake")):
             self.manual_command("stop", 0.0, 0.0)
-            return "로컬 모드에서 정지 명령을 실행했습니다."
-        if any(keyword in text for keyword in ("전진", "앞으로", "forward")):
+            return "Stopped the robot in standalone mode."
+        if any(keyword in text for keyword in ("forward", "go ahead")):
             self.manual_command("forward", 0.35, 1.0)
-            return "로컬 모드에서 전진 명령을 실행했습니다."
-        if any(keyword in text for keyword in ("후진", "뒤로", "backward")):
+            return "Moving forward in standalone mode."
+        if any(keyword in text for keyword in ("backward", "reverse", "back")):
             self.manual_command("backward", 0.35, 1.0)
-            return "로컬 모드에서 후진 명령을 실행했습니다."
-        if any(keyword in text for keyword in ("좌회전", "왼쪽", "left")):
+            return "Moving backward in standalone mode."
+        if any(keyword in text for keyword in ("left", "turn left")):
             self.manual_command("left", 0.45, 0.8)
-            return "로컬 모드에서 좌회전 명령을 실행했습니다."
-        if any(keyword in text for keyword in ("우회전", "오른쪽", "right")):
+            return "Turning left in standalone mode."
+        if any(keyword in text for keyword in ("right", "turn right")):
             self.manual_command("right", 0.45, 0.8)
-            return "로컬 모드에서 우회전 명령을 실행했습니다."
-        if any(keyword in text for keyword in ("추종 시작", "따라와", "follow")):
+            return "Turning right in standalone mode."
+        if any(keyword in text for keyword in ("follow", "track user")):
             self.follow_enabled = True
             self.last_command = "follow_on"
-            return "로컬 모드에서 사용자 추종을 시작 상태로 전환했습니다."
-        if any(keyword in text for keyword in ("추종 중지", "추종 멈춰", "follow stop")):
+            return "Follow mode enabled."
+        if any(keyword in text for keyword in ("unfollow", "follow stop")):
             self.follow_enabled = False
             self.last_command = "follow_off"
-            return "로컬 모드에서 사용자 추종을 중지 상태로 전환했습니다."
-        if "주방" in text:
+            return "Follow mode disabled."
+        if "kitchen" in text:
             self.go_waypoint("kitchen")
-            return "주방 체크포인트로 이동 요청을 보냈습니다."
-        if "거실" in text:
+            return "Sent a navigation request to kitchen."
+        if "living room" in text:
             self.go_waypoint("living_room_center")
-            return "거실 체크포인트로 이동 요청을 보냈습니다."
-        if "충전" in text:
+            return "Sent a navigation request to living_room_center."
+        if "charge" in text:
             self.go_waypoint("charging_station")
-            return "충전 스테이션으로 이동 요청을 보냈습니다."
-        return "로컬 명령 모드입니다. 전진, 후진, 정지, 왼쪽, 오른쪽, 추종 시작, 주방 이동 같은 명령을 사용할 수 있습니다."
+            return "Sent a navigation request to charging_station."
+        return "Standalone command mode. Try: forward, stop, follow, kitchen."
 
     def manual_command(self, direction: str, speed: float, duration: float) -> None:
         self.last_command = f"manual:{direction}"
         linear_x = 0.0
         angular_z = 0.0
+
         if direction == "forward":
             linear_x = speed
         elif direction == "backward":
@@ -333,11 +334,18 @@ class PanelBridge:
             msg.data = name
             self._waypoint_goal_pub.publish(msg)
 
-    def save_waypoint(self, name: str, x: Optional[float], y: Optional[float], theta: float, description: str) -> Dict[str, Any]:
+    def save_waypoint(
+        self,
+        name: str,
+        x: Optional[float],
+        y: Optional[float],
+        theta: float,
+        description: str,
+    ) -> Dict[str, Any]:
         if x is None or y is None:
             pose = self.current_pose()
             if pose is None:
-                raise ValueError("현재 위치가 없어서 좌표 없는 저장을 할 수 없습니다.")
+                raise ValueError("Current pose is not available.")
             x = pose["x"]
             y = pose["y"]
             theta = pose["theta"]
@@ -355,7 +363,13 @@ class PanelBridge:
         if self.ros2_connected and self._waypoint_save_pub is not None:
             msg = String()
             msg.data = json.dumps(
-                {"name": name, "x": float(x), "y": float(y), "theta": float(theta), "description": description or name},
+                {
+                    "name": name,
+                    "x": float(x),
+                    "y": float(y),
+                    "theta": float(theta),
+                    "description": description or name,
+                },
                 ensure_ascii=True,
             )
             self._waypoint_save_pub.publish(msg)
@@ -418,7 +432,11 @@ def api_chat(request: ChatRequest):
 
 @app.post("/api/manual")
 def api_manual(request: Dict[str, Any]):
-    bridge.manual_command(request.get("direction", "stop"), float(request.get("speed", 0.35)), float(request.get("duration", 1.0)))
+    bridge.manual_command(
+        request.get("direction", "stop"),
+        float(request.get("speed", 0.35)),
+        float(request.get("duration", 1.0)),
+    )
     return bridge.status()
 
 
@@ -436,7 +454,13 @@ def api_waypoints():
 
 @app.post("/api/waypoints")
 def api_save_waypoint(request: WaypointSaveRequest):
-    waypoint = bridge.save_waypoint(request.name, request.x, request.y, request.theta, request.description)
+    waypoint = bridge.save_waypoint(
+        request.name,
+        request.x,
+        request.y,
+        request.theta,
+        request.description,
+    )
     return {"saved": True, "waypoint": waypoint, "items": bridge.list_waypoints()}
 
 
@@ -449,7 +473,7 @@ def api_save_current_waypoint(request: CurrentPoseWaypointRequest):
 @app.post("/api/go")
 def api_go(request: WaypointGoRequest):
     bridge.go_waypoint(request.name)
-    return {"success": True, "message": f"{request.name} 체크포인트로 이동 요청을 전송했습니다."}
+    return {"success": True, "message": f"Sent navigation request to {request.name}."}
 
 
 def main():
