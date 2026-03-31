@@ -215,6 +215,55 @@ ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SE
 
 그리고 Pi5 로컬 패널에서 Assistant Mode를 켜면 됩니다.
 
+## 자주 나오는 빌드 에러와 해결
+
+### 1. `can't copy 'resource/buddybot_nav': doesn't exist`
+
+원인:
+- `buddybot_nav`는 `ament_python` 패키지이고 `resource/buddybot_nav` 마커 파일이 필요합니다.
+- 이 파일이 빠진 예전 커밋을 받은 경우 발생할 수 있습니다.
+
+해결:
+```bash
+cd ~/BuddyBot
+git pull
+cd software/pi5/ros2_ws
+colcon build
+```
+
+### 2. `buddybot_voice ... doesn't contain an '__init__.py' file`
+
+원인:
+- 예전 커밋의 `buddybot_voice`는 파이썬 패키지 폴더가 빠져 있어서 발생할 수 있습니다.
+
+해결:
+```bash
+cd ~/BuddyBot
+git pull
+cd software/pi5/ros2_ws
+colcon build
+```
+
+### 3. 이전 빌드 캐시 때문에 계속 이상한 에러가 날 때
+
+아래처럼 워크스페이스 빌드 산출물만 지우고 다시 빌드합니다.
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+rm -rf build install log
+colcon build
+source install/setup.bash
+```
+
+### 4. 패키지 설치 후에도 ROS가 명령을 못 찾을 때
+
+빌드 후 반드시 아래를 다시 실행합니다.
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+source install/setup.bash
+```
+
 ## 팀원 역할 분리
 
 ### 서버컴 담당
