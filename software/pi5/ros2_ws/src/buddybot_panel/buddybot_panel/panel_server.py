@@ -20,9 +20,11 @@ try:
     import cv2
     import rclpy
     from cv_bridge import CvBridge
+    from buddybot_msgs.msg import Status
     from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import OccupancyGrid, Odometry
     from rclpy.node import Node
+    from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
     from sensor_msgs.msg import Image
     from std_msgs.msg import String
 
@@ -32,10 +34,15 @@ except ImportError:
     cv2 = None
     rclpy = None
     CvBridge = None
+    Status = None
     PoseWithCovarianceStamped = None
     Twist = None
     OccupancyGrid = None
     Odometry = None
+    QoSProfile = None
+    ReliabilityPolicy = None
+    DurabilityPolicy = None
+    HistoryPolicy = None
     Image = None
     Node = object
     String = object
@@ -93,8 +100,10 @@ class PanelBridge:
         self._latest_map: Optional[Dict[str, Any]] = None
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
+        self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._system_status = "idle"
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
+        self._manual_command_token = 0
 
         self._init_ros()
 
@@ -114,8 +123,16 @@ class PanelBridge:
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
-            if Image is not None and self._cv_bridge is not None:
-                self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, 10)
+            if Status is not None:
+                self._node.create_subscription(Status, "/buddybot/pico_status", self._pico_status_callback, 10)
+            if Image is not None and self._cv_bridge is not None and QoSProfile is not None:
+                image_qos = QoSProfile(
+                    reliability=ReliabilityPolicy.BEST_EFFORT,
+                    durability=DurabilityPolicy.VOLATILE,
+                    history=HistoryPolicy.KEEP_LAST,
+                    depth=1,
+                )
+                self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
 
             self._spin_thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
             self._spin_thread.start()
@@ -125,6 +142,15 @@ class PanelBridge:
 
     def _status_callback(self, msg: String) -> None:
         self._system_status = msg.data
+
+    def _pico_status_callback(self, msg: Status) -> None:
+        with self._lock:
+            self._latest_pico_status = {
+                "battery_voltage": round(float(msg.battery_voltage), 2),
+                "emergency_stop": bool(msg.emergency_stop),
+                "mode": msg.mode,
+                "stamp": time.time(),
+            }
 
     def _map_callback(self, msg: OccupancyGrid) -> None:
         with self._lock:
@@ -215,6 +241,8 @@ class PanelBridge:
             "pose": pose,
             "camera_available": self.camera_available(),
             "camera_age_sec": self.camera_age_sec(),
+            "pico_connected": self.pico_connected(),
+            "pico_status": self.pico_status(),
         }
 
     def current_pose(self) -> Optional[Dict[str, float]]:
@@ -238,6 +266,21 @@ class PanelBridge:
     def get_camera_frame(self) -> Optional[bytes]:
         with self._lock:
             return self._latest_camera_jpeg
+
+    def pico_connected(self) -> bool:
+        with self._lock:
+            if self._latest_pico_status is None:
+                return False
+            return (time.time() - float(self._latest_pico_status.get("stamp", 0.0))) < 2.5
+
+    def pico_status(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            if self._latest_pico_status is None:
+                return None
+            status = dict(self._latest_pico_status)
+        status["age_sec"] = round(max(0.0, time.time() - float(status.get("stamp", 0.0))), 2)
+        status.pop("stamp", None)
+        return status
 
     def get_map_payload(self) -> Dict[str, Any]:
         with self._lock:
@@ -354,20 +397,31 @@ class PanelBridge:
         if not self.ros2_connected or self._manual_pub is None:
             return
 
-        twist = Twist()
-        twist.linear.x = linear_x
-        twist.angular.z = angular_z
-        self._manual_pub.publish(twist)
+        with self._lock:
+            self._manual_command_token += 1
+            token = self._manual_command_token
 
-        def stop_later() -> None:
+        if direction == "stop":
             self._manual_pub.publish(Twist())
+            return
 
-        if direction != "stop":
-            timer = threading.Timer(duration, stop_later)
-            timer.daemon = True
-            timer.start()
-        else:
-            self._manual_pub.publish(Twist())
+        def publish_burst() -> None:
+            end_time = time.time() + max(0.1, duration)
+            while time.time() < end_time:
+                with self._lock:
+                    if token != self._manual_command_token:
+                        return
+                twist = Twist()
+                twist.linear.x = linear_x
+                twist.angular.z = angular_z
+                self._manual_pub.publish(twist)
+                time.sleep(0.1)
+            with self._lock:
+                if token == self._manual_command_token:
+                    self._manual_pub.publish(Twist())
+
+        thread = threading.Thread(target=publish_burst, daemon=True)
+        thread.start()
 
     def go_waypoint(self, name: str) -> None:
         self.last_command = f"nav:{name}"

@@ -35,6 +35,7 @@ from buddybot_msgs.msg import Status
 from std_msgs.msg import String, Float32MultiArray
 import time
 import logging
+from pathlib import Path
 
 from .protocol import UARTProtocol
 from .serial_manager import SerialManager
@@ -69,8 +70,9 @@ class PicoBridgeNode(Node):
 
         # Initialize components
         self.protocol = UARTProtocol()
+        self.connected_port = self.serial_port
         self.serial_manager = SerialManager(
-            port=self.serial_port,
+            port=self.connected_port,
             baudrate=self.serial_baudrate,
             max_reconnect_attempts=self.max_reconnect_attempts
         )
@@ -109,8 +111,11 @@ class PicoBridgeNode(Node):
         self.emergency_stop_active = False
 
         # Connect to Pico
-        if self.serial_manager.connect():
-            self.get_logger().info(f"Connected to Pico serial device {self.serial_port}")
+        selected_port = self._connect_serial_with_fallback()
+        if selected_port:
+            self.connected_port = selected_port
+            self.serial_manager.port = selected_port
+            self.get_logger().info(f"Connected to Pico serial device {selected_port}")
             self.serial_manager.start_receive_thread()
         else:
             self.get_logger().error("Failed to connect to Pico on startup; receive loop will retry using SerialManager backoff")
@@ -122,6 +127,7 @@ class PicoBridgeNode(Node):
         """Log startup configuration for debugging."""
         self.get_logger().info("Configuration:")
         self.get_logger().info(f"  Serial port: {self.serial_port}")
+        self.get_logger().info(f"  Connected port: {self.connected_port}")
         self.get_logger().info(f"  Baud rate: {self.serial_baudrate}")
         self.get_logger().info(f"  Heartbeat interval: {self.heartbeat_interval}s")
         self.get_logger().info(f"  Status timeout: {self.status_timeout}s")
@@ -289,6 +295,27 @@ class PicoBridgeNode(Node):
         time_since_last_status = time.time() - self.last_status_time
         if time_since_last_status > self.status_timeout:
             self.get_logger().warn(f"No Pico status for {time_since_last_status:.1f}s")
+
+    def _candidate_serial_ports(self):
+        ports = [self.serial_port]
+        if self.serial_port.startswith("/dev/ttyACM"):
+            ports.extend(["/dev/ttyACM1", "/dev/ttyUSB0", "/dev/ttyUSB1"])
+        elif self.serial_port.startswith("/dev/ttyUSB"):
+            ports.extend(["/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyACM1"])
+        unique = []
+        for port in ports:
+            if port not in unique:
+                unique.append(port)
+        return unique
+
+    def _connect_serial_with_fallback(self):
+        for port in self._candidate_serial_ports():
+            if not Path(port).exists():
+                continue
+            self.serial_manager.port = port
+            if self.serial_manager.connect():
+                return port
+        return None
 
     def destroy_node(self):
         """Clean shutdown of the node."""
