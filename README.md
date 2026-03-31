@@ -113,6 +113,30 @@ Notes:
 - Your LiDAR driver must already be publishing `/scan`
 - When SLAM is healthy, the panel changes from `Map: synthetic` to `Map: ROS OccupancyGrid`
 - Click a map cell, type a waypoint name, then use `Save clicked point`
+- If `/scan` is missing, start your LiDAR driver first; otherwise SLAM cannot create `/map`
+
+## Pi5 local hotspot mode
+
+You do not need Tailscale, VPS, or internet for local control if Pi5 opens its own Wi-Fi AP.
+
+One-time setup:
+
+```bash
+cd ~/BuddyBot
+bash scripts/setup_pi5_hotspot.sh
+```
+
+Start hotspot:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_pi5_hotspot.sh
+```
+
+Default values:
+- SSID: `BuddyBot-Local`
+- Password: `BuddyBot1234!`
+- Panel URL: `http://192.168.50.1:8090`
 
 접속 주소:
 - Pi5 자체 브라우저: `http://127.0.0.1:8090`

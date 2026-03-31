@@ -63,6 +63,12 @@ start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
 start_node slam ros2 launch slam_toolbox online_async_launch.py
 start_node panel ros2 run buddybot_panel panel_server
 
+sleep 3
+if ! ros2 topic list | grep -q '^/scan$'; then
+  echo "[mapping] warning: /scan is not being published yet"
+  echo "[mapping] start your LiDAR driver first, then rerun this script"
+fi
+
 echo
 echo "[mapping] mapping panel is running"
 echo "[mapping] panel url: http://127.0.0.1:8090"
