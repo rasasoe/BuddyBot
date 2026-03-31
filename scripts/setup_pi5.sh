@@ -15,6 +15,14 @@ if [[ ! -f "/opt/ros/$ROS_DISTRO_NAME/setup.bash" ]]; then
   exit 1
 fi
 
+safe_source() {
+  local target="$1"
+  set +u
+  # shellcheck disable=SC1090
+  source "$target"
+  set -u
+}
+
 sudo apt update
 sudo apt install -y \
   python3-colcon-common-extensions \
@@ -28,13 +36,13 @@ sudo apt install -y \
   ros-"$ROS_DISTRO_NAME"-navigation2 \
   ros-"$ROS_DISTRO_NAME"-nav2-bringup
 
-source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
+safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 
 bash "$ROOT_DIR/scripts/doctor_pi5.sh" --fix
 
 cd "$WS_DIR"
 colcon build --symlink-install
-source "$WS_DIR/install/setup.bash"
+safe_source "$WS_DIR/install/setup.bash"
 
 echo
 echo "[setup] done"

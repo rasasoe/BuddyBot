@@ -19,8 +19,16 @@ if [[ ! -f "$WS_DIR/install/setup.bash" ]]; then
   exit 1
 fi
 
-source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
-source "$WS_DIR/install/setup.bash"
+safe_source() {
+  local target="$1"
+  set +u
+  # shellcheck disable=SC1090
+  source "$target"
+  set -u
+}
+
+safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
+safe_source "$WS_DIR/install/setup.bash"
 
 PIDS=()
 
