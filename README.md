@@ -100,6 +100,20 @@ cd ~/BuddyBot
 bash scripts/start_offline_demo.sh
 ```
 
+## Real map waypoint workflow
+
+To save waypoints from a real LiDAR map instead of the synthetic waypoint view:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_mapping_panel.sh
+```
+
+Notes:
+- Your LiDAR driver must already be publishing `/scan`
+- When SLAM is healthy, the panel changes from `Map: synthetic` to `Map: ROS OccupancyGrid`
+- Click a map cell, type a waypoint name, then use `Save clicked point`
+
 접속 주소:
 - Pi5 자체 브라우저: `http://127.0.0.1:8090`
 - 같은 와이파이 휴대폰: `http://PI5_IP:8090`

@@ -34,7 +34,8 @@ sudo apt install -y \
   python3-opencv \
   ros-"$ROS_DISTRO_NAME"-cv-bridge \
   ros-"$ROS_DISTRO_NAME"-navigation2 \
-  ros-"$ROS_DISTRO_NAME"-nav2-bringup
+  ros-"$ROS_DISTRO_NAME"-nav2-bringup \
+  ros-"$ROS_DISTRO_NAME"-slam-toolbox
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 
