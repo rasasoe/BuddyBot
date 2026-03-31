@@ -1,67 +1,81 @@
 # BuddyBot
 
-BuddyBot은 Raspberry Pi 5와 Raspberry Pi Pico를 사용하는 실제 로봇 제어 저장소입니다.
+BuddyBot is the real robot-side repository for Raspberry Pi 5 and Raspberry Pi Pico.
 
-이 저장소는 다음 역할을 담당합니다.
-- ROS 2 기반 로봇 노드
-- Pi 5 ↔ Pico USB serial bridge
-- command mux / mode manager / safety supervisor
-- 비전 기반 사용자 추종
-- LiDAR 기반 waypoint navigation
-- Pico 모터 제어 펌웨어
+This repository contains:
+- the ROS 2 stack for the robot
+- Pi 5 to Pico serial bridge
+- command mux, mode manager, and safety supervisor
+- vision-based follow control
+- LiDAR waypoint navigation
+- Pi 5 local web panel
+- Pico firmware files
 
-## 역할 분리
+## System split
 
-- 서버컴 GUI 및 AI: `BuddyBot-ai`
-- Raspberry Pi 5 실기 제어: `BuddyBot`
-- Raspberry Pi Pico 펌웨어: `firmware/pico_motor_controller`
+- Server PC: `BuddyBot-ai`
+- Raspberry Pi 5: `BuddyBot`
+- Raspberry Pi Pico: `firmware/pico_motor_controller`
 
-## 핵심 구조
+## Main operating modes
 
-### Raspberry Pi 5
+### 1. Standalone mode
 
-- ROS 2 Jazzy
-- 카메라 / LiDAR / 상위 제어
-- Pico와 USB serial 통신
-- follow, navigation, waypoint manager 실행
+No server PC required.
 
-### Raspberry Pi Pico
+Available:
+- Pi 5 local web UI
+- manual control
+- follow toggle
+- waypoint save and waypoint go
+- local voice command mode on the Pi 5 panel
 
-- 모터 PWM 제어
-- 엔코더 읽기
-- watchdog / brake / safety 처리
+### 2. Assistant mode
 
-## 주요 패키지
+Server PC required.
 
-- `buddybot_base`: Pi5-Pico bridge
-- `buddybot_system`: command mux, mode, safety
-- `buddybot_vision`: 사람 추종 제어
-- `buddybot_nav`: waypoint manager, navigation
-- `buddybot_voice`: 서버컴 AI와 연결하는 voice bridge
-- `buddybot_panel`: Pi5 로컬 웹 UI
+Available:
+- forward chat requests to `BuddyBot-ai`
+- AI assistant features
+- richer natural language handling
+- weather, memory, and high-level assistant flows
 
-## 하드웨어 전제
+## Main packages
+
+- `buddybot_base`: Pi 5 to Pico serial bridge
+- `buddybot_system`: command mux, mode manager, safety supervisor
+- `buddybot_vision`: follow and vision control
+- `buddybot_nav`: waypoint manager and navigation
+- `buddybot_voice`: bridge from Pi 5 to server AI
+- `buddybot_panel`: Pi 5 local web UI
+
+## Hardware assumptions
 
 - Raspberry Pi 5
 - Raspberry Pi Pico
-- 3륜 omni / kiwi drive 베이스
+- 3-wheel omni or kiwi drive base
 - LiDAR
-- 카메라
-- USB로 Pi5 ↔ Pico 연결
+- camera
+- USB serial between Pi 5 and Pico
 
-## 핀 매핑
-
-실제 배선 기준 소스 오브 트루스:
+## Source-of-truth pin mapping
 
 - Motor 0: `GP2 / GP0 / GP1 / GP3 / GP14`
 - Motor 1: `GP8 / GP6 / GP7 / GP9 / GP15`
 - Motor 2: `GP12 / GP10 / GP11 / GP13 / GP16`
 
-자세한 내용:
+See:
 
 - `docs/pin_mapping.md`
 
-## Raspberry Pi 5 설치
+## Raspberry Pi 5 requirements
+
+- Ubuntu 24.04
+- ROS 2 Jazzy
+- Python serial package
+- optional internet access for assistant mode
+
+## Pi 5 install
 
 ```bash
 git clone https://github.com/rasasoe/BuddyBot.git
@@ -74,15 +88,15 @@ colcon build
 source install/setup.bash
 ```
 
-## Raspberry Pi 5 실행 순서
+## Pi 5 run order
 
-### 1. Pico bridge
+### 1. Start Pico bridge
 
 ```bash
 ros2 run buddybot_base pico_bridge_node
 ```
 
-### 2. System nodes
+### 2. Start system nodes
 
 ```bash
 ros2 run buddybot_system command_mux_node
@@ -90,55 +104,63 @@ ros2 run buddybot_system mode_manager_node
 ros2 run buddybot_system safety_supervisor_node
 ```
 
-### 3. Vision / follow
+### 3. Start follow controller
 
 ```bash
 ros2 run buddybot_vision follow_controller_node
 ```
 
-### 4. Navigation
+### 4. Start waypoint manager
 
 ```bash
 ros2 run buddybot_nav waypoint_manager_node
 ```
 
-### 5. Voice bridge
+### 5. Optional: start voice bridge to server PC
 
-서버컴 IP를 바꿔서 실행:
+Replace `SERVER_PC_IP` with the real server address:
 
 ```bash
 ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SERVER_PC_IP:8000
 ```
 
-### 6. Pi5 로컬 웹 UI
-
-휴대폰이나 모니터에서 바로 접속할 수 있는 로컬 제어 패널:
+### 6. Start Pi 5 local web panel
 
 ```bash
 ros2 run buddybot_panel panel_server
 ```
 
-접속:
+Open from a phone or browser:
 
-- Pi5 로컬: `http://127.0.0.1:8090`
-- 휴대폰: `http://PI5_IP:8090`
+- Pi 5 local: `http://127.0.0.1:8090`
+- phone on same network: `http://PI5_IP:8090`
 
-이 패널에서는 다음을 할 수 있습니다.
+## What the Pi 5 local panel can do
 
-- 수동 조작
-- 추종 시작/중지
-- 로컬 음성 명령
-- 체크포인트 저장
-- 체크포인트 이동
-- 서버 연결 시 Assistant Mode 전환
+- manual drive
+- follow start and stop
+- checkpoint save
+- checkpoint go
+- local browser voice command
+- assistant mode toggle
 
-## Pico 설치
+## Pi 5 local panel behavior
 
-먼저 Pico에 MicroPython UF2를 올립니다.
+If assistant mode is off:
+- local commands stay on the Pi 5
+- server PC is not required
 
-그 다음 `firmware/pico_motor_controller` 안의 파일을 Pico 루트에 복사합니다.
+If assistant mode is on:
+- the Pi 5 panel forwards chat requests to `BuddyBot-ai`
+- server PC must be reachable
 
-필수 파일:
+## Pico firmware deploy
+
+Install MicroPython UF2 on the Pico first.
+
+Then copy the files from `firmware/pico_motor_controller/` to the Pico root.
+
+Required files:
 
 - `main.py`
 - `config.py`
@@ -152,25 +174,64 @@ ros2 run buddybot_panel panel_server
 - `state.py`
 - `uart_protocol.py`
 
-중요:
+Important:
 
-- Pico 루트에 `main.py`가 있어야 자동 실행됩니다.
+- `main.py` must exist at the Pico root for auto-start
 
-## 체크포인트 파일
+## Waypoint data
 
-Waypoint 데이터는 아래 파일에 저장됩니다.
+The main waypoint file is:
 
 - `software/pi5/ros2_ws/src/buddybot_nav/config/waypoints.yaml`
 
-서버컴 GUI에서 체크포인트를 저장하면 이 파일이 기준 데이터가 됩니다.
+This file is used by:
+- navigation
+- waypoint manager
+- server-side checkpoint features
+- Pi 5 local panel checkpoint features
 
-## 팀원 설치 안내
+## Team install summary
 
-Pi 5와 Pico 담당 팀원은 아래 문서를 먼저 보면 됩니다.
+### Server PC teammate
 
+Use `BuddyBot-ai`.
+
+### Pi 5 teammate
+
+Use this repository.
+
+### Pico teammate
+
+Flash MicroPython, then upload `firmware/pico_motor_controller`.
+
+## Important validation note
+
+The repository is installable and structured well enough for the team to start immediately.
+
+However, real robot validation still depends on hardware testing:
+- motor direction correction
+- kiwi drive kinematics verification
+- forward, backward, left, right, rotate calibration
+- odometry verification
+- follow tuning
+- navigation tuning
+
+So this repo is ready for:
+- setup
+- software integration
+- UI and control flow testing
+
+But it still needs:
+- final hardware calibration on the real robot
+
+## Files that teammates should read
+
+- `README.md`
 - `docs/TEAM_SETUP_PI5_AND_PICO.md`
+- `docs/pin_mapping.md`
+- `docs/bringup.md`
 
-## 프로젝트 구조
+## Project layout
 
 ```text
 BuddyBot/
@@ -184,12 +245,8 @@ BuddyBot/
 │       ├── buddybot_vision/
 │       ├── buddybot_nav/
 │       ├── buddybot_voice/
+│       ├── buddybot_panel/
 │       └── buddybot_msgs/
 └── README.md
 ```
 
-## 현재 상태
-
-현재 구조상 시스템 아키텍처와 통신 계층은 정리되어 있습니다.
-다만 실기 기준으로는 모터 방향 보정, 실제 odometry 계산, kiwi drive 운동학 검증이 계속 중요합니다.
-실주행 전에는 반드시 전진/후진/좌우/회전 캘리브레이션 테스트를 수행하세요.
