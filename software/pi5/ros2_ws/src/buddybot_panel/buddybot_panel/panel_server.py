@@ -4,32 +4,39 @@ import json
 import math
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
 import uvicorn
 import yaml
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 try:
+    import cv2
     import rclpy
+    from cv_bridge import CvBridge
     from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import OccupancyGrid, Odometry
     from rclpy.node import Node
+    from sensor_msgs.msg import Image
     from std_msgs.msg import String
 
     ROS2_AVAILABLE = True
 except ImportError:
     ROS2_AVAILABLE = False
+    cv2 = None
     rclpy = None
+    CvBridge = None
     PoseWithCovarianceStamped = None
     Twist = None
     OccupancyGrid = None
     Odometry = None
+    Image = None
     Node = object
     String = object
 
@@ -84,7 +91,10 @@ class PanelBridge:
         self._lock = threading.Lock()
         self._latest_pose: Optional[Dict[str, float]] = None
         self._latest_map: Optional[Dict[str, Any]] = None
+        self._latest_camera_jpeg: Optional[bytes] = None
+        self._latest_camera_stamp: Optional[float] = None
         self._system_status = "idle"
+        self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._init_ros()
 
@@ -104,6 +114,8 @@ class PanelBridge:
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
+            if Image is not None and self._cv_bridge is not None:
+                self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, 10)
 
             self._spin_thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
             self._spin_thread.start()
@@ -117,6 +129,20 @@ class PanelBridge:
     def _map_callback(self, msg: OccupancyGrid) -> None:
         with self._lock:
             self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+
+    def _camera_callback(self, msg: Image) -> None:
+        if self._cv_bridge is None or cv2 is None:
+            return
+        try:
+            frame = self._cv_bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            success, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+            if not success:
+                return
+            with self._lock:
+                self._latest_camera_jpeg = encoded.tobytes()
+                self._latest_camera_stamp = time.time()
+        except Exception:
+            return
 
     def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
         self._update_pose(
@@ -187,6 +213,8 @@ class PanelBridge:
             "map_available": self.map_available(),
             "pose_available": pose is not None,
             "pose": pose,
+            "camera_available": self.camera_available(),
+            "camera_age_sec": self.camera_age_sec(),
         }
 
     def current_pose(self) -> Optional[Dict[str, float]]:
@@ -196,6 +224,20 @@ class PanelBridge:
     def map_available(self) -> bool:
         with self._lock:
             return self._latest_map is not None
+
+    def camera_available(self) -> bool:
+        with self._lock:
+            return self._latest_camera_jpeg is not None
+
+    def camera_age_sec(self) -> Optional[float]:
+        with self._lock:
+            if self._latest_camera_stamp is None:
+                return None
+            return round(max(0.0, time.time() - self._latest_camera_stamp), 2)
+
+    def get_camera_frame(self) -> Optional[bytes]:
+        with self._lock:
+            return self._latest_camera_jpeg
 
     def get_map_payload(self) -> Dict[str, Any]:
         with self._lock:
@@ -418,6 +460,14 @@ def api_status():
 @app.get("/api/map")
 def api_map():
     return bridge.get_map_payload()
+
+
+@app.get("/api/camera.jpg")
+def api_camera():
+    frame = bridge.get_camera_frame()
+    if frame is None:
+        raise HTTPException(status_code=404, detail="Camera frame not available yet.")
+    return Response(content=frame, media_type="image/jpeg")
 
 
 @app.post("/api/assistant")

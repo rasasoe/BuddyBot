@@ -56,6 +56,8 @@ start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
+start_node camera ros2 run buddybot_vision camera_node
+start_node detector ros2 run buddybot_vision detector_node
 start_node follow_controller ros2 run buddybot_vision follow_controller_node
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
 start_node panel ros2 run buddybot_panel panel_server
