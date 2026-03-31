@@ -82,13 +82,27 @@
 ```bash
 git clone https://github.com/rasasoe/BuddyBot.git
 cd BuddyBot
-sudo apt update
-sudo apt install python3-serial
-python3 -m pip install fastapi uvicorn requests pyyaml
-cd software/pi5/ros2_ws
-colcon build
-source install/setup.bash
+bash scripts/setup_pi5.sh
 ```
+
+위 스크립트가 자동으로 해주는 것:
+- apt 의존성 설치
+- ROS 패키지 의존성 설치
+- 누락된 `resource` / `__init__.py` 점검 및 보정
+- `colcon build --symlink-install`
+
+## 제일 쉬운 오프라인 시연 시작
+
+Pi5에서 아래 두 줄이면 시작입니다.
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_offline_demo.sh
+```
+
+접속 주소:
+- Pi5 자체 브라우저: `http://127.0.0.1:8090`
+- 같은 와이파이 휴대폰: `http://PI5_IP:8090`
 
 ## Pico 준비
 
@@ -112,7 +126,7 @@ source install/setup.bash
 중요:
 - Pico 루트에 `main.py`가 있어야 전원 인가 시 자동 실행됩니다.
 
-## 오프라인 시연용 최소 실행 순서
+## 수동으로 실행하고 싶을 때
 
 Pi5에서 아래 순서로 실행하면 됩니다.
 
@@ -148,10 +162,6 @@ ros2 run buddybot_nav waypoint_manager_node
 ```bash
 ros2 run buddybot_panel panel_server
 ```
-
-접속 주소:
-- Pi5 자체 브라우저: `http://127.0.0.1:8090`
-- 같은 와이파이 휴대폰: `http://PI5_IP:8090`
 
 ## Pi5 로컬 패널에서 되는 것
 
@@ -227,8 +237,7 @@ ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SE
 ```bash
 cd ~/BuddyBot
 git pull
-cd software/pi5/ros2_ws
-colcon build
+bash scripts/setup_pi5.sh
 ```
 
 ### 2. `buddybot_voice ... doesn't contain an '__init__.py' file`
@@ -240,8 +249,7 @@ colcon build
 ```bash
 cd ~/BuddyBot
 git pull
-cd software/pi5/ros2_ws
-colcon build
+bash scripts/setup_pi5.sh
 ```
 
 ### 3. 이전 빌드 캐시 때문에 계속 이상한 에러가 날 때
@@ -264,6 +272,20 @@ cd ~/BuddyBot/software/pi5/ros2_ws
 source install/setup.bash
 ```
 
+### 5. 설치가 자꾸 꼬일 때 전체 점검만 먼저 하고 싶다면
+
+```bash
+cd ~/BuddyBot
+bash scripts/doctor_pi5.sh
+```
+
+자동 수정까지 하고 싶다면:
+
+```bash
+cd ~/BuddyBot
+bash scripts/doctor_pi5.sh --fix
+```
+
 ## 팀원 역할 분리
 
 ### 서버컴 담당
@@ -283,9 +305,11 @@ MicroPython 설치 후 `firmware/pico_motor_controller` 업로드
 팀원에게는 아래처럼 전달하면 됩니다.
 
 1. `BuddyBot`만 받아도 오프라인 모드 시연 가능
-2. Pi5에서 `buddybot_panel`을 띄우면 휴대폰으로 접속 가능
-3. 수동 조작, 체크포인트 저장/이동, 맵 확인, LiDAR 회피 시연은 서버 없이 가능
-4. 서버컴이 붙으면 AI 비서 기능만 추가됨
+2. Pi5에서 `bash scripts/setup_pi5.sh` 한 번 실행
+3. `bash scripts/start_offline_demo.sh`로 바로 데모 시작
+4. 휴대폰으로 Pi5 패널 접속 가능
+5. 수동 조작, 체크포인트 저장/이동, 맵 확인, LiDAR 회피 시연은 서버 없이 가능
+6. 서버컴이 붙으면 AI 비서 기능만 추가됨
 
 ## 중요한 현실적 주의사항
 
