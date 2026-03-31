@@ -1,46 +1,46 @@
 # BuddyBot
 
-`BuddyBot`은 실제 로봇 하드웨어 측 저장소입니다.
+`BuddyBot`은 실제 로봇 쪽 저장소입니다.
 
-이 레포는 라즈베리파이 5와 라즈베리파이 Pico에서 돌아가는 실제 로봇 제어 스택을 담고 있습니다.
+이 레포는 라즈베리파이 5와 라즈베리파이 Pico에서 돌아가는 실제 제어 스택을 담고 있습니다.
 
-포함된 내용:
-- ROS 2 스택
+포함 기능:
+- ROS 2 기반 로봇 스택
 - Pi5 <-> Pico 시리얼 브리지
-- command mux / mode manager / safety supervisor
-- 비전 기반 사용자 추종
-- LiDAR 기반 waypoint navigation
-- Pi5 로컬 웹 패널
+- 수동 조작
+- 사용자 추종
+- LiDAR / waypoint navigation
+- Pi5 로컬 웹 UI
 - Pico 펌웨어
 
-## 전체 시스템 역할 분리
+## 역할 분리
 
 - 서버컴: `BuddyBot-ai`
 - 라즈베리파이 5: `BuddyBot`
 - 라즈베리파이 Pico: `firmware/pico_motor_controller`
 
-## 운영 모드
+## 지금 바로 가능한 운용 모드
 
-### 1. Standalone Mode
+### 1. 오프라인 Standalone Mode
 
-서버컴 없이 Pi5만으로 동작하는 모드입니다.
+서버컴 없이 Pi5와 Pico만으로 시연/테스트하는 모드입니다.
 
-가능한 기능:
-- Pi5 로컬 웹 UI
+가능한 것:
+- Pi5 로컬 웹 UI 접속
 - 수동 조작
-- 추종 시작 / 중지
+- 추종 상태 전환
 - 체크포인트 저장 / 이동
-- Pi5 로컬 음성 명령
+- 맵 클릭으로 좌표 확인
+- 현재 위치 기준 체크포인트 저장
 
 ### 2. Assistant Mode
 
-서버컴과 연결해서 사용하는 모드입니다.
+서버컴과 연결해서 쓰는 상위 모드입니다.
 
-가능한 기능:
-- `BuddyBot-ai`로 채팅 요청 전달
+가능한 것:
+- BuddyBot-ai로 채팅 전달
 - AI 비서 기능
-- 더 자연스러운 자연어 처리
-- 날씨 / 메모리 / 상위 비서 기능
+- 날씨 / 시간 / 메모리 / 상위 자연어 명령
 
 ## 주요 패키지
 
@@ -51,7 +51,7 @@
 - `buddybot_voice`: Pi5에서 서버 AI로 연결되는 voice bridge
 - `buddybot_panel`: Pi5 로컬 웹 UI
 
-## 가정하는 하드웨어 구성
+## 하드웨어 기준
 
 - Raspberry Pi 5
 - Raspberry Pi Pico
@@ -69,14 +69,13 @@
 상세 문서:
 - `docs/pin_mapping.md`
 
-## Raspberry Pi 5 권장 환경
+## Pi5 권장 환경
 
 - Ubuntu 24.04
 - ROS 2 Jazzy
-- python serial 패키지
-- 선택 사항: Assistant Mode용 인터넷/사내망 연결
+- `python3-serial`
 
-## Pi5 설치 방법
+## Pi5 설치
 
 ```bash
 git clone https://github.com/rasasoe/BuddyBot.git
@@ -89,76 +88,7 @@ colcon build
 source install/setup.bash
 ```
 
-## Pi5 실행 순서
-
-### 1. Pico bridge 실행
-
-```bash
-ros2 run buddybot_base pico_bridge_node
-```
-
-### 2. 시스템 노드 실행
-
-```bash
-ros2 run buddybot_system command_mux_node
-ros2 run buddybot_system mode_manager_node
-ros2 run buddybot_system safety_supervisor_node
-```
-
-### 3. 사용자 추종 노드 실행
-
-```bash
-ros2 run buddybot_vision follow_controller_node
-```
-
-### 4. waypoint manager 실행
-
-```bash
-ros2 run buddybot_nav waypoint_manager_node
-```
-
-### 5. 선택 사항: 서버컴 연결용 voice bridge 실행
-
-아래의 `SERVER_PC_IP`를 실제 서버 주소로 바꿔 사용합니다.
-
-```bash
-ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SERVER_PC_IP:8000
-```
-
-### 6. Pi5 로컬 웹 패널 실행
-
-```bash
-ros2 run buddybot_panel panel_server
-```
-
-접속 주소:
-- Pi5 로컬: `http://127.0.0.1:8090`
-- 같은 네트워크 휴대폰: `http://PI5_IP:8090`
-
-## Pi5 로컬 패널에서 가능한 것
-
-- 수동 조작
-- 추종 시작 / 중지
-- 체크포인트 저장
-- 체크포인트 이동
-- 브라우저 로컬 음성 명령
-- Assistant Mode 토글
-
-## Pi5 로컬 패널 동작 방식
-
-Assistant Mode가 꺼져 있으면:
-- 로컬 명령은 Pi5 내부에서 처리
-- 서버컴 없이 사용 가능
-
-Assistant Mode가 켜져 있으면:
-- Pi5 패널이 `BuddyBot-ai`로 채팅/명령을 전달
-- 서버컴 접속 가능해야 함
-
-즉:
-- 평소에는 `Standalone Mode`
-- AI 비서가 필요할 때만 `Assistant Mode`
-
-## Pico 펌웨어 올리는 방법
+## Pico 준비
 
 먼저 Pico에 MicroPython UF2를 설치합니다.
 
@@ -180,53 +110,134 @@ Assistant Mode가 켜져 있으면:
 중요:
 - Pico 루트에 `main.py`가 있어야 전원 인가 시 자동 실행됩니다.
 
+## 오프라인 시연용 최소 실행 순서
+
+Pi5에서 아래 순서로 실행하면 됩니다.
+
+### 1. Pico bridge 실행
+
+```bash
+ros2 run buddybot_base pico_bridge_node
+```
+
+### 2. 시스템 노드 실행
+
+```bash
+ros2 run buddybot_system command_mux_node
+ros2 run buddybot_system mode_manager_node
+ros2 run buddybot_system safety_supervisor_node
+```
+
+### 3. 추종 노드 실행
+
+```bash
+ros2 run buddybot_vision follow_controller_node
+```
+
+### 4. waypoint manager 실행
+
+```bash
+ros2 run buddybot_nav waypoint_manager_node
+```
+
+### 5. Pi5 로컬 패널 실행
+
+```bash
+ros2 run buddybot_panel panel_server
+```
+
+접속 주소:
+- Pi5 자체 브라우저: `http://127.0.0.1:8090`
+- 같은 와이파이 휴대폰: `http://PI5_IP:8090`
+
+## Pi5 로컬 패널에서 되는 것
+
+- 수동 조작
+- 추종 시작 / 중지
+- 실시간 맵 토픽이 있으면 OccupancyGrid 기반 미니맵 표시
+- 맵이 없으면 체크포인트 기반 합성 미니맵 표시
+- 맵 클릭으로 좌표 채우기
+- 현재 위치 기준 체크포인트 저장
+- 체크포인트 선택 이동
+- 로컬 텍스트 명령
+- 브라우저 음성 입력
+
+## 미니맵 / 체크포인트 동작 방식
+
+### 실시간 맵이 있는 경우
+
+- `/map` 토픽을 읽어 미니맵 표시
+- `/amcl_pose` 또는 `/odom` 기준 현재 위치 표시
+- 미니맵 클릭으로 좌표 입력
+- 현재 위치를 이름만 넣고 바로 체크포인트로 저장 가능
+
+### 실시간 맵이 없는 경우
+
+- `waypoints.yaml` 기준으로 합성 미니맵 생성
+- 저장된 체크포인트 좌표를 기준으로 빠른 시연 가능
+
 ## 체크포인트 파일
 
-주요 waypoint 파일:
+기준 파일:
 
 - `software/pi5/ros2_ws/src/buddybot_nav/config/waypoints.yaml`
 
-이 파일은 아래에서 같이 사용합니다.
+이 파일은 아래에서 함께 사용합니다.
 - navigation
 - waypoint manager
+- Pi5 로컬 패널
 - 서버측 체크포인트 기능
-- Pi5 로컬 패널 체크포인트 기능
 
-## 팀원별 설치 기준
+## Assistant Mode 연결
+
+서버컴이 있을 때만 아래를 추가 실행합니다.
+
+```bash
+ros2 run buddybot_voice voice_interface --ros-args -p buddybot_ai_url:=http://SERVER_PC_IP:8000
+```
+
+그리고 Pi5 로컬 패널에서 Assistant Mode를 켜면 됩니다.
+
+## 팀원 역할 분리
 
 ### 서버컴 담당
 
-`BuddyBot-ai` 레포를 사용합니다.
+`BuddyBot-ai` 레포 설치 및 실행
 
 ### Pi5 담당
 
-이 `BuddyBot` 레포를 사용합니다.
+이 `BuddyBot` 레포 설치 및 ROS2 bringup
 
 ### Pico 담당
 
-MicroPython 설치 후 `firmware/pico_motor_controller`를 업로드합니다.
+MicroPython 설치 후 `firmware/pico_motor_controller` 업로드
 
-## 팀원에게 꼭 같이 전달할 검증 주의사항
+## 오프라인 시연 인계 포인트
 
-이 레포는 설치와 구조 파악, 소프트웨어 연동 시작에는 충분합니다.
+팀원에게는 아래처럼 전달하면 됩니다.
 
-하지만 실제 로봇 완성에는 아래 하드웨어 검증이 꼭 필요합니다.
+1. `BuddyBot`만 받아도 오프라인 모드 시연 가능
+2. Pi5에서 `buddybot_panel`을 띄우면 휴대폰으로 접속 가능
+3. 수동 조작, 체크포인트 저장/이동, 맵 확인은 서버 없이 가능
+4. 서버컴이 붙으면 AI 비서 기능만 추가됨
+
+## 중요한 현실적 주의사항
+
+이 레포는 설치와 소프트웨어 연동, UI 시연을 시작하기에 충분합니다.
+
+하지만 실제 로봇 완성은 아래 하드웨어 검증이 필요합니다.
 - 모터 방향 보정
 - Kiwi drive 운동학 검증
 - 전진 / 후진 / 좌 / 우 / 회전 보정
 - 오도메트리 검증
-- 사용자 추종 튜닝
+- 추종 튜닝
 - 네비게이션 튜닝
 
-즉 현재 상태는:
-- 설치 가능
-- 구조 파악 가능
-- UI / 제어 흐름 검증 가능
+즉:
+- 오프라인 시연 / 기능 테스트는 가능
+- 최종 실주행 완성도는 하드웨어 캘리브레이션이 남아 있음
 
-하지만 여전히 필요한 것:
-- 실제 하드웨어 캘리브레이션
-
-## 팀원이 같이 보면 좋은 파일
+## 같이 보면 좋은 파일
 
 - `README.md`
 - `docs/TEAM_SETUP_PI5_AND_PICO.md`
