@@ -56,6 +56,10 @@ scan_available() {
   ros2 topic list 2>/dev/null | grep -q '^/scan$'
 }
 
+camera_available() {
+  ros2 topic list 2>/dev/null | grep -q '^/camera/image_raw$'
+}
+
 start_lidar_if_available() {
   local serial_port="${BUDDYBOT_LIDAR_PORT:-}"
   local serial_baudrate="${BUDDYBOT_LIDAR_BAUDRATE:-115200}"
@@ -121,6 +125,11 @@ sleep 3
 if ! ros2 topic list | grep -q '^/scan$'; then
   echo "[mapping] warning: /scan is not being published yet"
   echo "[mapping] start your LiDAR driver first, then rerun this script"
+fi
+
+if ! camera_available; then
+  echo "[mapping] warning: /camera/image_raw is not being published yet"
+  echo "[mapping] check: tail -n 120 $LOG_DIR/camera.log"
 fi
 
 echo

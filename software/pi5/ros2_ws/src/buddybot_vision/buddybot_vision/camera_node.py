@@ -42,6 +42,7 @@ class CameraNode(Node):
         self.declare_parameter('fps', 30.0)
         self.declare_parameter('frame_id', 'camera_link')
         self.declare_parameter('publish_rate', 30.0)  # Hz
+        self.declare_parameter('backend', 'v4l2')
 
         # Get parameters
         self.device = self.get_parameter('device').value
@@ -50,6 +51,7 @@ class CameraNode(Node):
         self.fps = self.get_parameter('fps').value
         self.frame_id = self.get_parameter('frame_id').value
         self.publish_rate = self.get_parameter('publish_rate').value
+        self.backend = str(self.get_parameter('backend').value).lower()
 
         # Initialize camera
         self.cap = None
@@ -94,7 +96,7 @@ class CameraNode(Node):
                 return False
 
             self.device = selected_device
-            self.cap = cv2.VideoCapture(self.device)
+            self.cap = self._open_capture(self.device)
 
             if not self.cap.isOpened():
                 self.get_logger().error(f"Failed to open camera device: {self.device}")
@@ -134,7 +136,7 @@ class CameraNode(Node):
             tried.add(candidate)
             cap = None
             try:
-                cap = cv2.VideoCapture(candidate)
+                cap = self._open_capture(candidate)
                 if not cap.isOpened():
                     continue
                 ok, _ = cap.read()
@@ -147,6 +149,11 @@ class CameraNode(Node):
                 if cap is not None:
                     cap.release()
         return None
+
+    def _open_capture(self, candidate):
+        if self.backend == 'v4l2' and hasattr(cv2, 'CAP_V4L2'):
+            return cv2.VideoCapture(candidate, cv2.CAP_V4L2)
+        return cv2.VideoCapture(candidate)
 
     def timer_callback(self):
         """Timer callback for frame capture and publishing."""
