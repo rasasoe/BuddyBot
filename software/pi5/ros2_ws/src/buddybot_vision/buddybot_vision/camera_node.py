@@ -18,6 +18,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 import cv2
 import cv_bridge
+import glob
 from sensor_msgs.msg import Image
 import time
 
@@ -35,7 +36,7 @@ class CameraNode(Node):
         super().__init__('camera_node')
 
         # Declare parameters with sensible defaults for Raspberry Pi camera
-        self.declare_parameter('device', '/dev/video0')
+        self.declare_parameter('device', 'auto')
         self.declare_parameter('width', 640)
         self.declare_parameter('height', 480)
         self.declare_parameter('fps', 30.0)
@@ -87,6 +88,12 @@ class CameraNode(Node):
     def _initialize_camera(self):
         """Initialize camera capture with error handling."""
         try:
+            selected_device = self._detect_camera_device()
+            if selected_device is None:
+                self.get_logger().error("Failed to find a working camera device")
+                return False
+
+            self.device = selected_device
             self.cap = cv2.VideoCapture(self.device)
 
             if not self.cap.isOpened():
@@ -112,6 +119,34 @@ class CameraNode(Node):
         except Exception as e:
             self.get_logger().error(f"Camera initialization error: {e}")
             return False
+
+    def _detect_camera_device(self):
+        requested = str(self.device).strip()
+        candidates = []
+        if requested and requested.lower() != 'auto':
+            candidates.append(requested)
+        candidates.extend(sorted(glob.glob('/dev/video*')))
+
+        tried = set()
+        for candidate in candidates:
+            if candidate in tried:
+                continue
+            tried.add(candidate)
+            cap = None
+            try:
+                cap = cv2.VideoCapture(candidate)
+                if not cap.isOpened():
+                    continue
+                ok, _ = cap.read()
+                if ok:
+                    self.get_logger().info(f"Selected camera device: {candidate}")
+                    return candidate
+            except Exception:
+                continue
+            finally:
+                if cap is not None:
+                    cap.release()
+        return None
 
     def timer_callback(self):
         """Timer callback for frame capture and publishing."""

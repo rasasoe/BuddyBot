@@ -35,7 +35,9 @@ from buddybot_msgs.msg import Status
 from std_msgs.msg import String, Float32MultiArray
 import time
 import logging
+import glob
 from pathlib import Path
+import serial
 
 from .protocol import UARTProtocol
 from .serial_manager import SerialManager
@@ -103,6 +105,8 @@ class PicoBridgeNode(Node):
             self.heartbeat_interval, self._send_heartbeat)
         self.status_check_timer = self.create_timer(
             0.1, self._check_status_timeout)
+        self.reconnect_timer = self.create_timer(
+            2.0, self._reconnect_if_needed)
 
         # State tracking
         self.last_cmd_vel_time = time.time()
@@ -322,17 +326,49 @@ class PicoBridgeNode(Node):
 
     def _candidate_serial_ports(self):
         ports = [self.serial_port]
-        if self.serial_port.startswith("/dev/ttyACM"):
-            ports.extend(["/dev/ttyACM1", "/dev/ttyUSB0", "/dev/ttyUSB1"])
-        elif self.serial_port.startswith("/dev/ttyUSB"):
-            ports.extend(["/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyACM1"])
+        ports.extend(sorted(glob.glob("/dev/ttyACM*")))
+        ports.extend(sorted(glob.glob("/dev/ttyUSB*")))
         unique = []
         for port in ports:
             if port not in unique:
                 unique.append(port)
         return unique
 
+    def _probe_pico_port(self, port: str) -> bool:
+        try:
+            with serial.Serial(port=port, baudrate=self.serial_baudrate, timeout=0.25, write_timeout=0.5) as ser:
+                time.sleep(0.15)
+                ser.reset_input_buffer()
+                ser.write(b"HB\n")
+                ser.flush()
+                deadline = time.time() + 0.8
+                while time.time() < deadline:
+                    raw = ser.readline()
+                    if not raw:
+                        continue
+                    line = raw.decode("utf-8", errors="ignore").strip()
+                    if not line:
+                        continue
+                    if line.startswith("FEEDBACK:") or line.startswith("ACK") or line.startswith("STAT") or line.startswith("RPM"):
+                        self.get_logger().info(f"Detected Pico-compatible device on {port} via '{line}'")
+                        return True
+        except Exception as e:
+            self.get_logger().debug(f"Probe failed for {port}: {e}")
+        return False
+
     def _connect_serial_with_fallback(self):
+        probed_matches = []
+        for port in self._candidate_serial_ports():
+            if not Path(port).exists():
+                continue
+            if self._probe_pico_port(port):
+                probed_matches.append(port)
+
+        for port in probed_matches:
+            self.serial_manager.port = port
+            if self.serial_manager.connect():
+                return port
+
         for port in self._candidate_serial_ports():
             if not Path(port).exists():
                 continue
@@ -340,6 +376,16 @@ class PicoBridgeNode(Node):
             if self.serial_manager.connect():
                 return port
         return None
+
+    def _reconnect_if_needed(self) -> None:
+        if self.serial_manager.is_connected():
+            return
+        selected_port = self._connect_serial_with_fallback()
+        if selected_port:
+            self.connected_port = selected_port
+            self.serial_manager.port = selected_port
+            self.serial_manager.start_receive_thread()
+            self.get_logger().info(f"Recovered Pico connection on {selected_port}")
 
     def destroy_node(self):
         """Clean shutdown of the node."""
