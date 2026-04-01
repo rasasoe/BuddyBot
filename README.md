@@ -138,6 +138,33 @@ Default values:
 - Password: `BuddyBot1234!`
 - Panel URL: `http://192.168.50.1:8090`
 
+## Startup behavior summary
+
+`bash scripts/start_offline_demo.sh`
+- Starts the Pi5 local panel backend
+- Starts Pico bridge, system mux/safety nodes, camera, detector, follow controller, and waypoint manager
+- Tries to auto-start an `sllidar_ros2` driver if that package is installed and a likely serial port exists
+- Keeps running in the foreground until you press `Ctrl+C`
+
+`bash scripts/start_mapping_panel.sh`
+- Starts everything from the offline demo
+- Adds SLAM toolbox for live map generation
+- Tries to auto-start `sllidar_ros2` the same way
+- If `/scan` is still missing, the panel stays on `Map: synthetic`
+
+## Manual drive behavior
+
+- Manual drive buttons are latched
+- Press `Forward`, `Backward`, `Turn Left`, or `Turn Right` once and the robot keeps moving
+- Press `Stop` to clear the command and publish zero velocity
+- The panel status shows `Manual drive: latched` while a drive command is active
+
+## Development vs hotspot mode
+
+- For daily development, stay on your normal Wi-Fi or hotspot and use `http://PI5_IP:8090`
+- Pi5 hotspot mode is optional and mainly for demos where you want the phone to connect directly to the robot
+- When Pi5 switches `wlan0` into hotspot/AP mode, it will usually stop using the previous Wi-Fi connection
+
 접속 주소:
 - Pi5 자체 브라우저: `http://127.0.0.1:8090`
 - 같은 와이파이 휴대폰: `http://PI5_IP:8090`

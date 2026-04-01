@@ -31,6 +31,7 @@ safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
 
 PIDS=()
+LIDAR_STARTED=0
 
 start_node() {
   local name="$1"
@@ -51,6 +52,59 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+scan_available() {
+  ros2 topic list 2>/dev/null | grep -q '^/scan$'
+}
+
+start_lidar_if_available() {
+  local serial_port="${BUDDYBOT_LIDAR_PORT:-}"
+  local serial_baudrate="${BUDDYBOT_LIDAR_BAUDRATE:-115200}"
+  local pkg_prefix=""
+  local pkg_share=""
+  local launch_file=""
+
+  if scan_available; then
+    echo "[mapping] lidar scan already available"
+    return
+  fi
+
+  if ! pkg_prefix="$(ros2 pkg prefix sllidar_ros2 2>/dev/null)"; then
+    echo "[mapping] lidar autostart skipped: sllidar_ros2 is not installed"
+    return
+  fi
+
+  pkg_share="$pkg_prefix/share/sllidar_ros2"
+  if [[ -z "$serial_port" ]]; then
+    for candidate in /dev/ttyUSB0 /dev/ttyUSB1 /dev/ttyACM0 /dev/ttyACM1; do
+      if [[ -e "$candidate" ]]; then
+        serial_port="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$serial_port" ]]; then
+    echo "[mapping] lidar autostart skipped: no serial device found"
+    return
+  fi
+
+  for candidate in sllidar_a1_launch.py view_sllidar_a1_launch.py sllidar_launch.py view_sllidar_launch.py; do
+    if [[ -f "$pkg_share/launch/$candidate" ]]; then
+      launch_file="$candidate"
+      break
+    fi
+  done
+
+  if [[ -z "$launch_file" ]]; then
+    echo "[mapping] lidar autostart skipped: no known sllidar launch file found"
+    return
+  fi
+
+  start_node lidar ros2 launch sllidar_ros2 "$launch_file" serial_port:="$serial_port" serial_baudrate:="$serial_baudrate"
+  LIDAR_STARTED=1
+}
+
+start_lidar_if_available
 start_node pico_bridge ros2 run buddybot_base pico_bridge_node
 start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
@@ -72,7 +126,11 @@ fi
 echo
 echo "[mapping] mapping panel is running"
 echo "[mapping] panel url: http://127.0.0.1:8090"
-echo "[mapping] expectation: /scan must already be published by your LiDAR driver"
+if [[ "$LIDAR_STARTED" -eq 1 ]]; then
+  echo "[mapping] lidar driver: auto-started"
+else
+  echo "[mapping] lidar driver: not auto-started; /scan must already exist"
+fi
 echo "[mapping] logs: $LOG_DIR"
 echo "[mapping] press Ctrl+C to stop everything"
 

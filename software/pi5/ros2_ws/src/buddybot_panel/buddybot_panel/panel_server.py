@@ -103,7 +103,9 @@ class PanelBridge:
         self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._system_status = "idle"
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
-        self._manual_command_token = 0
+        self._manual_active = False
+        self._manual_linear_x = 0.0
+        self._manual_angular_z = 0.0
 
         self._init_ros()
 
@@ -118,6 +120,7 @@ class PanelBridge:
             self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", 10)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", 10)
             self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
+            self._node.create_timer(0.1, self._manual_publish_timer)
 
             self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, 10)
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
@@ -243,6 +246,7 @@ class PanelBridge:
             "camera_age_sec": self.camera_age_sec(),
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
+            "manual_active": self.manual_active(),
         }
 
     def current_pose(self) -> Optional[Dict[str, float]]:
@@ -281,6 +285,23 @@ class PanelBridge:
         status["age_sec"] = round(max(0.0, time.time() - float(status.get("stamp", 0.0))), 2)
         status.pop("stamp", None)
         return status
+
+    def manual_active(self) -> bool:
+        with self._lock:
+            return self._manual_active
+
+    def _manual_publish_timer(self) -> None:
+        if not self.ros2_connected or self._manual_pub is None:
+            return
+        with self._lock:
+            active = self._manual_active
+            linear_x = self._manual_linear_x
+            angular_z = self._manual_angular_z
+        twist = Twist()
+        if active:
+            twist.linear.x = linear_x
+            twist.angular.z = angular_z
+        self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
         with self._lock:
@@ -398,30 +419,16 @@ class PanelBridge:
             return
 
         with self._lock:
-            self._manual_command_token += 1
-            token = self._manual_command_token
-
+            if direction == "stop":
+                self._manual_active = False
+                self._manual_linear_x = 0.0
+                self._manual_angular_z = 0.0
+            else:
+                self._manual_active = True
+                self._manual_linear_x = linear_x
+                self._manual_angular_z = angular_z
         if direction == "stop":
             self._manual_pub.publish(Twist())
-            return
-
-        def publish_burst() -> None:
-            end_time = time.time() + max(0.1, duration)
-            while time.time() < end_time:
-                with self._lock:
-                    if token != self._manual_command_token:
-                        return
-                twist = Twist()
-                twist.linear.x = linear_x
-                twist.angular.z = angular_z
-                self._manual_pub.publish(twist)
-                time.sleep(0.1)
-            with self._lock:
-                if token == self._manual_command_token:
-                    self._manual_pub.publish(Twist())
-
-        thread = threading.Thread(target=publish_burst, daemon=True)
-        thread.start()
 
     def go_waypoint(self, name: str) -> None:
         self.last_command = f"nav:{name}"
