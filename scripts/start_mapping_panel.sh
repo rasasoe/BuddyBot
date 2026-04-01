@@ -29,6 +29,7 @@ safe_source() {
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
+eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 
 PIDS=()
 LIDAR_STARTED=0
@@ -61,7 +62,7 @@ camera_available() {
 }
 
 start_lidar_if_available() {
-  local serial_port="${BUDDYBOT_LIDAR_PORT:-}"
+  local serial_port="${BUDDYBOT_LIDAR_PORT:-${LIDAR_PORT:-}}"
   local serial_baudrate="${BUDDYBOT_LIDAR_BAUDRATE:-115200}"
   local pkg_prefix=""
   local pkg_share=""
@@ -108,13 +109,27 @@ start_lidar_if_available() {
   LIDAR_STARTED=1
 }
 
+echo "[mapping] detected Pico port: ${PICO_PORT:-none}"
+echo "[mapping] detected LiDAR port: ${LIDAR_PORT:-none}"
+echo "[mapping] detected camera device: ${CAMERA_DEVICE:-none}"
+echo "[mapping] microphone available: ${MIC_AVAILABLE:-0}"
+echo "[mapping] AI server: ${AI_SERVER_STATE:-unknown}"
+
 start_lidar_if_available
-start_node pico_bridge ros2 run buddybot_base pico_bridge_node
+if [[ -n "${PICO_PORT:-}" ]]; then
+  start_node pico_bridge ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
+else
+  start_node pico_bridge ros2 run buddybot_base pico_bridge_node
+fi
 start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
-start_node camera ros2 run buddybot_vision camera_node
+if [[ -n "${CAMERA_DEVICE:-}" ]]; then
+  start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}"
+else
+  start_node camera ros2 run buddybot_vision camera_node
+fi
 start_node detector ros2 run buddybot_vision detector_node
 start_node follow_controller ros2 run buddybot_vision follow_controller_node
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
