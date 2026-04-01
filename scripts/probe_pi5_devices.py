@@ -100,16 +100,24 @@ def main() -> None:
     parser.add_argument("--server-url", default=os.getenv("BUDDYBOT_AI_URL", ""))
     args = parser.parse_args()
 
-    serial_candidates = sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/ttyUSB*"))
+    serial_by_id = sorted(glob.glob("/dev/serial/by-id/*"))
+    serial_candidates = serial_by_id + sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/ttyUSB*"))
     pico_port = probe_pico_port(serial_candidates)
 
     lidar_port = ""
-    for candidate in sorted(glob.glob("/dev/ttyUSB*")) + sorted(glob.glob("/dev/ttyACM*")):
+    for candidate in serial_candidates:
         if candidate != pico_port:
             lidar_port = candidate
             break
 
-    camera_device = detect_camera_device()
+    v4l_by_id = sorted(glob.glob("/dev/v4l/by-id/*"))
+    camera_device = ""
+    for candidate in v4l_by_id:
+        if "video-index0" in candidate:
+            camera_device = candidate
+            break
+    if not camera_device:
+        camera_device = detect_camera_device()
     mic_ok, mic_info = detect_microphone()
     server_state = detect_ai_server(args.server_url)
 
@@ -120,6 +128,8 @@ def main() -> None:
         "MIC_AVAILABLE": "1" if mic_ok else "0",
         "AI_SERVER_STATE": server_state,
         "SERIAL_CANDIDATES": " ".join(serial_candidates),
+        "SERIAL_BY_ID": " ".join(serial_by_id),
+        "V4L_BY_ID": " ".join(v4l_by_id),
         "MIC_INFO": mic_info.replace("\n", " | "),
     }
 

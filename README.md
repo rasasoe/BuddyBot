@@ -152,6 +152,21 @@ Default values:
 - Tries to auto-start `sllidar_ros2` the same way
 - If `/scan` is still missing, the panel stays on `Map: synthetic`
 
+## Quick device check
+
+Before a demo, you can verify Pico, LiDAR, camera, and microphone with one command:
+
+```bash
+cd ~/BuddyBot
+bash scripts/check_all_devices.sh
+```
+
+This script:
+- Detects Pico, LiDAR, and camera using stable `/dev/serial/by-id` and `/dev/v4l/by-id` paths when available
+- Starts each device path one-by-one in a short runtime check
+- Reports whether `/buddybot/pico_status`, `/scan`, and `/camera/image_raw` appear
+- Shows recent logs for the failing device immediately
+
 ## Manual drive behavior
 
 - Manual drive buttons are latched
