@@ -19,6 +19,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPo
 import cv2
 import cv_bridge
 import glob
+import os
 from sensor_msgs.msg import Image
 import time
 
@@ -127,6 +128,7 @@ class CameraNode(Node):
         candidates = []
         if requested and requested.lower() != 'auto':
             candidates.append(requested)
+        candidates.extend(sorted(glob.glob('/dev/v4l/by-id/*')))
         candidates.extend(sorted(glob.glob('/dev/video*')))
 
         tried = set()
@@ -151,9 +153,18 @@ class CameraNode(Node):
         return None
 
     def _open_capture(self, candidate):
+        resolved = os.path.realpath(candidate)
         if self.backend == 'v4l2' and hasattr(cv2, 'CAP_V4L2'):
-            return cv2.VideoCapture(candidate, cv2.CAP_V4L2)
-        return cv2.VideoCapture(candidate)
+            cap = cv2.VideoCapture(resolved, cv2.CAP_V4L2)
+            if cap.isOpened():
+                return cap
+            cap.release()
+        if candidate != resolved:
+            cap = cv2.VideoCapture(candidate)
+            if cap.isOpened():
+                return cap
+            cap.release()
+        return cv2.VideoCapture(resolved)
 
     def timer_callback(self):
         """Timer callback for frame capture and publishing."""

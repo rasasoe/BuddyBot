@@ -54,11 +54,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 scan_available() {
-  ros2 topic list 2>/dev/null | grep -q '^/scan$'
+  ros2 topic list 2>/dev/null | grep -Eq '^(/)?scan$' && return 0
+  ros2 node info /sllidar_node 2>/dev/null | grep -q '/scan'
 }
 
 camera_available() {
-  ros2 topic list 2>/dev/null | grep -q '^/camera/image_raw$'
+  ros2 topic list 2>/dev/null | grep -q '^/camera/image_raw$' && return 0
+  ros2 node info /camera_node 2>/dev/null | grep -q '/camera/image_raw'
 }
 
 start_lidar_if_available() {

@@ -32,6 +32,7 @@ sudo apt install -y \
   python3-fastapi \
   python3-uvicorn \
   python3-opencv \
+  v4l-utils \
   ros-"$ROS_DISTRO_NAME"-cv-bridge \
   ros-"$ROS_DISTRO_NAME"-navigation2 \
   ros-"$ROS_DISTRO_NAME"-nav2-bringup \

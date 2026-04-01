@@ -25,6 +25,9 @@ safe_source() {
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
+ros2 daemon stop >/dev/null 2>&1 || true
+ros2 daemon start >/dev/null 2>&1 || true
+sleep 2
 eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 
 PIDS=()
@@ -61,10 +64,16 @@ wait_for_topic() {
   done
 }
 
+publisher_visible() {
+  local node_name="$1"
+  local topic_fragment="$2"
+  ros2 node info "$node_name" 2>/dev/null | grep -q "$topic_fragment"
+}
+
 echo "[check] pico test"
 if [[ -n "${PICO_PORT:-}" ]]; then
   start_bg pico ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
-  if wait_for_topic "/buddybot/pico_status" 6; then
+  if wait_for_topic "/buddybot/pico_status" 6 || publisher_visible "/pico_bridge_node" "/buddybot/pico_status"; then
     echo "  result: PASS (/buddybot/pico_status present)"
   else
     echo "  result: WARN (topic missing, heartbeat may still be alive)"
@@ -77,7 +86,7 @@ echo
 echo "[check] lidar test"
 if [[ -n "${LIDAR_PORT:-}" ]]; then
   start_bg lidar ros2 launch sllidar_ros2 sllidar_a1_launch.py serial_port:="${LIDAR_PORT}" serial_baudrate:=115200
-  if wait_for_topic "/scan" 8; then
+  if wait_for_topic "/scan" 8 || wait_for_topic "scan" 8 || publisher_visible "/sllidar_node" "/scan"; then
     echo "  result: PASS (/scan present)"
   else
     echo "  result: FAIL (/scan missing)"
@@ -90,7 +99,7 @@ echo
 echo "[check] camera test"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
   start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}"
-  if wait_for_topic "/camera/image_raw" 8; then
+  if wait_for_topic "/camera/image_raw" 8 || publisher_visible "/camera_node" "/camera/image_raw"; then
     echo "  result: PASS (/camera/image_raw present)"
   else
     echo "  result: FAIL (/camera/image_raw missing)"
