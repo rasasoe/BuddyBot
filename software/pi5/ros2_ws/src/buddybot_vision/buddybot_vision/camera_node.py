@@ -129,36 +129,69 @@ class CameraNode(Node):
         if requested and requested.lower() != 'auto':
             candidates.append(requested)
         candidates.extend(sorted(glob.glob('/dev/v4l/by-id/*')))
+        candidates.extend(sorted(glob.glob('/dev/v4l/by-path/*')))
         candidates.extend(sorted(glob.glob('/dev/video*')))
 
         tried = set()
         for candidate in candidates:
-            if candidate in tried:
-                continue
-            tried.add(candidate)
-            cap = None
-            try:
-                cap = self._open_capture(candidate)
-                if not cap.isOpened():
+            resolved = os.path.realpath(candidate)
+            probe_order = [candidate]
+            if resolved != candidate:
+                probe_order.append(resolved)
+
+            for probe in probe_order:
+                if probe in tried:
                     continue
-                ok, _ = cap.read()
-                if ok:
-                    self.get_logger().info(f"Selected camera device: {candidate}")
-                    return candidate
-            except Exception:
-                continue
-            finally:
-                if cap is not None:
-                    cap.release()
+                tried.add(probe)
+                cap = None
+                try:
+                    cap = self._open_capture(probe)
+                    if not cap.isOpened():
+                        self.get_logger().info(f"Camera probe failed to open: {probe}")
+                        continue
+                    ok, _ = cap.read()
+                    if ok:
+                        self.get_logger().info(f"Selected camera device: {candidate} via {probe}")
+                        return candidate
+                    self.get_logger().info(f"Camera probe opened but read failed: {probe}")
+                except Exception as exc:
+                    self.get_logger().warn(f"Camera probe exception for {probe}: {exc}")
+                    continue
+                finally:
+                    if cap is not None:
+                        cap.release()
         return None
 
     def _open_capture(self, candidate):
         resolved = os.path.realpath(candidate)
         if self.backend == 'v4l2' and hasattr(cv2, 'CAP_V4L2'):
-            cap = cv2.VideoCapture(resolved, cv2.CAP_V4L2)
-            if cap.isOpened():
-                return cap
-            cap.release()
+            v4l_targets = []
+            if candidate != resolved:
+                v4l_targets.append(candidate)
+            v4l_targets.append(resolved)
+
+            for target in v4l_targets:
+                cap = cv2.VideoCapture(target, cv2.CAP_V4L2)
+                if cap.isOpened():
+                    return cap
+                cap.release()
+
+            if resolved.startswith('/dev/video'):
+                try:
+                    index = int(resolved.removeprefix('/dev/video'))
+                    cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        return cap
+                    cap.release()
+                except ValueError:
+                    pass
+
+            # Device paths should stay on V4L2; falling through to CAP_ANY
+            # sends OpenCV into its GStreamer backend on Pi and causes
+            # repeated pipeline errors for /dev/video* targets.
+            if candidate.startswith('/dev/') or resolved.startswith('/dev/'):
+                return cv2.VideoCapture()
+
         if candidate != resolved:
             cap = cv2.VideoCapture(candidate)
             if cap.isOpened():

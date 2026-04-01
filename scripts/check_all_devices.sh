@@ -31,12 +31,16 @@ sleep 2
 eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 
 PIDS=()
+CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-4}"
+LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-6}"
 
 echo "[check] detected devices"
 echo "  pico   : ${PICO_PORT:-none}"
 echo "  lidar  : ${LIDAR_PORT:-none}"
 echo "  camera : ${CAMERA_DEVICE:-none}"
 echo "  mic    : ${MIC_AVAILABLE:-0}"
+echo "  lidar settle delay : ${LIDAR_SETTLE_DELAY}s"
+echo "  camera start delay : ${CAMERA_START_DELAY}s"
 echo
 
 start_bg() {
@@ -46,6 +50,15 @@ start_bg() {
   "$@" > "$TMP_DIR/$name.log" 2>&1 &
   PIDS+=("$!")
   sleep 2
+}
+
+pause_before_step() {
+  local seconds="$1"
+  local reason="$2"
+  if [[ "$seconds" =~ ^[0-9]+$ ]] && (( seconds > 0 )); then
+    echo "[check] waiting ${seconds}s before $reason"
+    sleep "$seconds"
+  fi
 }
 
 wait_for_topic() {
@@ -64,10 +77,16 @@ wait_for_topic() {
   done
 }
 
+wait_for_message() {
+  local topic="$1"
+  local timeout="${2:-8}"
+  timeout "${timeout}s" ros2 topic echo --once "$topic" >/dev/null 2>&1
+}
+
 publisher_visible() {
   local node_name="$1"
   local topic_fragment="$2"
-  ros2 node info "$node_name" 2>/dev/null | grep -q "$topic_fragment"
+  ros2 node info "$node_name" 2>/dev/null | grep -Eq "(^|[[:space:]])/?${topic_fragment}([[:space:]]|$)"
 }
 
 echo "[check] pico test"
@@ -86,7 +105,8 @@ echo
 echo "[check] lidar test"
 if [[ -n "${LIDAR_PORT:-}" ]]; then
   start_bg lidar ros2 launch sllidar_ros2 sllidar_a1_launch.py serial_port:="${LIDAR_PORT}" serial_baudrate:=115200
-  if wait_for_topic "/scan" 8 || wait_for_topic "scan" 8 || publisher_visible "/sllidar_node" "/scan"; then
+  pause_before_step "$LIDAR_SETTLE_DELAY" "checking LiDAR scan output"
+  if wait_for_message "/scan" 10 || wait_for_topic "/scan" 10 || wait_for_topic "scan" 10 || publisher_visible "/sllidar_node" "scan"; then
     echo "  result: PASS (/scan present)"
   else
     echo "  result: FAIL (/scan missing)"
@@ -98,8 +118,9 @@ echo
 
 echo "[check] camera test"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
+  pause_before_step "$CAMERA_START_DELAY" "starting camera after USB devices settle"
   start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}"
-  if wait_for_topic "/camera/image_raw" 8 || publisher_visible "/camera_node" "/camera/image_raw"; then
+  if wait_for_message "/camera/image_raw" 10 || wait_for_topic "/camera/image_raw" 10 || publisher_visible "/camera_node" "camera/image_raw"; then
     echo "  result: PASS (/camera/image_raw present)"
   else
     echo "  result: FAIL (/camera/image_raw missing)"

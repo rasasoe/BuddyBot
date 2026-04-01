@@ -46,23 +46,42 @@ def probe_pico_port(candidates: list[str], baudrate: int = 115200) -> str:
 def detect_camera_device() -> str:
     if cv2 is None:
         return ""
-    for candidate in sorted(glob.glob("/dev/video*")):
-        cap = None
-        try:
-            if hasattr(cv2, "CAP_V4L2"):
-                cap = cv2.VideoCapture(candidate, cv2.CAP_V4L2)
-            else:
-                cap = cv2.VideoCapture(candidate)
-            if not cap.isOpened():
+    candidates: list[str] = []
+    candidates.extend(sorted(glob.glob("/dev/v4l/by-id/*")))
+    candidates.extend(sorted(glob.glob("/dev/v4l/by-path/*")))
+    candidates.extend(sorted(glob.glob("/dev/video*")))
+
+    tried: set[str] = set()
+    for candidate in candidates:
+        resolved = os.path.realpath(candidate)
+        probe_order = [candidate]
+        if resolved != candidate:
+            probe_order.append(resolved)
+
+        for probe in probe_order:
+            if probe in tried:
                 continue
-            ok, _ = cap.read()
-            if ok:
-                return candidate
-        except Exception:
-            continue
-        finally:
-            if cap is not None:
-                cap.release()
+            tried.add(probe)
+
+            cap = None
+            try:
+                if hasattr(cv2, "CAP_V4L2"):
+                    cap = cv2.VideoCapture(probe, cv2.CAP_V4L2)
+                else:
+                    cap = cv2.VideoCapture(probe)
+                if not cap.isOpened() and resolved.startswith("/dev/video") and hasattr(cv2, "CAP_V4L2"):
+                    cap.release()
+                    cap = cv2.VideoCapture(int(resolved.removeprefix("/dev/video")), cv2.CAP_V4L2)
+                if not cap.isOpened():
+                    continue
+                ok, _ = cap.read()
+                if ok:
+                    return candidate
+            except Exception:
+                continue
+            finally:
+                if cap is not None:
+                    cap.release()
     return ""
 
 

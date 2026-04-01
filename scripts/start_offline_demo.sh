@@ -33,6 +33,8 @@ eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 
 PIDS=()
 LIDAR_STARTED=0
+CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-4}"
+LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-6}"
 
 start_node() {
   local name="$1"
@@ -41,6 +43,15 @@ start_node() {
   "$@" > "$LOG_DIR/$name.log" 2>&1 &
   PIDS+=("$!")
   sleep 1
+}
+
+pause_before_node() {
+  local seconds="$1"
+  local reason="$2"
+  if [[ "$seconds" =~ ^[0-9]+$ ]] && (( seconds > 0 )); then
+    echo "[demo] waiting ${seconds}s before $reason"
+    sleep "$seconds"
+  fi
 }
 
 cleanup() {
@@ -55,12 +66,12 @@ trap cleanup EXIT INT TERM
 
 scan_available() {
   ros2 topic list 2>/dev/null | grep -Eq '^(/)?scan$' && return 0
-  ros2 node info /sllidar_node 2>/dev/null | grep -q '/scan'
+  ros2 node info /sllidar_node 2>/dev/null | grep -Eq '(^|[[:space:]])/?scan([[:space:]]|$)'
 }
 
 camera_available() {
   ros2 topic list 2>/dev/null | grep -q '^/camera/image_raw$' && return 0
-  ros2 node info /camera_node 2>/dev/null | grep -q '/camera/image_raw'
+  ros2 node info /camera_node 2>/dev/null | grep -Eq '(^|[[:space:]])/?camera/image_raw([[:space:]]|$)'
 }
 
 start_lidar_if_available() {
@@ -116,8 +127,13 @@ echo "[demo] detected LiDAR port: ${LIDAR_PORT:-none}"
 echo "[demo] detected camera device: ${CAMERA_DEVICE:-none}"
 echo "[demo] microphone available: ${MIC_AVAILABLE:-0}"
 echo "[demo] AI server: ${AI_SERVER_STATE:-unknown}"
+echo "[demo] lidar settle delay: ${LIDAR_SETTLE_DELAY}s"
+echo "[demo] camera start delay: ${CAMERA_START_DELAY}s"
 
 start_lidar_if_available
+if [[ "$LIDAR_STARTED" -eq 1 ]]; then
+  pause_before_node "$LIDAR_SETTLE_DELAY" "starting camera after lidar spin-up"
+fi
 if [[ -n "${PICO_PORT:-}" ]]; then
   start_node pico_bridge ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
 else
@@ -127,6 +143,7 @@ start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
+pause_before_node "$CAMERA_START_DELAY" "starting camera"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
   start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}"
 else
