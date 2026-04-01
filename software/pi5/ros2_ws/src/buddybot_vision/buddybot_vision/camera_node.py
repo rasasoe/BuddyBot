@@ -44,6 +44,8 @@ class CameraNode(Node):
         self.declare_parameter('frame_id', 'camera_link')
         self.declare_parameter('publish_rate', 30.0)  # Hz
         self.declare_parameter('backend', 'v4l2')
+        self.declare_parameter('open_retries', 4)
+        self.declare_parameter('open_retry_delay', 0.6)
 
         # Get parameters
         self.device = self.get_parameter('device').value
@@ -53,6 +55,8 @@ class CameraNode(Node):
         self.frame_id = self.get_parameter('frame_id').value
         self.publish_rate = self.get_parameter('publish_rate').value
         self.backend = str(self.get_parameter('backend').value).lower()
+        self.open_retries = int(self.get_parameter('open_retries').value)
+        self.open_retry_delay = float(self.get_parameter('open_retry_delay').value)
 
         # Initialize camera
         self.cap = None
@@ -97,7 +101,8 @@ class CameraNode(Node):
                 return False
 
             self.device = selected_device
-            self.cap = self._open_capture(self.device)
+            time.sleep(0.3)
+            self.cap = self._open_capture_with_retry(self.device)
 
             if not self.cap.isOpened():
                 self.get_logger().error(f"Failed to open camera device: {self.device}")
@@ -125,16 +130,13 @@ class CameraNode(Node):
 
     def _detect_camera_device(self):
         requested = str(self.device).strip()
-        candidates = []
-        if requested and requested.lower() != 'auto':
-            candidates.append(requested)
-        candidates.extend(sorted(glob.glob('/dev/v4l/by-id/*')))
-        candidates.extend(sorted(glob.glob('/dev/v4l/by-path/*')))
-        candidates.extend(sorted(glob.glob('/dev/video*')))
+        candidates = self._camera_candidates(requested)
 
         tried = set()
         for candidate in candidates:
             resolved = os.path.realpath(candidate)
+            if resolved.startswith('/dev/video') and not os.access(resolved, os.R_OK | os.W_OK):
+                continue
             probe_order = [candidate]
             if resolved != candidate:
                 probe_order.append(resolved)
@@ -161,6 +163,33 @@ class CameraNode(Node):
                     if cap is not None:
                         cap.release()
         return None
+
+    def _camera_candidates(self, preferred=''):
+        candidates = []
+        if preferred and preferred.lower() != 'auto':
+            candidates.append(preferred)
+            return candidates
+        candidates.extend(sorted(glob.glob('/dev/v4l/by-id/*')))
+        candidates.extend(sorted(glob.glob('/dev/v4l/by-path/*usb*')))
+        candidates.extend(sorted(glob.glob('/dev/video*')))
+        return candidates
+
+    def _open_capture_with_retry(self, candidate):
+        attempts = max(1, self.open_retries)
+        last_cap = None
+        for attempt in range(1, attempts + 1):
+            if last_cap is not None:
+                last_cap.release()
+                last_cap = None
+            if attempt > 1:
+                self.get_logger().info(
+                    f"Retrying camera open ({attempt}/{attempts}) for {candidate}"
+                )
+                time.sleep(self.open_retry_delay)
+            last_cap = self._open_capture(candidate)
+            if last_cap.isOpened():
+                return last_cap
+        return last_cap if last_cap is not None else cv2.VideoCapture()
 
     def _open_capture(self, candidate):
         resolved = os.path.realpath(candidate)

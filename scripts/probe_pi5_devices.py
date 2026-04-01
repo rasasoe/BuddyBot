@@ -20,6 +20,16 @@ except Exception:
     serial = None
 
 
+def camera_candidates(preferred: str = "") -> list[str]:
+    candidates: list[str] = []
+    if preferred:
+        candidates.append(preferred)
+    candidates.extend(sorted(glob.glob("/dev/v4l/by-id/*")))
+    candidates.extend(sorted(glob.glob("/dev/v4l/by-path/*usb*")))
+    candidates.extend(sorted(glob.glob("/dev/video*")))
+    return candidates
+
+
 def probe_pico_port(candidates: list[str], baudrate: int = 115200) -> str:
     if serial is None:
         return ""
@@ -43,17 +53,16 @@ def probe_pico_port(candidates: list[str], baudrate: int = 115200) -> str:
     return ""
 
 
-def detect_camera_device() -> str:
+def detect_camera_device(preferred: str = "") -> str:
     if cv2 is None:
         return ""
-    candidates: list[str] = []
-    candidates.extend(sorted(glob.glob("/dev/v4l/by-id/*")))
-    candidates.extend(sorted(glob.glob("/dev/v4l/by-path/*")))
-    candidates.extend(sorted(glob.glob("/dev/video*")))
+    candidates = camera_candidates(preferred)
 
     tried: set[str] = set()
     for candidate in candidates:
         resolved = os.path.realpath(candidate)
+        if resolved.startswith("/dev/video") and not os.access(resolved, os.R_OK | os.W_OK):
+            continue
         probe_order = [candidate]
         if resolved != candidate:
             probe_order.append(resolved)
@@ -133,8 +142,9 @@ def main() -> None:
     camera_device = ""
     for candidate in v4l_by_id:
         if "video-index0" in candidate:
-            camera_device = candidate
-            break
+            camera_device = detect_camera_device(candidate)
+            if camera_device:
+                break
     if not camera_device:
         camera_device = detect_camera_device()
     mic_ok, mic_info = detect_microphone()
