@@ -5,6 +5,15 @@ SSID="${1:-BuddyBot-Local}"
 PASSWORD="${2:-BuddyBot1234!}"
 CONNECTION_NAME="${3:-buddybot-hotspot}"
 ADDRESS="${4:-192.168.50.1/24}"
+ALLOW_HOTSPOT="${BUDDYBOT_ALLOW_HOTSPOT:-0}"
+
+if [[ "$ALLOW_HOTSPOT" != "1" ]]; then
+  echo "[hotspot] disabled by default"
+  echo "[hotspot] this script will not configure AP mode unless you explicitly allow it"
+  echo "[hotspot] to force-enable once:"
+  echo "  BUDDYBOT_ALLOW_HOTSPOT=1 bash scripts/setup_pi5_hotspot.sh"
+  exit 1
+fi
 
 echo "[hotspot] configuring Pi5 hotspot with NetworkManager"
 echo "[hotspot] ssid: $SSID"
@@ -28,7 +37,7 @@ sudo nmcli connection add \
   type wifi \
   ifname wlan0 \
   con-name "$CONNECTION_NAME" \
-  autoconnect yes \
+  autoconnect no \
   ssid "$SSID"
 
 sudo nmcli connection modify "$CONNECTION_NAME" \
@@ -42,6 +51,7 @@ sudo nmcli connection modify "$CONNECTION_NAME" \
 
 echo
 echo "[hotspot] configured successfully"
+echo "[hotspot] autoconnect is disabled to prevent reboot-time AP fallback"
 echo "[hotspot] start with:"
 echo "  bash scripts/start_pi5_hotspot.sh \"$CONNECTION_NAME\""
 echo "[hotspot] phone connection:"

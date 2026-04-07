@@ -117,20 +117,30 @@ Notes:
 
 ## Pi5 local hotspot mode
 
+Hotspot mode is disabled by default to avoid accidental AP-mode switching during normal development.
+You must explicitly opt in with `BUDDYBOT_ALLOW_HOTSPOT=1` before running the hotspot scripts.
+The saved hotspot profile is also created with `autoconnect no`, so reboot does not switch `wlan0` back into AP mode.
+
 You do not need Tailscale, VPS, or internet for local control if Pi5 opens its own Wi-Fi AP.
 
 One-time setup:
 
 ```bash
 cd ~/BuddyBot
-bash scripts/setup_pi5_hotspot.sh
+BUDDYBOT_ALLOW_HOTSPOT=1 bash scripts/setup_pi5_hotspot.sh
 ```
 
 Start hotspot:
 
 ```bash
 cd ~/BuddyBot
-bash scripts/start_pi5_hotspot.sh
+BUDDYBOT_ALLOW_HOTSPOT=1 bash scripts/start_pi5_hotspot.sh
+
+Remove an existing hotspot profile and stop reboot-time fallback:
+
+```bash
+bash scripts/disable_pi5_hotspot.sh
+```
 ```
 
 Default values:
