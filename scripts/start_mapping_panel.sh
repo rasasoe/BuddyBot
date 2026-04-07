@@ -35,6 +35,10 @@ PIDS=()
 LIDAR_STARTED=0
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-4}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-6}"
+CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
+CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
+CAMERA_FPS="${BUDDYBOT_CAMERA_FPS:-15}"
+CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10}"
 
 start_node() {
   local name="$1"
@@ -129,6 +133,7 @@ echo "[mapping] microphone available: ${MIC_AVAILABLE:-0}"
 echo "[mapping] AI server: ${AI_SERVER_STATE:-unknown}"
 echo "[mapping] lidar settle delay: ${LIDAR_SETTLE_DELAY}s"
 echo "[mapping] camera start delay: ${CAMERA_START_DELAY}s"
+echo "[mapping] camera profile: ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
 
 start_lidar_if_available
 if [[ "$LIDAR_STARTED" -eq 1 ]]; then
@@ -145,9 +150,9 @@ start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 pause_before_node "$CAMERA_START_DELAY" "starting camera"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
-  start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}"
+  start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
 else
-  start_node camera ros2 run buddybot_vision camera_node
+  start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
 fi
 start_node detector ros2 run buddybot_vision detector_node
 start_node follow_controller ros2 run buddybot_vision follow_controller_node

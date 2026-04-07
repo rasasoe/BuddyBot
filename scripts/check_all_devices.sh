@@ -33,6 +33,10 @@ eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 PIDS=()
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-4}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-6}"
+CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
+CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
+CAMERA_FPS="${BUDDYBOT_CAMERA_FPS:-15}"
+CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10}"
 
 echo "[check] detected devices"
 echo "  pico   : ${PICO_PORT:-none}"
@@ -41,6 +45,7 @@ echo "  camera : ${CAMERA_DEVICE:-none}"
 echo "  mic    : ${MIC_AVAILABLE:-0}"
 echo "  lidar settle delay : ${LIDAR_SETTLE_DELAY}s"
 echo "  camera start delay : ${CAMERA_START_DELAY}s"
+echo "  camera profile : ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
 echo
 
 start_bg() {
@@ -119,7 +124,7 @@ echo
 echo "[check] camera test"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
   pause_before_step "$CAMERA_START_DELAY" "starting camera after USB devices settle"
-  start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}"
+  start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
   if wait_for_message "/camera/image_raw" 10 || wait_for_topic "/camera/image_raw" 10 || publisher_visible "/camera_node" "camera/image_raw"; then
     echo "  result: PASS (/camera/image_raw present)"
   else

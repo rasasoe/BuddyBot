@@ -176,6 +176,8 @@ This script:
 - Starts each device path one-by-one in a short runtime check
 - Reports whether `/buddybot/pico_status`, `/scan`, and `/camera/image_raw` appear
 - Shows recent logs for the failing device immediately
+- Starts the camera in a conservative USB profile by default: `320x240`, `15fps`, `10Hz` publish
+- You can override that profile with `BUDDYBOT_CAMERA_WIDTH`, `BUDDYBOT_CAMERA_HEIGHT`, `BUDDYBOT_CAMERA_FPS`, and `BUDDYBOT_CAMERA_PUBLISH_RATE`
 
 ## Manual drive behavior
 
