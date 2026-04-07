@@ -15,8 +15,17 @@ run_section() {
 first_camera_device() {
   if command -v v4l2-ctl >/dev/null 2>&1; then
     v4l2-ctl --list-devices 2>/dev/null | awk '
-      /^\/dev\/video[0-9]+$/ { print $1; exit }
-      /^\t\/dev\/video[0-9]+$/ { gsub(/^\t/, "", $1); print $1; exit }
+      /^[^\t].*\(/ {
+        current_usb = ($0 ~ /usb/i)
+        next
+      }
+      /^\t\/dev\/video[0-9]+$/ {
+        if (current_usb) {
+          gsub(/^\t/, "", $1)
+          print $1
+          exit
+        }
+      }
     '
   fi
 }
@@ -40,7 +49,7 @@ else
   echo
 fi
 
-if [[ -x "$CHECK_SCRIPT" ]]; then
+if [[ -f "$CHECK_SCRIPT" ]]; then
   run_section "check_all_devices" bash "$CHECK_SCRIPT"
 else
   echo "===== check_all_devices ====="
