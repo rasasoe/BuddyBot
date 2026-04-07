@@ -19,13 +19,13 @@ from pydantic import BaseModel
 try:
     import cv2
     import rclpy
-    from cv_bridge import CvBridge
     from buddybot_msgs.msg import Status
+    from cv_bridge import CvBridge
     from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import OccupancyGrid, Odometry
     from rclpy.node import Node
-    from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
-    from sensor_msgs.msg import Image
+    from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from sensor_msgs.msg import Image, LaserScan
     from std_msgs.msg import String
 
     ROS2_AVAILABLE = True
@@ -33,18 +33,19 @@ except ImportError:
     ROS2_AVAILABLE = False
     cv2 = None
     rclpy = None
-    CvBridge = None
     Status = None
+    CvBridge = None
     PoseWithCovarianceStamped = None
     Twist = None
     OccupancyGrid = None
     Odometry = None
+    Node = object
     QoSProfile = None
     ReliabilityPolicy = None
     DurabilityPolicy = None
     HistoryPolicy = None
     Image = None
-    Node = object
+    LaserScan = None
     String = object
 
 
@@ -82,7 +83,7 @@ class WaypointGoRequest(BaseModel):
 
 
 class PanelBridge:
-    def __init__(self):
+    def __init__(self) -> None:
         self.follow_enabled = False
         self.assistant_enabled = False
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
@@ -94,17 +95,19 @@ class PanelBridge:
         self._manual_pub = None
         self._waypoint_goal_pub = None
         self._waypoint_save_pub = None
+        self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._lock = threading.Lock()
         self._latest_pose: Optional[Dict[str, float]] = None
         self._latest_map: Optional[Dict[str, Any]] = None
+        self._latest_scan_map: Optional[Dict[str, Any]] = None
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._system_status = "idle"
-        self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
         self._manual_active = False
         self._manual_linear_x = 0.0
+        self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
 
         self._init_ros()
@@ -126,6 +129,8 @@ class PanelBridge:
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
+            if LaserScan is not None:
+                self._node.create_subscription(LaserScan, "/scan", self._scan_callback, 10)
             if Status is not None:
                 self._node.create_subscription(Status, "/buddybot/pico_status", self._pico_status_callback, 10)
             if Image is not None and self._cv_bridge is not None and QoSProfile is not None:
@@ -158,6 +163,16 @@ class PanelBridge:
     def _map_callback(self, msg: OccupancyGrid) -> None:
         with self._lock:
             self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+
+    def _scan_callback(self, msg: LaserScan) -> None:
+        try:
+            with self._lock:
+                pose = dict(self._latest_pose) if self._latest_pose is not None else None
+            scan_map = self._build_scan_map(msg, pose)
+            with self._lock:
+                self._latest_scan_map = scan_map
+        except Exception:
+            return
 
     def _camera_callback(self, msg: Image) -> None:
         if self._cv_bridge is None or cv2 is None:
@@ -215,7 +230,6 @@ class PanelBridge:
         sampled_width = max(1, math.ceil(width / step))
         sampled_height = max(1, math.ceil(height / step))
         sampled: List[int] = []
-
         for row in range(0, height, step):
             for col in range(0, width, step):
                 sampled.append(int(msg.data[row * width + col]))
@@ -227,6 +241,110 @@ class PanelBridge:
             "resolution": resolution * step,
             "origin": {"x": origin_x, "y": origin_y},
             "cells": sampled,
+        }
+
+    def _build_scan_map(
+        self,
+        msg: LaserScan,
+        pose: Optional[Dict[str, float]],
+        size_m: float = 8.0,
+        resolution: float = 0.05,
+    ) -> Dict[str, Any]:
+        width = max(1, int(size_m / resolution))
+        height = width
+        half = size_m / 2.0
+        base_x = float(pose["x"]) if pose is not None else 0.0
+        base_y = float(pose["y"]) if pose is not None else 0.0
+        theta = float(pose["theta"]) if pose is not None else 0.0
+        origin_x = base_x - half
+        origin_y = base_y - half
+        cells = [-1] * (width * height)
+        robot_cx = width // 2
+        robot_cy = height // 2
+
+        def set_cell(cx: int, cy: int, value: int) -> None:
+            if 0 <= cx < width and 0 <= cy < height:
+                idx = cy * width + cx
+                cells[idx] = max(cells[idx], value)
+
+        def world_to_grid(x: float, y: float) -> tuple[int, int]:
+            return int((x - origin_x) / resolution), int((y - origin_y) / resolution)
+
+        def mark_ray(end_x: int, end_y: int, occupied: bool) -> None:
+            x0, y0 = robot_cx, robot_cy
+            x1, y1 = end_x, end_y
+            dx = abs(x1 - x0)
+            sx = 1 if x0 < x1 else -1
+            dy = -abs(y1 - y0)
+            sy = 1 if y0 < y1 else -1
+            err = dx + dy
+            x, y = x0, y0
+            while True:
+                if (x, y) != (x1, y1):
+                    set_cell(x, y, 0)
+                if x == x1 and y == y1:
+                    break
+                e2 = 2 * err
+                if e2 >= dy:
+                    err += dy
+                    x += sx
+                if e2 <= dx:
+                    err += dx
+                    y += sy
+            if occupied:
+                set_cell(x1, y1, 100)
+
+        angle = float(msg.angle_min)
+        range_min = float(msg.range_min)
+        range_max = float(msg.range_max)
+        for raw_range in msg.ranges:
+            distance = float(raw_range)
+            is_valid = math.isfinite(distance) and range_min <= distance <= range_max
+            clipped_distance = min(distance, half) if is_valid else half
+            heading = theta + angle
+            end_x = base_x + math.cos(heading) * clipped_distance
+            end_y = base_y + math.sin(heading) * clipped_distance
+            gx, gy = world_to_grid(end_x, end_y)
+            mark_ray(gx, gy, is_valid and distance <= half)
+            angle += float(msg.angle_increment)
+
+        set_cell(robot_cx, robot_cy, 35)
+        return {
+            "source": "scan_local",
+            "width": width,
+            "height": height,
+            "resolution": resolution,
+            "origin": {"x": origin_x, "y": origin_y},
+            "cells": cells,
+        }
+
+    def _build_synthetic_map(self) -> Dict[str, Any]:
+        waypoints = self.list_waypoints()
+        if not waypoints:
+            width = 100
+            height = 100
+            resolution = 0.1
+            origin_x = -5.0
+            origin_y = -5.0
+        else:
+            xs = [item["x"] for item in waypoints]
+            ys = [item["y"] for item in waypoints]
+            padding = 2.0
+            origin_x = min(xs) - padding
+            origin_y = min(ys) - padding
+            max_x = max(xs) + padding
+            max_y = max(ys) + padding
+            resolution = 0.1
+            width = max(60, int(math.ceil((max_x - origin_x) / resolution)))
+            height = max(60, int(math.ceil((max_y - origin_y) / resolution)))
+
+        return {
+            "source": "synthetic",
+            "width": width,
+            "height": height,
+            "resolution": resolution,
+            "origin": {"x": origin_x, "y": origin_y},
+            "cells": [0] * (width * height),
         }
 
     def status(self) -> Dict[str, Any]:
@@ -255,7 +373,7 @@ class PanelBridge:
 
     def map_available(self) -> bool:
         with self._lock:
-            return self._latest_map is not None
+            return self._latest_map is not None or self._latest_scan_map is not None
 
     def camera_available(self) -> bool:
         with self._lock:
@@ -296,47 +414,25 @@ class PanelBridge:
         with self._lock:
             active = self._manual_active
             linear_x = self._manual_linear_x
+            linear_y = self._manual_linear_y
             angular_z = self._manual_angular_z
         twist = Twist()
         if active:
             twist.linear.x = linear_x
+            twist.linear.y = linear_y
             twist.angular.z = angular_z
         self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
         with self._lock:
-            payload = dict(self._latest_map) if self._latest_map is not None else self._build_synthetic_map()
+            if self._latest_map is not None:
+                payload = dict(self._latest_map)
+            elif self._latest_scan_map is not None:
+                payload = dict(self._latest_scan_map)
+            else:
+                payload = self._build_synthetic_map()
         payload["pose"] = self.current_pose()
         return payload
-
-    def _build_synthetic_map(self) -> Dict[str, Any]:
-        waypoints = self.list_waypoints()
-        if not waypoints:
-            width = 100
-            height = 100
-            resolution = 0.1
-            origin_x = -5.0
-            origin_y = -5.0
-        else:
-            xs = [item["x"] for item in waypoints]
-            ys = [item["y"] for item in waypoints]
-            padding = 2.0
-            origin_x = min(xs) - padding
-            origin_y = min(ys) - padding
-            max_x = max(xs) + padding
-            max_y = max(ys) + padding
-            resolution = 0.1
-            width = max(60, int(math.ceil((max_x - origin_x) / resolution)))
-            height = max(60, int(math.ceil((max_y - origin_y) / resolution)))
-
-        return {
-            "source": "synthetic",
-            "width": width,
-            "height": height,
-            "resolution": resolution,
-            "origin": {"x": origin_x, "y": origin_y},
-            "cells": [0] * (width * height),
-        }
 
     def set_assistant(self, enabled: bool, server_url: str) -> Dict[str, Any]:
         self.assistant_enabled = enabled
@@ -368,19 +464,25 @@ class PanelBridge:
     def _handle_local_command(self, message: str) -> str:
         text = message.lower().strip()
         if any(keyword in text for keyword in ("stop", "halt", "brake")):
-            self.manual_command("stop", 0.0, 0.0)
+            self.manual_command("stop", 0.0)
             return "Stopped the robot in standalone mode."
         if any(keyword in text for keyword in ("forward", "go ahead")):
-            self.manual_command("forward", 0.35, 1.0)
+            self.manual_command("forward", 0.35)
             return "Moving forward in standalone mode."
         if any(keyword in text for keyword in ("backward", "reverse", "back")):
-            self.manual_command("backward", 0.35, 1.0)
+            self.manual_command("backward", 0.35)
             return "Moving backward in standalone mode."
-        if any(keyword in text for keyword in ("left", "turn left")):
-            self.manual_command("left", 0.45, 0.8)
+        if any(keyword in text for keyword in ("strafe left", "slide left")):
+            self.manual_command("strafe_left", 0.3)
+            return "Strafing left in standalone mode."
+        if any(keyword in text for keyword in ("strafe right", "slide right")):
+            self.manual_command("strafe_right", 0.3)
+            return "Strafing right in standalone mode."
+        if any(keyword in text for keyword in ("turn left", "rotate left", "left")):
+            self.manual_command("rotate_left", 0.45)
             return "Turning left in standalone mode."
-        if any(keyword in text for keyword in ("right", "turn right")):
-            self.manual_command("right", 0.45, 0.8)
+        if any(keyword in text for keyword in ("turn right", "rotate right", "right")):
+            self.manual_command("rotate_right", 0.45)
             return "Turning right in standalone mode."
         if any(keyword in text for keyword in ("follow", "track user")):
             self.follow_enabled = True
@@ -390,6 +492,14 @@ class PanelBridge:
             self.follow_enabled = False
             self.last_command = "follow_off"
             return "Follow mode disabled."
+        if any(keyword in text for keyword in ("status", "state")):
+            pose = self.current_pose()
+            if pose is None:
+                return "BuddyBot is online. Sensors are running, but current pose is not available yet."
+            return (
+                f"BuddyBot is online. Pose x={pose['x']}, y={pose['y']}, theta={pose['theta']}. "
+                f"Camera={'on' if self.camera_available() else 'off'}, map={'ready' if self.map_available() else 'waiting'}."
+            )
         if "kitchen" in text:
             self.go_waypoint("kitchen")
             return "Sent a navigation request to kitchen."
@@ -399,20 +509,25 @@ class PanelBridge:
         if "charge" in text:
             self.go_waypoint("charging_station")
             return "Sent a navigation request to charging_station."
-        return "Standalone command mode. Try: forward, stop, follow, kitchen."
+        return "Standalone BuddyBot mode. Try forward, strafe left, rotate right, stop, follow, status, or kitchen."
 
-    def manual_command(self, direction: str, speed: float, duration: float) -> None:
+    def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
         linear_x = 0.0
+        linear_y = 0.0
         angular_z = 0.0
 
         if direction == "forward":
             linear_x = speed
         elif direction == "backward":
             linear_x = -speed
-        elif direction == "left":
+        elif direction == "strafe_left":
+            linear_y = speed
+        elif direction == "strafe_right":
+            linear_y = -speed
+        elif direction == "rotate_left":
             angular_z = speed
-        elif direction == "right":
+        elif direction == "rotate_right":
             angular_z = -speed
 
         if not self.ros2_connected or self._manual_pub is None:
@@ -422,11 +537,14 @@ class PanelBridge:
             if direction == "stop":
                 self._manual_active = False
                 self._manual_linear_x = 0.0
+                self._manual_linear_y = 0.0
                 self._manual_angular_z = 0.0
             else:
                 self._manual_active = True
                 self._manual_linear_x = linear_x
+                self._manual_linear_y = linear_y
                 self._manual_angular_z = angular_z
+
         if direction == "stop":
             self._manual_pub.publish(Twist())
 
@@ -546,7 +664,6 @@ def api_manual(request: Dict[str, Any]):
     bridge.manual_command(
         request.get("direction", "stop"),
         float(request.get("speed", 0.35)),
-        float(request.get("duration", 1.0)),
     )
     return bridge.status()
 
@@ -587,7 +704,7 @@ def api_go(request: WaypointGoRequest):
     return {"success": True, "message": f"Sent navigation request to {request.name}."}
 
 
-def main():
+def main() -> None:
     host = os.getenv("BUDDYBOT_PANEL_HOST", "0.0.0.0")
     port = int(os.getenv("BUDDYBOT_PANEL_PORT", "8090"))
     uvicorn.run(app, host=host, port=port)
