@@ -212,6 +212,12 @@ class CameraNode(Node):
                     if cap.isOpened():
                         return cap
                     cap.release()
+                    # Some Pi/OpenCV builds fail on CAP_V4L2 for UVC paths but
+                    # succeed when the same device is opened by numeric index.
+                    cap = cv2.VideoCapture(index)
+                    if cap.isOpened():
+                        return cap
+                    cap.release()
                 except ValueError:
                     pass
 
