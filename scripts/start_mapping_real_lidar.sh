@@ -39,7 +39,7 @@ fi
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
-configure_offline_ros()
+configure_offline_ros
 
 echo "[real-map] resetting ROS discovery"
 ros2 daemon stop >/dev/null 2>&1 || true
