@@ -101,6 +101,8 @@ class PanelBridge:
         self._latest_pose: Optional[Dict[str, float]] = None
         self._latest_map: Optional[Dict[str, Any]] = None
         self._latest_scan_map: Optional[Dict[str, Any]] = None
+        self._latest_scan_stamp: Optional[float] = None
+        self._scan_frames_received = 0
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
@@ -130,7 +132,22 @@ class PanelBridge:
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
             if LaserScan is not None:
-                self._node.create_subscription(LaserScan, "/scan", self._scan_callback, 10)
+                scan_subscribed = False
+                if QoSProfile is not None:
+                    try:
+                        scan_qos = QoSProfile(
+                            reliability=ReliabilityPolicy.BEST_EFFORT,
+                            durability=DurabilityPolicy.VOLATILE,
+                            history=HistoryPolicy.KEEP_LAST,
+                            depth=5,
+                        )
+                        self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
+                        scan_subscribed = True
+                    except Exception:
+                        scan_subscribed = False
+                if not scan_subscribed:
+                    # Fallback: keep panel alive even when QoS profile wiring differs across environments.
+                    self._node.create_subscription(LaserScan, "/scan", self._scan_callback, 10)
             if Status is not None:
                 self._node.create_subscription(Status, "/buddybot/pico_status", self._pico_status_callback, 10)
             if Image is not None and self._cv_bridge is not None and QoSProfile is not None:
@@ -171,6 +188,8 @@ class PanelBridge:
             scan_map = self._build_scan_map(msg, pose)
             with self._lock:
                 self._latest_scan_map = scan_map
+                self._latest_scan_stamp = time.time()
+                self._scan_frames_received += 1
         except Exception:
             return
 
@@ -362,6 +381,9 @@ class PanelBridge:
             "pose": pose,
             "camera_available": self.camera_available(),
             "camera_age_sec": self.camera_age_sec(),
+            "scan_available": self.scan_available(),
+            "scan_age_sec": self.scan_age_sec(),
+            "scan_frames_received": self.scan_frames_received(),
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
@@ -384,6 +406,20 @@ class PanelBridge:
             if self._latest_camera_stamp is None:
                 return None
             return round(max(0.0, time.time() - self._latest_camera_stamp), 2)
+
+    def scan_available(self) -> bool:
+        with self._lock:
+            return self._latest_scan_map is not None
+
+    def scan_age_sec(self) -> Optional[float]:
+        with self._lock:
+            if self._latest_scan_stamp is None:
+                return None
+            return round(max(0.0, time.time() - self._latest_scan_stamp), 2)
+
+    def scan_frames_received(self) -> int:
+        with self._lock:
+            return int(self._scan_frames_received)
 
     def get_camera_frame(self) -> Optional[bytes]:
         with self._lock:

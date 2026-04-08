@@ -363,11 +363,13 @@
       const pico=data.pico_connected?"connected":"waiting";
       const picoMode=data.pico_status?`${data.pico_status.mode} ${data.pico_status.battery_voltage}V`:"no status";
       const manualMode=data.manual_active?"active":"idle";
+      const scanState=data.scan_available?`live (${data.scan_age_sec}s, ${data.scan_frames_received} frames)`:"waiting";
       document.getElementById("status-box").innerHTML=
         statusCard("Mode",data.mode)+
         statusCard("ROS2",data.ros2_connected?"connected":"mock")+
         statusCard("Pico",pico)+
         statusCard("Pico status",picoMode)+
+        statusCard("LiDAR /scan",scanState)+
         statusCard("Manual",manualMode)+
         statusCard("Follow",data.follow_enabled?"on":"off")+
         statusCard("Map",data.map_available?"ready":"waiting")+
