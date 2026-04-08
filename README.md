@@ -201,6 +201,26 @@ cd ~/BuddyBot
 BUDDYBOT_DISABLE_CAMERA=1 BUDDYBOT_DISABLE_PICO=1 bash scripts/start_mapping_real_lidar.sh
 ```
 
+One-terminal real-map startup with automatic stale-process cleanup:
+
+```bash
+cd ~/BuddyBot
+git pull
+cd ~/BuddyBot/software/pi5/ros2_ws
+rm -rf build install log
+colcon build --symlink-install
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_mapping_one_terminal.sh
+```
+
+What this one-terminal command does:
+- Kills stale `sllidar_ros2` and `slam_toolbox` processes left from previous runs
+- Resets ROS discovery
+- Reuses the detected Pico, LiDAR, and camera device paths
+- Forces LiDAR to be started again for the real mapping run
+- Starts the full mapping stack in the foreground so `Ctrl+C` stops everything together
+
 Notes:
 - Your LiDAR driver must already be publishing `/scan`
 - When SLAM is healthy, the panel changes from `Map: synthetic` to `Map: ROS OccupancyGrid`
