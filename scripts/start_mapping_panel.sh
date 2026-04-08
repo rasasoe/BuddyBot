@@ -42,6 +42,7 @@ CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
 CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
 CAMERA_FPS="${BUDDYBOT_CAMERA_FPS:-15.0}"
 CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}"
+DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 
 start_node() {
   local name="$1"
@@ -137,6 +138,7 @@ echo "[mapping] AI server: ${AI_SERVER_STATE:-unknown}"
 echo "[mapping] lidar settle delay: ${LIDAR_SETTLE_DELAY}s"
 echo "[mapping] camera start delay: ${CAMERA_START_DELAY}s"
 echo "[mapping] camera profile: ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
+echo "[mapping] camera disabled: ${DISABLE_CAMERA}"
 
 start_lidar_if_available
 if [[ "$LIDAR_STARTED" -eq 1 ]]; then
@@ -151,14 +153,18 @@ start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
-pause_before_node "$CAMERA_START_DELAY" "starting camera"
-if [[ -n "${CAMERA_DEVICE:-}" ]]; then
-  start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+if [[ "$DISABLE_CAMERA" == "1" ]]; then
+  echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"
 else
-  start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+  pause_before_node "$CAMERA_START_DELAY" "starting camera"
+  if [[ -n "${CAMERA_DEVICE:-}" ]]; then
+    start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+  else
+    start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+  fi
+  start_node detector ros2 run buddybot_vision detector_node
+  start_node follow_controller ros2 run buddybot_vision follow_controller_node
 fi
-start_node detector ros2 run buddybot_vision detector_node
-start_node follow_controller ros2 run buddybot_vision follow_controller_node
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
 start_node slam ros2 launch slam_toolbox online_async_launch.py
 start_node panel ros2 run buddybot_panel panel_server
@@ -169,7 +175,7 @@ if ! scan_available; then
   echo "[mapping] start your LiDAR driver first, then rerun this script"
 fi
 
-if ! camera_available; then
+if [[ "$DISABLE_CAMERA" != "1" ]] && ! camera_available; then
   echo "[mapping] warning: /camera/image_raw is not being published yet"
   echo "[mapping] check: tail -n 120 $LOG_DIR/camera.log"
 fi

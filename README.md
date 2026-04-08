@@ -107,6 +107,13 @@ cd ~/BuddyBot
 bash scripts/start_all_pi5.sh
 ```
 
+Run the full Pi5 stack without the camera pipeline:
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_all_pi5.sh
+```
+
 ## Real map waypoint workflow
 
 To save waypoints from a real LiDAR map instead of the synthetic waypoint view:
