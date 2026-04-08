@@ -130,6 +130,13 @@ cd ~/BuddyBot
 bash scripts/start_all_pi5.sh mapping
 ```
 
+If LiDAR auto-start is unstable, start real-map mode with a detached LiDAR boot first:
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_DISABLE_CAMERA=1 BUDDYBOT_DISABLE_PICO=1 bash scripts/start_mapping_real_lidar.sh
+```
+
 Notes:
 - Your LiDAR driver must already be publishing `/scan`
 - When SLAM is healthy, the panel changes from `Map: synthetic` to `Map: ROS OccupancyGrid`
