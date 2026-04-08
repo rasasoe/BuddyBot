@@ -29,6 +29,9 @@ safe_source() {
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
+ros2 daemon stop >/dev/null 2>&1 || true
+ros2 daemon start >/dev/null 2>&1 || true
+sleep 2
 eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 
 PIDS=()

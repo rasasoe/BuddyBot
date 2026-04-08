@@ -100,6 +100,13 @@ cd ~/BuddyBot
 bash scripts/start_offline_demo.sh
 ```
 
+Run the full Pi5 stack with preflight checks in one command:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_all_pi5.sh
+```
+
 ## Real map waypoint workflow
 
 To save waypoints from a real LiDAR map instead of the synthetic waypoint view:
@@ -107,6 +114,13 @@ To save waypoints from a real LiDAR map instead of the synthetic waypoint view:
 ```bash
 cd ~/BuddyBot
 bash scripts/start_mapping_panel.sh
+```
+
+Or start the same flow through the all-in-one launcher:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_all_pi5.sh mapping
 ```
 
 Notes:
@@ -156,11 +170,21 @@ Default values:
 - Tries to auto-start an `sllidar_ros2` driver if that package is installed and a likely serial port exists
 - Keeps running in the foreground until you press `Ctrl+C`
 
+`bash scripts/start_all_pi5.sh`
+- Resets ROS discovery first
+- Probes attached Pi5 devices
+- Runs `check_all_devices.sh` as a preflight check
+- Starts the offline demo stack in one step
+
 `bash scripts/start_mapping_panel.sh`
 - Starts everything from the offline demo
 - Adds SLAM toolbox for live map generation
 - Tries to auto-start `sllidar_ros2` the same way
 - If `/scan` is still missing, the panel stays on `Map: synthetic`
+
+`bash scripts/start_all_pi5.sh mapping`
+- Runs the same preflight flow
+- Starts the mapping panel stack in one step
 
 ## Quick device check
 
