@@ -23,8 +23,16 @@ safe_source() {
   set -u
 }
 
+configure_offline_ros() {
+  export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+  export ROS_LOCALHOST_ONLY=0
+  unset ROS_DISCOVERY_SERVER
+  unset ROS_SUPER_CLIENT
+}
+
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
+configure_offline_ros()
 ros2 daemon stop >/dev/null 2>&1 || true
 ros2 daemon start >/dev/null 2>&1 || true
 sleep 2
@@ -46,6 +54,9 @@ echo "  mic    : ${MIC_AVAILABLE:-0}"
 echo "  lidar settle delay : ${LIDAR_SETTLE_DELAY}s"
 echo "  camera start delay : ${CAMERA_START_DELAY}s"
 echo "  camera profile : ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
+echo "  ROS_DOMAIN_ID : ${ROS_DOMAIN_ID}"
+echo "  ROS_LOCALHOST_ONLY : ${ROS_LOCALHOST_ONLY}"
+echo "  ROS_DISCOVERY_SERVER : ${ROS_DISCOVERY_SERVER:-unset}"
 echo
 
 start_bg() {

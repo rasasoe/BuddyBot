@@ -19,6 +19,13 @@ safe_source() {
   set -u
 }
 
+configure_offline_ros() {
+  export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+  export ROS_LOCALHOST_ONLY=0
+  unset ROS_DISCOVERY_SERVER
+  unset ROS_SUPER_CLIENT
+}
+
 if [[ ! -f "/opt/ros/$ROS_DISTRO_NAME/setup.bash" ]]; then
   echo "[real-map] error: /opt/ros/$ROS_DISTRO_NAME/setup.bash not found"
   exit 1
@@ -32,6 +39,7 @@ fi
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
+configure_offline_ros()
 
 echo "[real-map] resetting ROS discovery"
 ros2 daemon stop >/dev/null 2>&1 || true
@@ -40,6 +48,10 @@ sleep 2
 
 echo "[real-map] starting detached LiDAR driver"
 nohup bash -lc "
+  export ROS_DOMAIN_ID='${ROS_DOMAIN_ID}'
+  export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY}'
+  unset ROS_DISCOVERY_SERVER
+  unset ROS_SUPER_CLIENT
   source /opt/ros/$ROS_DISTRO_NAME/setup.bash
   source '$WS_DIR/install/setup.bash'
   exec ros2 launch sllidar_ros2 sllidar_a1_launch.py serial_port:='$LIDAR_PORT' serial_baudrate:='$LIDAR_BAUDRATE'

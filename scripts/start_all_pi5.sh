@@ -17,6 +17,13 @@ safe_source() {
   set -u
 }
 
+configure_offline_ros() {
+  export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+  export ROS_LOCALHOST_ONLY=0
+  unset ROS_DISCOVERY_SERVER
+  unset ROS_SUPER_CLIENT
+}
+
 usage() {
   echo "Usage: bash scripts/start_all_pi5.sh [demo|mapping]"
 }
@@ -47,6 +54,7 @@ esac
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
+configure_offline_ros()
 
 echo "[all] resetting ROS discovery"
 ros2 daemon stop >/dev/null 2>&1 || true
@@ -58,6 +66,9 @@ python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" || true
 echo
 echo "[all] camera disabled: $DISABLE_CAMERA"
 echo "[all] pico disabled: $DISABLE_PICO"
+echo "[all] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
+echo "[all] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
+echo "[all] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
 
 if [[ "$RUN_PREFLIGHT" == "1" ]]; then
   echo "[all] running preflight device check"
