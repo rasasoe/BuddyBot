@@ -7,6 +7,7 @@ ROS_DISTRO_NAME="${ROS_DISTRO:-jazzy}"
 MODE="${1:-demo}"
 RUN_PREFLIGHT="${BUDDYBOT_PREFLIGHT_CHECK:-1}"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
+DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 
 safe_source() {
   local target="$1"
@@ -56,6 +57,7 @@ echo "[all] probing Pi5 devices"
 python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" || true
 echo
 echo "[all] camera disabled: $DISABLE_CAMERA"
+echo "[all] pico disabled: $DISABLE_PICO"
 
 if [[ "$RUN_PREFLIGHT" == "1" ]]; then
   echo "[all] running preflight device check"

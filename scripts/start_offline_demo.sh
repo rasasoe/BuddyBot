@@ -43,12 +43,17 @@ CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
 CAMERA_FPS="${BUDDYBOT_CAMERA_FPS:-15.0}"
 CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
+DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 
 start_node() {
   local name="$1"
   shift
   echo "[demo] starting $name"
-  "$@" > "$LOG_DIR/$name.log" 2>&1 &
+  if [[ "$name" == "lidar" ]]; then
+    nohup "$@" > "$LOG_DIR/$name.log" 2>&1 < /dev/null &
+  else
+    "$@" > "$LOG_DIR/$name.log" 2>&1 &
+  fi
   PIDS+=("$!")
   sleep 1
 }
@@ -139,15 +144,20 @@ echo "[demo] lidar settle delay: ${LIDAR_SETTLE_DELAY}s"
 echo "[demo] camera start delay: ${CAMERA_START_DELAY}s"
 echo "[demo] camera profile: ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
 echo "[demo] camera disabled: ${DISABLE_CAMERA}"
+echo "[demo] pico disabled: ${DISABLE_PICO}"
 
 start_lidar_if_available
 if [[ "$LIDAR_STARTED" -eq 1 ]]; then
   pause_before_node "$LIDAR_SETTLE_DELAY" "starting camera after lidar spin-up"
 fi
-if [[ -n "${PICO_PORT:-}" ]]; then
-  start_node pico_bridge ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
+if [[ "$DISABLE_PICO" == "1" ]]; then
+  echo "[demo] pico bridge disabled by BUDDYBOT_DISABLE_PICO=1"
 else
-  start_node pico_bridge ros2 run buddybot_base pico_bridge_node
+  if [[ -n "${PICO_PORT:-}" ]]; then
+    start_node pico_bridge ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
+  else
+    start_node pico_bridge ros2 run buddybot_base pico_bridge_node
+  fi
 fi
 start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
