@@ -45,9 +45,12 @@ def detect_lidar_port(candidates: list[str], pico_port: str) -> str:
         if port == pico_port:
             continue
         label = _port_label(port)
+        resolved = os.path.realpath(port)
+        if any(token in label for token in ("micropython", "pico")):
+            continue
         if any(token in label for token in ("cp210", "silicon_labs", "lidar", "rplidar", "sllidar", "ttyusb")):
             preferred.append(port)
-        else:
+        elif resolved.startswith("/dev/ttyUSB"):
             fallback.append(port)
     ordered = preferred + fallback
     return ordered[0] if ordered else ""

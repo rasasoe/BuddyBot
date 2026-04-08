@@ -47,6 +47,8 @@ CAMERA_DEVICE="${BUDDYBOT_CAMERA_DEVICE:-${CAMERA_DEVICE:-}}"
 
 PIDS=()
 LIDAR_STARTED=0
+LIDAR_PID=""
+LIDAR_RECOVERY_ATTEMPTED=0
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-4}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-6}"
 CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
@@ -60,13 +62,18 @@ FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
 start_node() {
   local name="$1"
   shift
+  local pid=""
   echo "[demo] starting $name"
   if [[ "$name" == "lidar" ]]; then
     nohup "$@" > "$LOG_DIR/$name.log" 2>&1 < /dev/null &
   else
     "$@" > "$LOG_DIR/$name.log" 2>&1 &
   fi
-  PIDS+=("$!")
+  pid="$!"
+  PIDS+=("$pid")
+  if [[ "$name" == "lidar" ]]; then
+    LIDAR_PID="$pid"
+  fi
   sleep 1
 }
 
@@ -97,6 +104,31 @@ scan_available() {
 camera_available() {
   ros2 topic list 2>/dev/null | grep -q '^/camera/image_raw$' && return 0
   ros2 node info /camera_node 2>/dev/null | grep -Eq '(^|[[:space:]])/?camera/image_raw([[:space:]]|$)'
+}
+
+wait_for_message() {
+  local topic="$1"
+  local timeout="${2:-8}"
+  timeout "${timeout}s" ros2 topic echo --once "$topic" >/dev/null 2>&1
+}
+
+scan_streaming() {
+  local timeout="${1:-8}"
+  wait_for_message "/scan" "$timeout" || scan_available
+}
+
+camera_streaming() {
+  local timeout="${1:-8}"
+  wait_for_message "/camera/image_raw" "$timeout" || camera_available
+}
+
+stop_lidar_node() {
+  if [[ -n "$LIDAR_PID" ]] && kill -0 "$LIDAR_PID" 2>/dev/null; then
+    kill "$LIDAR_PID" 2>/dev/null || true
+    wait "$LIDAR_PID" 2>/dev/null || true
+  fi
+  LIDAR_PID=""
+  LIDAR_STARTED=0
 }
 
 start_lidar_if_available() {
@@ -147,6 +179,39 @@ start_lidar_if_available() {
   LIDAR_STARTED=1
 }
 
+ensure_lidar_stream() {
+  local reason="$1"
+  if scan_streaming 8; then
+    return 0
+  fi
+
+  echo "[demo] warning: /scan is not receiving live messages after $reason"
+  if [[ "$LIDAR_STARTED" -ne 1 ]]; then
+    echo "[demo] check: tail -n 120 $LOG_DIR/lidar.log"
+    return 1
+  fi
+
+  if [[ "$LIDAR_RECOVERY_ATTEMPTED" -eq 1 ]]; then
+    echo "[demo] warning: LiDAR recovery already attempted once"
+    echo "[demo] check: tail -n 120 $LOG_DIR/lidar.log"
+    return 1
+  fi
+
+  LIDAR_RECOVERY_ATTEMPTED=1
+  echo "[demo] restarting lidar after $reason"
+  stop_lidar_node
+  sleep 2
+  start_lidar_if_available
+  if scan_streaming 10; then
+    echo "[demo] lidar scan recovered"
+    return 0
+  fi
+
+  echo "[demo] warning: /scan is still missing after lidar restart"
+  echo "[demo] check: tail -n 120 $LOG_DIR/lidar.log"
+  return 1
+}
+
 echo "[demo] detected Pico port: ${PICO_PORT:-none}"
 echo "[demo] detected LiDAR port: ${LIDAR_PORT:-none}"
 echo "[demo] detected camera device: ${CAMERA_DEVICE:-none}"
@@ -165,6 +230,7 @@ echo "[demo] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
 start_lidar_if_available
 if [[ "$LIDAR_STARTED" -eq 1 ]]; then
   pause_before_node "$LIDAR_SETTLE_DELAY" "starting camera after lidar spin-up"
+  ensure_lidar_stream "initial lidar startup" || true
 fi
 if [[ "$DISABLE_PICO" == "1" ]]; then
   echo "[demo] pico bridge disabled by BUDDYBOT_DISABLE_PICO=1"
@@ -190,6 +256,7 @@ else
   fi
   start_node detector ros2 run buddybot_vision detector_node
   start_node follow_controller ros2 run buddybot_vision follow_controller_node
+  ensure_lidar_stream "camera startup" || true
 fi
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
 start_node panel ros2 run buddybot_panel panel_server
@@ -234,12 +301,12 @@ then
 fi
 
 sleep 2
-if [[ "$DISABLE_CAMERA" != "1" ]] && ! camera_available; then
+if [[ "$DISABLE_CAMERA" != "1" ]] && ! camera_streaming 8; then
   echo "[demo] warning: /camera/image_raw is not being published yet"
   echo "[demo] check: tail -n 120 $LOG_DIR/camera.log"
 fi
 
-if [[ "$LIDAR_STARTED" -eq 1 ]] && ! scan_available; then
+if ! scan_streaming 8; then
   echo "[demo] warning: lidar driver started but /scan is still missing"
   echo "[demo] check: tail -n 120 $LOG_DIR/lidar.log"
 fi

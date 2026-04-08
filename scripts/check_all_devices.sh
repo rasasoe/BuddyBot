@@ -105,6 +105,11 @@ publisher_visible() {
   ros2 node info "$node_name" 2>/dev/null | grep -Eq "(^|[[:space:]])/?${topic_fragment}([[:space:]]|$)"
 }
 
+scan_streaming() {
+  local timeout="${1:-8}"
+  wait_for_message "/scan" "$timeout" || publisher_visible "/sllidar_node" "scan"
+}
+
 echo "[check] pico test"
 if [[ -n "${PICO_PORT:-}" ]]; then
   start_bg pico ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
@@ -145,6 +150,16 @@ else
   echo "  result: FAIL (no camera device detected)"
 fi
 echo
+
+if [[ -n "${LIDAR_PORT:-}" && -n "${CAMERA_DEVICE:-}" ]]; then
+  echo "[check] lidar stability after camera start"
+  if scan_streaming 8; then
+    echo "  result: PASS (/scan still live after camera startup)"
+  else
+    echo "  result: FAIL (/scan stopped after camera startup)"
+  fi
+  echo
+fi
 
 echo "[check] microphone test"
 if [[ "${MIC_AVAILABLE:-0}" == "1" ]]; then
