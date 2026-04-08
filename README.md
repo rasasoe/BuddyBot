@@ -114,6 +114,55 @@ cd ~/BuddyBot
 BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_all_pi5.sh
 ```
 
+## Pi5 startup guide
+
+Recommended clean rebuild after pulling new changes:
+
+```bash
+cd ~/BuddyBot
+git pull
+cd ~/BuddyBot/software/pi5/ros2_ws
+rm -rf build install log
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Recommended full offline start on Pi5:
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_DISABLE_CAMERA=0 BUDDYBOT_DISABLE_PICO=0 bash scripts/start_all_pi5.sh
+```
+
+What this does:
+- Forces local ROS discovery for Pi5 offline mode
+- Clears any `ROS_DISCOVERY_SERVER` setting used for server-PC or Tailscale workflows
+- Probes Pico, LiDAR, camera, and microphone
+- Runs `check_all_devices.sh`
+- Resets ROS discovery again after preflight so stale `/scan` or `/camera/image_raw` topics do not fool the main launcher
+- Starts the actual offline demo stack
+
+If you only want a quick hardware check first:
+
+```bash
+cd ~/BuddyBot
+bash scripts/check_all_devices.sh
+```
+
+If LiDAR and Pico should be skipped temporarily during debugging:
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_DISABLE_CAMERA=1 BUDDYBOT_DISABLE_PICO=1 bash scripts/start_all_pi5.sh
+```
+
+If camera is unstable but LiDAR and Pico should still run:
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_all_pi5.sh
+```
+
 ## Real map waypoint workflow
 
 To save waypoints from a real LiDAR map instead of the synthetic waypoint view:
@@ -137,11 +186,25 @@ cd ~/BuddyBot
 BUDDYBOT_DISABLE_CAMERA=1 BUDDYBOT_DISABLE_PICO=1 bash scripts/start_mapping_real_lidar.sh
 ```
 
+Recommended real-map startup sequence on Pi5:
+
+```bash
+cd ~/BuddyBot
+git pull
+cd ~/BuddyBot/software/pi5/ros2_ws
+rm -rf build install log
+colcon build --symlink-install
+source install/setup.bash
+cd ~/BuddyBot
+BUDDYBOT_DISABLE_CAMERA=1 BUDDYBOT_DISABLE_PICO=1 bash scripts/start_mapping_real_lidar.sh
+```
+
 Notes:
 - Your LiDAR driver must already be publishing `/scan`
 - When SLAM is healthy, the panel changes from `Map: synthetic` to `Map: ROS OccupancyGrid`
 - Click a map cell, type a waypoint name, then use `Save clicked point`
 - If `/scan` is missing, start your LiDAR driver first; otherwise SLAM cannot create `/map`
+- If you use a server PC, Tailscale, or a ROS discovery server in other workflows, the offline Pi5 launch scripts now clear those settings on purpose so Pi5 local nodes can discover each other directly
 
 ## Pi5 local hotspot mode
 

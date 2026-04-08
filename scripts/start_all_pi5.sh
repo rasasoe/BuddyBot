@@ -74,6 +74,10 @@ if [[ "$RUN_PREFLIGHT" == "1" ]]; then
   echo "[all] running preflight device check"
   bash "$ROOT_DIR/scripts/check_all_devices.sh" || true
   echo
+  echo "[all] resetting ROS discovery after preflight"
+  ros2 daemon stop >/dev/null 2>&1 || true
+  ros2 daemon start >/dev/null 2>&1 || true
+  sleep 2
 fi
 
 echo "[all] starting mode: $MODE"
