@@ -20,6 +20,39 @@ except Exception:
     serial = None
 
 
+def _port_label(port: str) -> str:
+    return os.path.basename(os.path.realpath(port)).lower() + " " + os.path.basename(port).lower() + " " + port.lower()
+
+
+def pico_probe_candidates(candidates: list[str]) -> list[str]:
+    preferred: list[str] = []
+    fallback: list[str] = []
+    for port in candidates:
+        label = _port_label(port)
+        if any(token in label for token in ("cp210", "silicon_labs", "lidar", "rplidar", "sllidar")):
+            continue
+        if any(token in label for token in ("micropython", "pico", "ttyacm")):
+            preferred.append(port)
+        else:
+            fallback.append(port)
+    return preferred + fallback
+
+
+def detect_lidar_port(candidates: list[str], pico_port: str) -> str:
+    preferred: list[str] = []
+    fallback: list[str] = []
+    for port in candidates:
+        if port == pico_port:
+            continue
+        label = _port_label(port)
+        if any(token in label for token in ("cp210", "silicon_labs", "lidar", "rplidar", "sllidar", "ttyusb")):
+            preferred.append(port)
+        else:
+            fallback.append(port)
+    ordered = preferred + fallback
+    return ordered[0] if ordered else ""
+
+
 def camera_candidates(preferred: str = "") -> list[str]:
     candidates: list[str] = []
     if preferred:
@@ -130,13 +163,8 @@ def main() -> None:
 
     serial_by_id = sorted(glob.glob("/dev/serial/by-id/*"))
     serial_candidates = serial_by_id + sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/ttyUSB*"))
-    pico_port = probe_pico_port(serial_candidates)
-
-    lidar_port = ""
-    for candidate in serial_candidates:
-        if candidate != pico_port:
-            lidar_port = candidate
-            break
+    pico_port = probe_pico_port(pico_probe_candidates(serial_candidates))
+    lidar_port = detect_lidar_port(serial_candidates, pico_port)
 
     v4l_by_id = sorted(glob.glob("/dev/v4l/by-id/*"))
     camera_device = ""
