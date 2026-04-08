@@ -41,6 +41,9 @@ ros2 daemon stop >/dev/null 2>&1 || true
 ros2 daemon start >/dev/null 2>&1 || true
 sleep 2
 eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
+PICO_PORT="${BUDDYBOT_PICO_PORT:-${PICO_PORT:-}}"
+LIDAR_PORT="${BUDDYBOT_LIDAR_PORT:-${LIDAR_PORT:-}}"
+CAMERA_DEVICE="${BUDDYBOT_CAMERA_DEVICE:-${CAMERA_DEVICE:-}}"
 
 PIDS=()
 LIDAR_STARTED=0
@@ -52,6 +55,7 @@ CAMERA_FPS="${BUDDYBOT_CAMERA_FPS:-15.0}"
 CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
+FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
 
 start_node() {
   local name="$1"
@@ -102,7 +106,7 @@ start_lidar_if_available() {
   local pkg_share=""
   local launch_file=""
 
-  if scan_available; then
+  if [[ "$FORCE_LIDAR_START" != "1" ]] && scan_available; then
     echo "[mapping] lidar scan already available"
     return
   fi
@@ -153,6 +157,7 @@ echo "[mapping] camera start delay: ${CAMERA_START_DELAY}s"
 echo "[mapping] camera profile: ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
 echo "[mapping] camera disabled: ${DISABLE_CAMERA}"
 echo "[mapping] pico disabled: ${DISABLE_PICO}"
+echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[mapping] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[mapping] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"

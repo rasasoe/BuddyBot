@@ -140,6 +140,8 @@ What this does:
 - Probes Pico, LiDAR, camera, and microphone
 - Runs `check_all_devices.sh`
 - Resets ROS discovery again after preflight so stale `/scan` or `/camera/image_raw` topics do not fool the main launcher
+- Reuses the exact device paths found during preflight for the real launch
+- Forces the main launch to start LiDAR again after preflight instead of trusting stale graph state
 - Starts the actual offline demo stack
 
 If you only want a quick hardware check first:

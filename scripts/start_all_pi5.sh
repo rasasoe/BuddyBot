@@ -62,13 +62,26 @@ ros2 daemon start >/dev/null 2>&1 || true
 sleep 2
 
 echo "[all] probing Pi5 devices"
-python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" || true
+eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
+echo "PICO_PORT=${PICO_PORT:-}"
+echo "LIDAR_PORT=${LIDAR_PORT:-}"
+echo "CAMERA_DEVICE=${CAMERA_DEVICE:-}"
+echo "MIC_AVAILABLE=${MIC_AVAILABLE:-}"
+echo "AI_SERVER_STATE=${AI_SERVER_STATE:-}"
+echo "SERIAL_CANDIDATES=${SERIAL_CANDIDATES:-}"
+echo "SERIAL_BY_ID=${SERIAL_BY_ID:-}"
+echo "V4L_BY_ID=${V4L_BY_ID:-}"
+echo "MIC_INFO=${MIC_INFO:-}"
 echo
 echo "[all] camera disabled: $DISABLE_CAMERA"
 echo "[all] pico disabled: $DISABLE_PICO"
 echo "[all] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[all] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[all] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
+
+export BUDDYBOT_PICO_PORT="${PICO_PORT:-}"
+export BUDDYBOT_LIDAR_PORT="${LIDAR_PORT:-}"
+export BUDDYBOT_CAMERA_DEVICE="${CAMERA_DEVICE:-}"
 
 if [[ "$RUN_PREFLIGHT" == "1" ]]; then
   echo "[all] running preflight device check"
@@ -78,6 +91,7 @@ if [[ "$RUN_PREFLIGHT" == "1" ]]; then
   ros2 daemon stop >/dev/null 2>&1 || true
   ros2 daemon start >/dev/null 2>&1 || true
   sleep 2
+  export BUDDYBOT_FORCE_LIDAR_START=1
 fi
 
 echo "[all] starting mode: $MODE"
