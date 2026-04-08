@@ -36,6 +36,7 @@ from std_msgs.msg import String, Float32MultiArray
 import time
 import logging
 import glob
+import os
 from pathlib import Path
 import serial
 
@@ -326,13 +327,21 @@ class PicoBridgeNode(Node):
 
     def _candidate_serial_ports(self):
         ports = [self.serial_port]
+        ports.extend(sorted(glob.glob("/dev/serial/by-id/*")))
         ports.extend(sorted(glob.glob("/dev/ttyACM*")))
         ports.extend(sorted(glob.glob("/dev/ttyUSB*")))
         unique = []
         for port in ports:
+            label = self._port_label(port)
+            if any(token in label for token in ("cp210", "silicon_labs", "lidar", "rplidar", "sllidar")):
+                continue
             if port not in unique:
                 unique.append(port)
         return unique
+
+    def _port_label(self, port: str) -> str:
+        resolved = os.path.realpath(port)
+        return f"{resolved} {os.path.basename(resolved)} {os.path.basename(port)}".lower()
 
     def _probe_pico_port(self, port: str) -> bool:
         try:
