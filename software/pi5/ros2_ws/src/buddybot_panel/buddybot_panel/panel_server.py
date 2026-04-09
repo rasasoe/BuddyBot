@@ -98,6 +98,8 @@ class PanelBridge:
         self._map_sub = None
         self._scan_sub = None
         self._spin_error: Optional[str] = None
+        self._last_scan_error: Optional[str] = None
+        self._last_map_error: Optional[str] = None
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._lock = threading.Lock()
@@ -200,8 +202,12 @@ class PanelBridge:
             }
 
     def _map_callback(self, msg: OccupancyGrid) -> None:
-        with self._lock:
-            self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+        try:
+            with self._lock:
+                self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+                self._last_map_error = None
+        except Exception as exc:
+            self._last_map_error = repr(exc)
 
     def _scan_callback(self, msg: LaserScan) -> None:
         try:
@@ -212,7 +218,9 @@ class PanelBridge:
                 self._latest_scan_map = scan_map
                 self._latest_scan_stamp = time.time()
                 self._scan_frames_received += 1
-        except Exception:
+                self._last_scan_error = None
+        except Exception as exc:
+            self._last_scan_error = repr(exc)
             return
 
     def _camera_callback(self, msg: Image) -> None:
@@ -406,6 +414,10 @@ class PanelBridge:
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
+            "spin_error": self._spin_error,
+            "spin_thread_alive": bool(self._spin_thread and self._spin_thread.is_alive()),
+            "last_scan_error": self._last_scan_error,
+            "last_map_error": self._last_map_error,
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
