@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import subprocess
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -23,6 +25,7 @@ try:
     from cv_bridge import CvBridge
     from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import OccupancyGrid, Odometry
+    from rclpy.executors import SingleThreadedExecutor
     from rclpy.node import Node
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import Image, LaserScan
@@ -40,6 +43,7 @@ except ImportError:
     OccupancyGrid = None
     Odometry = None
     Node = object
+    SingleThreadedExecutor = None
     QoSProfile = None
     ReliabilityPolicy = None
     DurabilityPolicy = None
@@ -95,6 +99,12 @@ class PanelBridge:
         self._manual_pub = None
         self._waypoint_goal_pub = None
         self._waypoint_save_pub = None
+        self._map_sub = None
+        self._scan_sub = None
+        self._executor = None
+        self._spin_error: Optional[str] = None
+        self._last_scan_error: Optional[str] = None
+        self._last_map_error: Optional[str] = None
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._lock = threading.Lock()
@@ -111,6 +121,7 @@ class PanelBridge:
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._last_cli_scan_attempt = 0.0
 
         self._init_ros()
 
@@ -127,27 +138,37 @@ class PanelBridge:
             self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
             self._node.create_timer(0.1, self._manual_publish_timer)
 
-            self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, 10)
+            map_qos = 10
+            if QoSProfile is not None:
+                try:
+                    # OccupancyGrid from slam_toolbox is published as transient local.
+                    map_qos = QoSProfile(
+                        reliability=ReliabilityPolicy.RELIABLE,
+                        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                        history=HistoryPolicy.KEEP_LAST,
+                        depth=1,
+                    )
+                except Exception:
+                    map_qos = 10
+            self._map_sub = self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, map_qos)
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
             if LaserScan is not None:
-                scan_subscribed = False
+                scan_qos = 10
                 if QoSProfile is not None:
                     try:
+                        # Prefer a reliable scan subscription because the Pi LiDAR driver
+                        # in this stack publishes reliably.
                         scan_qos = QoSProfile(
-                            reliability=ReliabilityPolicy.BEST_EFFORT,
+                            reliability=ReliabilityPolicy.RELIABLE,
                             durability=DurabilityPolicy.VOLATILE,
                             history=HistoryPolicy.KEEP_LAST,
-                            depth=5,
+                            depth=10,
                         )
-                        self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
-                        scan_subscribed = True
                     except Exception:
-                        scan_subscribed = False
-                if not scan_subscribed:
-                    # Fallback: keep panel alive even when QoS profile wiring differs across environments.
-                    self._node.create_subscription(LaserScan, "/scan", self._scan_callback, 10)
+                        scan_qos = 10
+                self._scan_sub = self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
             if Status is not None:
                 self._node.create_subscription(Status, "/buddybot/pico_status", self._pico_status_callback, 10)
             if Image is not None and self._cv_bridge is not None and QoSProfile is not None:
@@ -159,11 +180,26 @@ class PanelBridge:
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
 
-            self._spin_thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
+            if SingleThreadedExecutor is not None:
+                self._executor = SingleThreadedExecutor()
+                self._executor.add_node(self._node)
+            self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
             self._spin_thread.start()
             self.ros2_connected = True
         except Exception:
             self.ros2_connected = False
+
+    def _spin_loop(self) -> None:
+        if self._node is None:
+            return
+        try:
+            while rclpy.ok():
+                if self._executor is not None:
+                    self._executor.spin_once(timeout_sec=0.2)
+                else:
+                    rclpy.spin_once(self._node, timeout_sec=0.2)
+        except Exception as exc:
+            self._spin_error = repr(exc)
 
     def _status_callback(self, msg: String) -> None:
         self._system_status = msg.data
@@ -178,8 +214,12 @@ class PanelBridge:
             }
 
     def _map_callback(self, msg: OccupancyGrid) -> None:
-        with self._lock:
-            self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+        try:
+            with self._lock:
+                self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+                self._last_map_error = None
+        except Exception as exc:
+            self._last_map_error = repr(exc)
 
     def _scan_callback(self, msg: LaserScan) -> None:
         try:
@@ -190,7 +230,9 @@ class PanelBridge:
                 self._latest_scan_map = scan_map
                 self._latest_scan_stamp = time.time()
                 self._scan_frames_received += 1
-        except Exception:
+                self._last_scan_error = None
+        except Exception as exc:
+            self._last_scan_error = repr(exc)
             return
 
     def _camera_callback(self, msg: Image) -> None:
@@ -366,6 +408,53 @@ class PanelBridge:
             "cells": [0] * (width * height),
         }
 
+    def _poll_scan_from_cli(self, min_interval_sec: float = 2.0) -> bool:
+        now = time.time()
+        if (now - self._last_cli_scan_attempt) < min_interval_sec:
+            return self._latest_scan_map is not None
+        self._last_cli_scan_attempt = now
+        try:
+            result = subprocess.run(
+                [
+                    "timeout",
+                    "3s",
+                    "ros2",
+                    "topic",
+                    "echo",
+                    "--qos-reliability",
+                    "reliable",
+                    "--once",
+                    "/scan",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=os.environ.copy(),
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return False
+            data = yaml.safe_load(result.stdout)
+            if not isinstance(data, dict):
+                return False
+            scan_msg = SimpleNamespace(
+                angle_min=float(data["angle_min"]),
+                angle_increment=float(data["angle_increment"]),
+                range_min=float(data["range_min"]),
+                range_max=float(data["range_max"]),
+                ranges=[float(item) for item in data.get("ranges", [])],
+            )
+            with self._lock:
+                pose = dict(self._latest_pose) if self._latest_pose is not None else None
+            scan_map = self._build_scan_map(scan_msg, pose)
+            with self._lock:
+                self._latest_scan_map = scan_map
+                self._latest_scan_stamp = now
+                self._last_scan_error = None
+            return True
+        except Exception as exc:
+            self._last_scan_error = repr(exc)
+            return False
+
     def status(self) -> Dict[str, Any]:
         pose = self.current_pose()
         return {
@@ -384,6 +473,10 @@ class PanelBridge:
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
+            "spin_error": self._spin_error,
+            "spin_thread_alive": bool(self._spin_thread and self._spin_thread.is_alive()),
+            "last_scan_error": self._last_scan_error,
+            "last_map_error": self._last_map_error,
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
@@ -460,6 +553,8 @@ class PanelBridge:
         self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
+        if self._latest_map is None and self._latest_scan_map is None:
+            self._poll_scan_from_cli()
         with self._lock:
             if self._latest_map is not None:
                 payload = dict(self._latest_map)
