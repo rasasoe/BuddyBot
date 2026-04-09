@@ -240,3 +240,72 @@ BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_mapping_one_terminal.sh
 3. 패널 또는 `/voice/text`로 `버디봇`, `버디봇 앞으로`, `버디봇 좌회전`, `버디봇 정지` 확인
 4. `tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/voice.log`
 5. 회전이 여전히 약하면 `ROTATION_MIX_GAIN`를 `1.2 ~ 1.5`로 소폭 올려 재검증
+
+## 2026-04-09 추가 작업: 카메라 끊김 원인 진단
+
+상황:
+- 같은 날 실기에서 "아까까지 보이던 C920이 중간에 사라지는" 현상이 발생
+- `start_mapping_one_terminal.sh` 로그에는 `camera: none`, `CAMERA_DEVICE=`, `V4L_BY_ID=`가 찍혔고
+- OpenCV `can't open camera by index` 경고가 반복됨
+
+실제 확인 결과:
+
+문제가 발생한 시점:
+
+```bash
+ls -l /dev/v4l/by-id
+v4l2-ctl --list-devices
+lsusb | grep -i -E '046d|camera|webcam'
+```
+
+관찰:
+- `/dev/v4l/by-id` 자체가 없었음
+- `v4l2-ctl --list-devices`에는 Pi 내부 `pispbe`, `rpivid`만 보였음
+- `lsusb | grep -i 046d`도 비어 있었음
+
+의미:
+- 카메라 노드가 죽은 것이 아니라 USB 레벨에서 C920 자체가 사라진 상태
+- 따라서 ROS, OpenCV, panel API를 먼저 의심하면 안 됨
+
+재부팅 후 확인:
+
+```bash
+echo '=== previous boot kernel hints ==='
+journalctl -k -b -1 2>/dev/null | grep -Ei 'under-voltage|voltage|usb|disconnect|reset high-speed|descriptor read|over-current|enumerate|not enough power' | tail -n 80
+
+echo '=== current usb ==='
+lsusb
+
+echo '=== current camera devices ==='
+v4l2-ctl --list-devices
+```
+
+관찰:
+- 이전 부팅 커널 로그에 `Undervoltage detected!` / `Voltage normalised`가 반복적으로 다수 존재
+- 현재 부팅에서는 다시 `046d:08e5 Logitech, Inc. C920 PRO HD Webcam`이 보였음
+- `v4l2-ctl --list-devices`에도 `HD Pro Webcam C920 (usb-xhci-hcd.0-2.4)`가 복귀
+- 같은 시점 USB 목록에는 다음이 함께 보였음:
+  - `2148:7022 USB2.0 HUB`
+  - `10c4:ea60 Silicon Labs CP210x UART Bridge` (LiDAR)
+  - `046d:08e5 Logitech C920`
+
+결론:
+- 카메라 끊김은 코드 버그보다 `전력 부족 / 순간 전압 강하 / USB 허브 안정성` 문제일 가능성이 큼
+- 특히 LiDAR와 C920이 같은 USB2 허브 아래에 있는 구성이 리스크를 높였을 수 있음
+- "LiDAR와 카메라를 동시에 소프트웨어적으로 못 돌린다"로 결론 내리면 안 됨
+
+운영 가이드:
+- 카메라가 필요 없는 개발 단계는 `BUDDYBOT_DISABLE_CAMERA=1`
+- 카메라를 쓸 때는 C920를 Pi5 본체 포트에 직접 연결하는 것을 우선 검토
+- LiDAR / Pico / 카메라는 가능한 한 같은 허브에 몰지 않기
+- 재현 확인은 `sudo dmesg -w`를 켜 두고 장치가 사라질 때 마지막 로그를 보는 방식이 가장 확실
+- 포터블 최종형 관점에서는 `CSI 카메라 + USB LiDAR + USB Pico` 구성이 더 적합
+- `5V 5A`급 전원/UPS는 도움이 될 가능성이 높지만, 실제 부하 시 전압 유지 품질이 중요함
+
+다음 작업환경에서 카메라가 다시 사라지면:
+1. `lsusb | grep -i 046d`
+2. `v4l2-ctl --list-devices`
+3. `sudo dmesg -w`
+4. `journalctl -k -b -1 | grep -Ei 'under-voltage|usb|disconnect|reset high-speed|descriptor read|over-current|enumerate|not enough power'`
+
+위 1, 2에서 C920이 사라져 있으면 소프트웨어보다 하드웨어/전원부터 봐야 한다.

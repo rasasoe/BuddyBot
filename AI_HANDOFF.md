@@ -33,6 +33,41 @@
 - 전후진 / 측면이동은 실기에서 동작
 - 회전은 기존에 안 움직였고, Pico kinematics mixer를 수정해 둔 상태
 - 따라서 다음 AI는 "회전이 실기에서 정상화됐는지"를 가장 먼저 검증해야 함
+- USB 웹캠(C920)은 한동안 정상 인식되다가 실기 중간에 사라질 수 있었음
+- 이 현상은 현재 코드보다 Pi 전원/USB 안정성 이슈로 보는 것이 맞음
+
+## 2-0. 최신 하드웨어 결론: 카메라 끊김은 전원/USB 문제 가능성이 큼
+
+2026-04-09 실기에서 확인한 사실:
+- 카메라가 사라진 시점에는 `lsusb`에 `046d`가 보이지 않았음
+- `v4l2-ctl --list-devices`에도 C920이 아니라 Pi 내부 `pispbe`, `rpivid`만 보였음
+- 즉 카메라 노드나 ROS 문제가 아니라, USB 레벨에서 장치 자체가 떨어진 상태였음
+- 재부팅 후에는 다시 `lsusb`에 `046d:08e5 Logitech, Inc. C920 PRO HD Webcam`이 보였고 `v4l2-ctl`에도 복귀했음
+- 이전 부팅 커널 로그에는 `Undervoltage detected!`가 반복적으로 다수 찍혀 있었음
+
+현재 가장 그럴듯한 해석:
+- 문제의 1차 원인은 `전력 부족 / 순간 전압 강하`
+- 그 결과 USB 장치가 리셋되거나 허브 아래에서 재열거에 실패하면서 카메라가 사라졌을 가능성이 큼
+- "LiDAR와 카메라를 소프트웨어적으로 동시에 못 돌림"으로 단정하면 안 됨
+
+그때 관찰된 USB 구성:
+- `Bus 002 Device 002: ID 2148:7022 USB2.0 HUB`
+- `Bus 002 Device 003: ID 10c4:ea60 Silicon Labs CP210x UART Bridge` (LiDAR)
+- `Bus 002 Device 004: ID 046d:08e5 Logitech, Inc. C920 PRO HD Webcam`
+- 즉 LiDAR와 C920이 같은 USB2 허브 아래에 있었음
+
+따라서 다음 AI는 카메라 문제를 볼 때 다음 순서로 판단해야 함:
+1. 먼저 `lsusb`와 `v4l2-ctl --list-devices`에서 C920이 실제로 보이는지 확인
+2. 안 보이면 ROS나 OpenCV를 보기 전에 전원/USB 이슈로 판단
+3. `journalctl -k -b -1 | grep -Ei 'under-voltage|usb|disconnect|reset high-speed|descriptor read|over-current|enumerate|not enough power'`
+4. 실시간 재현 시 `sudo dmesg -w`
+
+현재 운영 권장:
+- 개발 중에는 카메라가 필요 없으면 `BUDDYBOT_DISABLE_CAMERA=1`로 분리
+- C920를 계속 쓸 경우 Pi5 본체 포트 직결 우선
+- LiDAR / Pico / 카메라는 가능하면 같은 허브에 몰지 않기
+- 최종 포터블 완성형은 `CSI 카메라 + USB LiDAR + USB Pico` 구성이 더 적합
+- `5V 5A`급 전원/UPS는 도움될 가능성이 높지만, "표기 스펙"보다 실제 부하 시 전압 유지가 중요함
 
 ## 2-1. 왜 7주 / 8주가 건너뛴 것처럼 보이는가
 
