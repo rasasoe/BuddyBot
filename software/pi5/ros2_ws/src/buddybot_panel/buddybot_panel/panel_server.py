@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import subprocess
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -119,6 +121,7 @@ class PanelBridge:
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._last_cli_scan_attempt = 0.0
 
         self._init_ros()
 
@@ -405,6 +408,53 @@ class PanelBridge:
             "cells": [0] * (width * height),
         }
 
+    def _poll_scan_from_cli(self, min_interval_sec: float = 2.0) -> bool:
+        now = time.time()
+        if (now - self._last_cli_scan_attempt) < min_interval_sec:
+            return self._latest_scan_map is not None
+        self._last_cli_scan_attempt = now
+        try:
+            result = subprocess.run(
+                [
+                    "timeout",
+                    "3s",
+                    "ros2",
+                    "topic",
+                    "echo",
+                    "--qos-reliability",
+                    "reliable",
+                    "--once",
+                    "/scan",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=os.environ.copy(),
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return False
+            data = yaml.safe_load(result.stdout)
+            if not isinstance(data, dict):
+                return False
+            scan_msg = SimpleNamespace(
+                angle_min=float(data["angle_min"]),
+                angle_increment=float(data["angle_increment"]),
+                range_min=float(data["range_min"]),
+                range_max=float(data["range_max"]),
+                ranges=[float(item) for item in data.get("ranges", [])],
+            )
+            with self._lock:
+                pose = dict(self._latest_pose) if self._latest_pose is not None else None
+            scan_map = self._build_scan_map(scan_msg, pose)
+            with self._lock:
+                self._latest_scan_map = scan_map
+                self._latest_scan_stamp = now
+                self._last_scan_error = None
+            return True
+        except Exception as exc:
+            self._last_scan_error = repr(exc)
+            return False
+
     def status(self) -> Dict[str, Any]:
         pose = self.current_pose()
         return {
@@ -503,6 +553,8 @@ class PanelBridge:
         self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
+        if self._latest_map is None and self._latest_scan_map is None:
+            self._poll_scan_from_cli()
         with self._lock:
             if self._latest_map is not None:
                 payload = dict(self._latest_map)
