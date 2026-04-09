@@ -97,6 +97,7 @@ class PanelBridge:
         self._waypoint_save_pub = None
         self._map_sub = None
         self._scan_sub = None
+        self._spin_error: Optional[str] = None
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._lock = threading.Lock()
@@ -171,11 +172,20 @@ class PanelBridge:
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
 
-            self._spin_thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
+            self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
             self._spin_thread.start()
             self.ros2_connected = True
         except Exception:
             self.ros2_connected = False
+
+    def _spin_loop(self) -> None:
+        if self._node is None:
+            return
+        try:
+            while rclpy.ok():
+                rclpy.spin_once(self._node, timeout_sec=0.2)
+        except Exception as exc:
+            self._spin_error = repr(exc)
 
     def _status_callback(self, msg: String) -> None:
         self._system_status = msg.data
