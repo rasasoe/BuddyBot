@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import subprocess
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -23,10 +25,11 @@ try:
     from cv_bridge import CvBridge
     from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import OccupancyGrid, Odometry
+    from rclpy.executors import SingleThreadedExecutor
     from rclpy.node import Node
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import Image, LaserScan
-    from std_msgs.msg import String
+    from std_msgs.msg import Bool, String
 
     ROS2_AVAILABLE = True
 except ImportError:
@@ -40,6 +43,7 @@ except ImportError:
     OccupancyGrid = None
     Odometry = None
     Node = object
+    SingleThreadedExecutor = None
     QoSProfile = None
     ReliabilityPolicy = None
     DurabilityPolicy = None
@@ -47,6 +51,7 @@ except ImportError:
     Image = None
     LaserScan = None
     String = object
+    Bool = object
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -93,8 +98,16 @@ class PanelBridge:
         self._node = None
         self._spin_thread = None
         self._manual_pub = None
+        self._follow_pub = None
         self._waypoint_goal_pub = None
         self._waypoint_save_pub = None
+        self._nav_cancel_pub = None
+        self._map_sub = None
+        self._scan_sub = None
+        self._executor = None
+        self._spin_error: Optional[str] = None
+        self._last_scan_error: Optional[str] = None
+        self._last_map_error: Optional[str] = None
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._lock = threading.Lock()
@@ -107,10 +120,12 @@ class PanelBridge:
         self._latest_camera_stamp: Optional[float] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._system_status = "idle"
+        self._navigation_status = "idle"
         self._manual_active = False
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._last_cli_scan_attempt = 0.0
 
         self._init_ros()
 
@@ -123,31 +138,44 @@ class PanelBridge:
 
             self._node = Node("buddybot_local_panel")
             self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", 10)
+            self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", 10)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", 10)
             self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
+            self._nav_cancel_pub = self._node.create_publisher(String, "/nav/cancel", 10)
             self._node.create_timer(0.1, self._manual_publish_timer)
 
-            self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, 10)
+            map_qos = 10
+            if QoSProfile is not None:
+                try:
+                    # OccupancyGrid from slam_toolbox is published as transient local.
+                    map_qos = QoSProfile(
+                        reliability=ReliabilityPolicy.RELIABLE,
+                        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                        history=HistoryPolicy.KEEP_LAST,
+                        depth=1,
+                    )
+                except Exception:
+                    map_qos = 10
+            self._map_sub = self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, map_qos)
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
+            self._node.create_subscription(String, "/nav/navigation_status", self._navigation_status_callback, 10)
             if LaserScan is not None:
-                scan_subscribed = False
+                scan_qos = 10
                 if QoSProfile is not None:
                     try:
+                        # Prefer a reliable scan subscription because the Pi LiDAR driver
+                        # in this stack publishes reliably.
                         scan_qos = QoSProfile(
-                            reliability=ReliabilityPolicy.BEST_EFFORT,
+                            reliability=ReliabilityPolicy.RELIABLE,
                             durability=DurabilityPolicy.VOLATILE,
                             history=HistoryPolicy.KEEP_LAST,
-                            depth=5,
+                            depth=10,
                         )
-                        self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
-                        scan_subscribed = True
                     except Exception:
-                        scan_subscribed = False
-                if not scan_subscribed:
-                    # Fallback: keep panel alive even when QoS profile wiring differs across environments.
-                    self._node.create_subscription(LaserScan, "/scan", self._scan_callback, 10)
+                        scan_qos = 10
+                self._scan_sub = self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
             if Status is not None:
                 self._node.create_subscription(Status, "/buddybot/pico_status", self._pico_status_callback, 10)
             if Image is not None and self._cv_bridge is not None and QoSProfile is not None:
@@ -159,14 +187,32 @@ class PanelBridge:
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
 
-            self._spin_thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
+            if SingleThreadedExecutor is not None:
+                self._executor = SingleThreadedExecutor()
+                self._executor.add_node(self._node)
+            self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
             self._spin_thread.start()
             self.ros2_connected = True
         except Exception:
             self.ros2_connected = False
 
+    def _spin_loop(self) -> None:
+        if self._node is None:
+            return
+        try:
+            while rclpy.ok():
+                if self._executor is not None:
+                    self._executor.spin_once(timeout_sec=0.2)
+                else:
+                    rclpy.spin_once(self._node, timeout_sec=0.2)
+        except Exception as exc:
+            self._spin_error = repr(exc)
+
     def _status_callback(self, msg: String) -> None:
         self._system_status = msg.data
+
+    def _navigation_status_callback(self, msg: String) -> None:
+        self._navigation_status = msg.data
 
     def _pico_status_callback(self, msg: Status) -> None:
         with self._lock:
@@ -178,8 +224,12 @@ class PanelBridge:
             }
 
     def _map_callback(self, msg: OccupancyGrid) -> None:
-        with self._lock:
-            self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+        try:
+            with self._lock:
+                self._latest_map = self._downsample_occupancy_grid(msg, max_width=220, max_height=220)
+                self._last_map_error = None
+        except Exception as exc:
+            self._last_map_error = repr(exc)
 
     def _scan_callback(self, msg: LaserScan) -> None:
         try:
@@ -190,7 +240,9 @@ class PanelBridge:
                 self._latest_scan_map = scan_map
                 self._latest_scan_stamp = time.time()
                 self._scan_frames_received += 1
-        except Exception:
+                self._last_scan_error = None
+        except Exception as exc:
+            self._last_scan_error = repr(exc)
             return
 
     def _camera_callback(self, msg: Image) -> None:
@@ -366,11 +418,67 @@ class PanelBridge:
             "cells": [0] * (width * height),
         }
 
+    def _poll_scan_from_cli(self, min_interval_sec: float = 2.0) -> bool:
+        now = time.time()
+        if (now - self._last_cli_scan_attempt) < min_interval_sec:
+            return self._latest_scan_map is not None
+        self._last_cli_scan_attempt = now
+        try:
+            result = subprocess.run(
+                [
+                    "timeout",
+                    "3s",
+                    "ros2",
+                    "topic",
+                    "echo",
+                    "--qos-reliability",
+                    "reliable",
+                    "--once",
+                    "/scan",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=os.environ.copy(),
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return False
+            data = yaml.safe_load(result.stdout)
+            if not isinstance(data, dict):
+                return False
+            ranges: List[float] = []
+            for item in data.get("ranges", []):
+                try:
+                    ranges.append(float(item))
+                except (TypeError, ValueError):
+                    continue
+            if not ranges:
+                return False
+            scan_msg = SimpleNamespace(
+                angle_min=float(data["angle_min"]),
+                angle_increment=float(data["angle_increment"]),
+                range_min=float(data["range_min"]),
+                range_max=float(data["range_max"]),
+                ranges=ranges,
+            )
+            with self._lock:
+                pose = dict(self._latest_pose) if self._latest_pose is not None else None
+            scan_map = self._build_scan_map(scan_msg, pose)
+            with self._lock:
+                self._latest_scan_map = scan_map
+                self._latest_scan_stamp = now
+                self._last_scan_error = None
+            return True
+        except Exception as exc:
+            self._last_scan_error = repr(exc)
+            return False
+
     def status(self) -> Dict[str, Any]:
         pose = self.current_pose()
         return {
             "mode": "assistant" if self.assistant_enabled else "standalone",
             "follow_enabled": self.follow_enabled,
+            "navigation_status": self._navigation_status,
             "ros2_connected": self.ros2_connected,
             "server_url": self.server_url,
             "server_connected": self.check_server(),
@@ -384,6 +492,10 @@ class PanelBridge:
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
+            "spin_error": self._spin_error,
+            "spin_thread_alive": bool(self._spin_thread and self._spin_thread.is_alive()),
+            "last_scan_error": self._last_scan_error,
+            "last_map_error": self._last_map_error,
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
@@ -444,6 +556,38 @@ class PanelBridge:
         with self._lock:
             return self._manual_active
 
+    def _publish_follow_state(self, enabled: bool) -> None:
+        if not self.ros2_connected or self._follow_pub is None:
+            return
+        msg = Bool()
+        msg.data = bool(enabled)
+        self._follow_pub.publish(msg)
+
+    def _clear_manual_motion(self, publish_zero: bool = True) -> None:
+        with self._lock:
+            self._manual_active = False
+            self._manual_linear_x = 0.0
+            self._manual_linear_y = 0.0
+            self._manual_angular_z = 0.0
+        if publish_zero and self.ros2_connected and self._manual_pub is not None:
+            self._manual_pub.publish(Twist())
+
+    def cancel_navigation(self) -> None:
+        if not self.ros2_connected or self._nav_cancel_pub is None:
+            return
+        msg = String()
+        msg.data = "cancel"
+        self._nav_cancel_pub.publish(msg)
+
+    def set_follow_enabled(self, enabled: bool, *, update_last_command: bool = True) -> None:
+        self.follow_enabled = bool(enabled)
+        if self.follow_enabled:
+            self._clear_manual_motion()
+            self.cancel_navigation()
+        if update_last_command:
+            self.last_command = "follow_on" if self.follow_enabled else "follow_off"
+        self._publish_follow_state(self.follow_enabled)
+
     def _manual_publish_timer(self) -> None:
         if not self.ros2_connected or self._manual_pub is None:
             return
@@ -460,6 +604,8 @@ class PanelBridge:
         self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
+        if self._latest_map is None and self._latest_scan_map is None:
+            self._poll_scan_from_cli()
         with self._lock:
             if self._latest_map is not None:
                 payload = dict(self._latest_map)
@@ -499,56 +645,73 @@ class PanelBridge:
 
     def _handle_local_command(self, message: str) -> str:
         text = message.lower().strip()
-        if any(keyword in text for keyword in ("stop", "halt", "brake")):
+        wake_words = ("버디봇", "버디봇아", "버디", "buddybot", "buddy")
+
+        if text in wake_words:
+            return "네, 부르셨어요?"
+
+        for wake_word in wake_words:
+            if text.startswith(f"{wake_word} "):
+                text = text[len(wake_word):].strip()
+                break
+            if text.startswith(f"{wake_word},"):
+                text = text[len(wake_word) + 1:].strip()
+                break
+
+        if not text:
+            return "네, 말씀하세요."
+
+        if any(keyword in text for keyword in ("stop", "halt", "brake", "정지", "멈춰", "스톱")):
             self.manual_command("stop", 0.0)
-            return "Stopped the robot in standalone mode."
-        if any(keyword in text for keyword in ("forward", "go ahead")):
+            return "Standalone mode에서 로봇을 정지했습니다."
+        if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self.manual_command("forward", 0.35)
-            return "Moving forward in standalone mode."
-        if any(keyword in text for keyword in ("backward", "reverse", "back")):
+            return "Standalone mode에서 앞으로 이동합니다."
+        if any(keyword in text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
             self.manual_command("backward", 0.35)
-            return "Moving backward in standalone mode."
-        if any(keyword in text for keyword in ("strafe left", "slide left")):
+            return "Standalone mode에서 뒤로 이동합니다."
+        if any(keyword in text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로")):
             self.manual_command("strafe_left", 0.3)
-            return "Strafing left in standalone mode."
-        if any(keyword in text for keyword in ("strafe right", "slide right")):
+            return "Standalone mode에서 왼쪽으로 이동합니다."
+        if any(keyword in text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로")):
             self.manual_command("strafe_right", 0.3)
-            return "Strafing right in standalone mode."
-        if any(keyword in text for keyword in ("turn left", "rotate left", "left")):
+            return "Standalone mode에서 오른쪽으로 이동합니다."
+        if any(keyword in text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):
             self.manual_command("rotate_left", 0.45)
-            return "Turning left in standalone mode."
-        if any(keyword in text for keyword in ("turn right", "rotate right", "right")):
+            return "Standalone mode에서 좌회전합니다."
+        if any(keyword in text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
             self.manual_command("rotate_right", 0.45)
-            return "Turning right in standalone mode."
-        if any(keyword in text for keyword in ("follow", "track user")):
-            self.follow_enabled = True
-            self.last_command = "follow_on"
-            return "Follow mode enabled."
-        if any(keyword in text for keyword in ("unfollow", "follow stop")):
-            self.follow_enabled = False
-            self.last_command = "follow_off"
-            return "Follow mode disabled."
-        if any(keyword in text for keyword in ("status", "state")):
+            return "Standalone mode에서 우회전합니다."
+        if any(keyword in text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
+            self.set_follow_enabled(False)
+            return "사용자 추종을 중지했습니다."
+        if any(keyword in text for keyword in ("follow", "track user", "따라와", "추종 시작", "추종 켜")):
+            self.set_follow_enabled(True)
+            return "사용자 추종을 시작했습니다."
+        if any(keyword in text for keyword in ("status", "state", "상태", "지금 상태")):
             pose = self.current_pose()
             if pose is None:
-                return "BuddyBot is online. Sensors are running, but current pose is not available yet."
+                return "버디봇은 온라인 상태입니다. 센서는 동작 중이지만 현재 위치는 아직 잡히지 않았습니다."
             return (
-                f"BuddyBot is online. Pose x={pose['x']}, y={pose['y']}, theta={pose['theta']}. "
-                f"Camera={'on' if self.camera_available() else 'off'}, map={'ready' if self.map_available() else 'waiting'}."
+                f"버디봇은 온라인 상태입니다. 위치는 x={pose['x']}, y={pose['y']}, theta={pose['theta']}이고, "
+                f"카메라는 {'켜짐' if self.camera_available() else '대기'}, 맵은 {'준비됨' if self.map_available() else '대기'} 상태입니다."
             )
-        if "kitchen" in text:
+        if "kitchen" in text or "주방" in text or "부엌" in text:
             self.go_waypoint("kitchen")
-            return "Sent a navigation request to kitchen."
-        if "living room" in text:
+            return "주방으로 이동 요청을 보냈습니다."
+        if "living room" in text or "거실" in text:
             self.go_waypoint("living_room_center")
-            return "Sent a navigation request to living_room_center."
-        if "charge" in text:
+            return "거실로 이동 요청을 보냈습니다."
+        if "charge" in text or "충전" in text or "도킹" in text:
             self.go_waypoint("charging_station")
-            return "Sent a navigation request to charging_station."
-        return "Standalone BuddyBot mode. Try forward, strafe left, rotate right, stop, follow, status, or kitchen."
+            return "충전 스테이션으로 이동 요청을 보냈습니다."
+        return "Standalone BuddyBot mode입니다. 버디봇이라고 부른 뒤 전진, 좌회전, 왼쪽 이동, 정지, 추종, 상태, 주방 같은 명령을 써보세요."
 
     def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
+        self.follow_enabled = False
+        self._publish_follow_state(False)
+        self.cancel_navigation()
         linear_x = 0.0
         linear_y = 0.0
         angular_z = 0.0
@@ -566,26 +729,23 @@ class PanelBridge:
         elif direction == "rotate_right":
             angular_z = -speed
 
+        if direction == "stop":
+            self._clear_manual_motion()
+            return
+
         if not self.ros2_connected or self._manual_pub is None:
             return
 
         with self._lock:
-            if direction == "stop":
-                self._manual_active = False
-                self._manual_linear_x = 0.0
-                self._manual_linear_y = 0.0
-                self._manual_angular_z = 0.0
-            else:
-                self._manual_active = True
-                self._manual_linear_x = linear_x
-                self._manual_linear_y = linear_y
-                self._manual_angular_z = angular_z
-
-        if direction == "stop":
-            self._manual_pub.publish(Twist())
+            self._manual_active = True
+            self._manual_linear_x = linear_x
+            self._manual_linear_y = linear_y
+            self._manual_angular_z = angular_z
 
     def go_waypoint(self, name: str) -> None:
         self.last_command = f"nav:{name}"
+        self.set_follow_enabled(False, update_last_command=False)
+        self._clear_manual_motion()
         if self.ros2_connected and self._waypoint_goal_pub is not None:
             msg = String()
             msg.data = name
@@ -706,8 +866,7 @@ def api_manual(request: Dict[str, Any]):
 
 @app.post("/api/follow")
 def api_follow(request: Dict[str, Any]):
-    bridge.follow_enabled = bool(request.get("enabled", False))
-    bridge.last_command = "follow_on" if bridge.follow_enabled else "follow_off"
+    bridge.set_follow_enabled(bool(request.get("enabled", False)))
     return bridge.status()
 
 

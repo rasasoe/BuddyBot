@@ -36,6 +36,10 @@ BuddyBot은 라즈베리 파이 5와 라즈베리 파이 피코 플랫폼을 사
 ### 2단계: 인지 시스템 (5-8주)
 **목표**: 컴퓨터 비전 및 네비게이션 감지 기능 추가
 
+주의:
+- 아래 7주 / 8주 체크리스트는 한동안 문서 갱신이 늦어서 실제 코드 상태보다 뒤처져 있었다.
+- 현재 저장소 기준으로 7주는 대부분 구현되어 있고, 8주는 "기본 health monitoring은 있음 / full sensor fusion은 아직 미완" 상태다.
+
 #### 5주: 카메라 통합
 - [x] Pi 5에서 카메라 파이프라인 설정
 - [x] 기본 이미지 캡처 및 처리 구현
@@ -49,16 +53,37 @@ BuddyBot은 라즈베리 파이 5와 라즈베리 파이 피코 플랫폼을 사
 - [x] 사람 추적 데이터 구조 생성
 
 #### 7주: LiDAR 통합
-- [ ] LiDAR 센서 통신 설정
+- [x] LiDAR 센서 통신 설정
 - [ ] 포인트 클라우드 처리 구현
-- [ ] 기본 장애물 감지 추가
-- [ ] ROS 네비게이션 스택과 통합
+- [x] 기본 장애물 감지 추가
+- [x] ROS 네비게이션 스택과 통합
+
+메모:
+- 현재 BuddyBot은 `sensor_msgs/LaserScan` 기반 2D LiDAR 스택이다.
+- 따라서 실제 구현은 되어 있어도 "포인트 클라우드 처리"라는 표현은 현재 구조와 맞지 않는다.
+- 관련 구현 위치:
+  - `scripts/start_mapping_panel.sh`
+  - `scripts/start_offline_demo.sh`
+  - `scripts/check_all_devices.sh`
+  - `software/pi5/ros2_ws/src/buddybot_system/buddybot_system/lidar_avoidance_node.py`
+  - `software/pi5/ros2_ws/src/buddybot_nav/config/nav_params.yaml`
+  - `software/pi5/ros2_ws/src/buddybot_nav/launch/nav.launch.py`
 
 #### 8주: 센서 융합
 - [ ] 카메라와 LiDAR 데이터 결합
 - [ ] 다중 센서 시간 동기화 구현
-- [ ] 센서 건강 모니터링 추가
+- [x] 센서 건강 모니터링 추가
 - [ ] 통합 장애물 표현 생성
+
+메모:
+- 기본적인 sensor health monitoring과 camera-after-LiDAR 생존 확인은 구현되어 있다.
+- 하지만 camera detection과 LiDAR obstacle을 하나의 공통 표현으로 융합하는 full fusion 노드는 아직 없다.
+- 관련 구현 위치:
+  - `scripts/check_all_devices.sh`
+  - `scripts/start_mapping_panel.sh`
+  - `scripts/start_offline_demo.sh`
+  - `software/pi5/ros2_ws/src/buddybot_system/buddybot_system/safety_supervisor_node.py`
+  - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py`
 
 ### 3단계: 자율 동작 (9-12주)
 **목표**: 자율 네비게이션 및 추적 동작 구현

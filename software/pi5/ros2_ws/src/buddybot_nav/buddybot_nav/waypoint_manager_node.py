@@ -39,7 +39,8 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
-from geometry_msgs.msg import PoseStamped, Pose
+from action_msgs.msg import GoalStatus
+from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovarianceStamped, Twist
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from nav2_msgs.action import NavigateToPose
@@ -67,6 +68,12 @@ class WaypointManagerNode(Node):
         self.declare_parameter('waypoint_config', 'config/waypoints.yaml')
         self.declare_parameter('navigation_timeout', 300.0)  # seconds
         self.declare_parameter('goal_tolerance', 0.5)        # meters
+        self.declare_parameter('yaw_tolerance', 0.35)        # rad
+        self.declare_parameter('local_nav_rate', 10.0)
+        self.declare_parameter('local_position_gain', 0.75)
+        self.declare_parameter('local_heading_gain', 1.2)
+        self.declare_parameter('max_nav_linear_velocity', 0.3)
+        self.declare_parameter('max_nav_angular_velocity', 0.6)
         self.declare_parameter('use_sim_time', False)
 
         # Get parameters
@@ -74,6 +81,12 @@ class WaypointManagerNode(Node):
         self.waypoint_config = waypoint_config
         self.navigation_timeout = self.get_parameter('navigation_timeout').value
         self.goal_tolerance = self.get_parameter('goal_tolerance').value
+        self.yaw_tolerance = float(self.get_parameter('yaw_tolerance').value)
+        self.local_nav_rate = float(self.get_parameter('local_nav_rate').value)
+        self.local_position_gain = float(self.get_parameter('local_position_gain').value)
+        self.local_heading_gain = float(self.get_parameter('local_heading_gain').value)
+        self.max_nav_linear_velocity = float(self.get_parameter('max_nav_linear_velocity').value)
+        self.max_nav_angular_velocity = float(self.get_parameter('max_nav_angular_velocity').value)
         self.use_sim_time = self.get_parameter('use_sim_time').value
 
         # Load waypoint database
@@ -84,6 +97,14 @@ class WaypointManagerNode(Node):
         self.current_waypoint = None
         self.navigation_active = False
         self.last_odom_time = self.get_clock().now()
+        self.current_pose: Optional[Dict[str, float]] = None
+        self.current_pose_source = "none"
+        self.target_pose: Optional[Dict[str, float]] = None
+        self.control_mode = "idle"
+        self.goal_handle = None
+        self.goal_future = None
+        self.result_future = None
+        self.navigation_started_at = 0.0
 
         # Action client for Nav2
         self.nav_action_client = ActionClient(
@@ -101,17 +122,25 @@ class WaypointManagerNode(Node):
 
         self.navigation_status_pub = self.create_publisher(
             String, '/nav/navigation_status', qos_profile)
+        self.cmd_vel_nav_pub = self.create_publisher(
+            Twist, '/cmd_vel_nav', 10)
 
         # Subscribers
         self.create_subscription(
             Odometry, '/odom', self.odom_callback, 10)
+        self.create_subscription(
+            PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10)
 
         self.create_subscription(
             String, '/system/current_mode', self.mode_callback, qos_profile)
         self.create_subscription(
+            String, '/system/mode', self.mode_callback, qos_profile)
+        self.create_subscription(
             String, '/nav/waypoint_goal', self.waypoint_goal_callback, qos_profile)
         self.create_subscription(
             String, '/nav/waypoint_save', self.waypoint_save_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/cancel', self.cancel_topic_callback, qos_profile)
 
         # Services
         self.create_service(
@@ -128,6 +157,7 @@ class WaypointManagerNode(Node):
 
         # Timer for navigation monitoring
         self.create_timer(1.0, self.navigation_monitor_callback)
+        self.create_timer(1.0 / self.local_nav_rate, self.local_navigation_callback)
 
         self.get_logger().info("Waypoint manager node initialized")
         self._log_available_waypoints()
@@ -199,6 +229,10 @@ class WaypointManagerNode(Node):
             self.get_logger().error(f"Failed to save waypoint from topic: {exc}")
             self._publish_navigation_status("waypoint_save_failed")
 
+    def cancel_topic_callback(self, msg: String):
+        if msg.data.strip() or not msg.data:
+            self._cancel_navigation("cancelled")
+
     def _save_waypoints(self):
         config_path = self.waypoint_config
         if not os.path.isabs(config_path):
@@ -239,14 +273,10 @@ class WaypointManagerNode(Node):
 
     def cancel_navigation_callback(self, request, response):
         """Cancel current navigation."""
-        if self.navigation_active:
-            # Cancel Nav2 action
-            self.nav_action_client._cancel_goal()
-            self.navigation_active = False
-            self.current_waypoint = None
+        if self.navigation_active or self.goal_handle is not None:
+            self._cancel_navigation("cancelled")
             response.success = True
             response.message = "Navigation cancelled"
-            self._publish_navigation_status("cancelled")
         else:
             response.success = False
             response.message = "No active navigation to cancel"
@@ -259,48 +289,82 @@ class WaypointManagerNode(Node):
             self.get_logger().error(f"Unknown waypoint: {waypoint_name}")
             return
 
+        if self.navigation_active or self.goal_handle is not None:
+            self._cancel_navigation("preempted")
+
         waypoint_data = self.waypoints[waypoint_name]
         pose_data = waypoint_data.get('pose', {})
+        self.target_pose = {
+            "x": float(pose_data.get('x', 0.0)),
+            "y": float(pose_data.get('y', 0.0)),
+            "theta": float(pose_data.get('theta', 0.0)),
+        }
 
         # Create Nav2 goal
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = 'map'
         goal.pose.header.stamp = self.get_clock().now().to_msg()
 
-        goal.pose.pose.position.x = pose_data.get('x', 0.0)
-        goal.pose.pose.position.y = pose_data.get('y', 0.0)
+        goal.pose.pose.position.x = self.target_pose["x"]
+        goal.pose.pose.position.y = self.target_pose["y"]
         goal.pose.pose.position.z = 0.0
 
         # Convert yaw to quaternion
-        yaw = pose_data.get('theta', 0.0)
+        yaw = self.target_pose["theta"]
         goal.pose.pose.orientation.z = math.sin(yaw / 2.0)
         goal.pose.pose.orientation.w = math.cos(yaw / 2.0)
 
         self.get_logger().info(f"Starting navigation to {waypoint_name}")
-
-        # Send goal to Nav2 (placeholder - would need action client setup)
-        # self.nav_action_client.wait_for_server()
-        # self.nav_action_client.send_goal_async(goal)
-
         self.current_waypoint = waypoint_name
-        self.navigation_active = True
+        self.navigation_started_at = time.time()
         self._publish_current_waypoint(waypoint_name)
-        self._publish_navigation_status("navigating")
+
+        if self.nav_action_client.wait_for_server(timeout_sec=0.5):
+            self.navigation_active = True
+            self.control_mode = "nav2_pending"
+            self.goal_future = self.nav_action_client.send_goal_async(goal)
+            self.goal_future.add_done_callback(self._goal_response_callback)
+            self._publish_navigation_status(f"navigating_nav2:{waypoint_name}")
+            return
+
+        if self.current_pose is None:
+            self.get_logger().warn("Nav2 server unavailable and current pose is missing")
+            self._publish_navigation_status("pose_unavailable")
+            self.current_waypoint = None
+            self.target_pose = None
+            self._publish_current_waypoint("")
+            return
+
+        self.navigation_active = True
+        self.control_mode = "local"
+        self._publish_navigation_status(f"navigating_local:{waypoint_name}")
 
     def odom_callback(self, msg: Odometry):
         """Monitor odometry for navigation progress."""
         self.last_odom_time = self.get_clock().now()
+        if self.current_pose_source != "amcl":
+            self._update_pose(
+                msg.pose.pose.position.x,
+                msg.pose.pose.position.y,
+                self._yaw_from_quaternion(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w),
+                "odom",
+            )
 
-        # Placeholder: In full implementation, would check distance to goal
-        # and update navigation status accordingly
+    def amcl_pose_callback(self, msg: PoseWithCovarianceStamped):
+        self._update_pose(
+            msg.pose.pose.position.x,
+            msg.pose.pose.position.y,
+            self._yaw_from_quaternion(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w),
+            "amcl",
+        )
 
     def mode_callback(self, msg: String):
         """Handle system mode changes."""
-        mode = msg.data
+        mode = msg.data.strip().upper()
 
-        if mode != "NAVIGATION" and self.navigation_active:
+        if mode not in {"NAV", "NAVIGATION"} and self.navigation_active:
             self.get_logger().info(f"Mode changed to {mode}, cancelling navigation")
-            self.cancel_navigation_callback(None, None)  # Trigger cancel
+            self._cancel_navigation(f"mode_change:{mode}")
 
     def navigation_monitor_callback(self):
         """Monitor navigation progress and handle timeouts."""
@@ -313,8 +377,137 @@ class WaypointManagerNode(Node):
             self.get_logger().warn("Lost odometry, navigation may be stalled")
             self._publish_navigation_status("odom_lost")
 
-        # Placeholder: Check if goal reached
-        # In full implementation, would monitor Nav2 action feedback/result
+        if (time.time() - self.navigation_started_at) > self.navigation_timeout:
+            self.get_logger().warn("Navigation timed out")
+            self._cancel_navigation("timeout")
+
+    def local_navigation_callback(self):
+        if not self.navigation_active or self.control_mode != "local":
+            return
+        if self.current_pose is None or self.target_pose is None:
+            self._cancel_navigation("pose_unavailable")
+            return
+
+        dx = self.target_pose["x"] - self.current_pose["x"]
+        dy = self.target_pose["y"] - self.current_pose["y"]
+        distance = math.hypot(dx, dy)
+
+        if distance <= self.goal_tolerance:
+            yaw_error = self._normalize_angle(self.target_pose["theta"] - self.current_pose["theta"])
+            if abs(yaw_error) <= self.yaw_tolerance:
+                self._publish_nav_velocity(0.0, 0.0, 0.0)
+                self._finish_navigation(f"arrived:{self.current_waypoint}")
+                return
+
+            angular_z = self._clamp(
+                yaw_error * self.local_heading_gain,
+                self.max_nav_angular_velocity,
+            )
+            self._publish_nav_velocity(0.0, 0.0, angular_z)
+            return
+
+        theta = self.current_pose["theta"]
+        error_x = math.cos(theta) * dx + math.sin(theta) * dy
+        error_y = -math.sin(theta) * dx + math.cos(theta) * dy
+        yaw_error = self._normalize_angle(self.target_pose["theta"] - theta)
+
+        linear_x = self._clamp(error_x * self.local_position_gain, self.max_nav_linear_velocity)
+        linear_y = self._clamp(error_y * self.local_position_gain, self.max_nav_linear_velocity)
+        angular_z = self._clamp(yaw_error * self.local_heading_gain, self.max_nav_angular_velocity)
+
+        self._publish_nav_velocity(linear_x, linear_y, angular_z)
+
+    def _goal_response_callback(self, future):
+        try:
+            goal_handle = future.result()
+        except Exception as exc:
+            self.get_logger().error(f"Failed to send Nav2 goal: {exc}")
+            self.navigation_active = False
+            self.control_mode = "idle"
+            self._publish_navigation_status("nav2_send_failed")
+            return
+
+        if not goal_handle.accepted:
+            self.get_logger().warn("Nav2 goal rejected")
+            self.navigation_active = False
+            self.control_mode = "idle"
+            self.goal_handle = None
+            self._publish_navigation_status("nav2_goal_rejected")
+            self._publish_current_waypoint("")
+            self.current_waypoint = None
+            self.target_pose = None
+            return
+
+        self.goal_handle = goal_handle
+        self.control_mode = "nav2"
+        self.result_future = goal_handle.get_result_async()
+        self.result_future.add_done_callback(self._nav_result_callback)
+        self._publish_navigation_status(f"nav2_active:{self.current_waypoint}")
+
+    def _nav_result_callback(self, future):
+        try:
+            result = future.result()
+            status = result.status
+        except Exception as exc:
+            self.get_logger().error(f"Failed to receive Nav2 result: {exc}")
+            self._finish_navigation("nav2_result_failed")
+            return
+
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self._finish_navigation(f"arrived:{self.current_waypoint}")
+        elif status == GoalStatus.STATUS_CANCELED:
+            self._finish_navigation("cancelled")
+        else:
+            self._finish_navigation(f"nav2_failed:{status}")
+
+    def _cancel_navigation(self, status: str):
+        if self.goal_handle is not None:
+            try:
+                self.goal_handle.cancel_goal_async()
+            except Exception as exc:
+                self.get_logger().warn(f"Failed to cancel Nav2 goal cleanly: {exc}")
+        self._publish_nav_velocity(0.0, 0.0, 0.0)
+        self._finish_navigation(status)
+
+    def _finish_navigation(self, status: str):
+        self.navigation_active = False
+        self.control_mode = "idle"
+        self.goal_handle = None
+        self.goal_future = None
+        self.result_future = None
+        self.navigation_started_at = 0.0
+        self._publish_navigation_status(status)
+        self._publish_current_waypoint("")
+        self.current_waypoint = None
+        self.target_pose = None
+
+    def _publish_nav_velocity(self, linear_x: float, linear_y: float, angular_z: float):
+        twist = Twist()
+        twist.linear.x = linear_x
+        twist.linear.y = linear_y
+        twist.angular.z = angular_z
+        self.cmd_vel_nav_pub.publish(twist)
+
+    def _update_pose(self, x: float, y: float, theta: float, source: str):
+        self.current_pose = {
+            "x": float(x),
+            "y": float(y),
+            "theta": float(theta),
+        }
+        self.current_pose_source = source
+
+    def _yaw_from_quaternion(self, z: float, w: float) -> float:
+        return math.atan2(2.0 * w * z, 1.0 - 2.0 * z * z)
+
+    def _normalize_angle(self, angle: float) -> float:
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    def _clamp(self, value: float, limit: float) -> float:
+        return max(-limit, min(limit, value))
 
     def _publish_current_waypoint(self, waypoint: str):
         """Publish current navigation waypoint."""
@@ -330,9 +523,9 @@ class WaypointManagerNode(Node):
 
     def destroy_node(self):
         """Clean shutdown."""
-        if self.navigation_active:
+        if self.navigation_active or self.goal_handle is not None:
             self.get_logger().info("Cancelling navigation on shutdown")
-            # Cancel any active navigation
+            self._cancel_navigation("shutdown")
 
         super().destroy_node()
 

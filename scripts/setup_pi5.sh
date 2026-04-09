@@ -26,6 +26,9 @@ safe_source() {
 sudo apt update
 sudo apt install -y \
   python3-colcon-common-extensions \
+  python3-pyaudio \
+  python3-pocketsphinx \
+  python3-speechrecognition \
   python3-serial \
   python3-requests \
   python3-yaml \

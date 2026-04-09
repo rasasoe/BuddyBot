@@ -10,6 +10,7 @@ BuddyBot은 라즈베리 파이 5 + 라즈베리 파이 피코 기반 자율 주
 - **[safety_policy.md](safety_policy.md)**: 안전 아키텍처 및 비상 절차
 - **[uart_protocol.md](uart_protocol.md)**: Pi 5와 Pico 간 UART 통신 사양
 - **[development_plan.md](development_plan.md)**: 구현 로드맵 및 마일스톤
+- **[field_log.md](field_log.md)**: 날짜별 실기 디버깅 로그 및 다음 작업환경용 Codex 인수인계
 
 ## 빠른 시작
 

@@ -23,6 +23,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Bool
 import math
 
 
@@ -47,6 +48,8 @@ class FollowControllerNode(Node):
         self.declare_parameter('max_angular_velocity', 0.5)  # rad/s
         self.declare_parameter('deadzone_center', 20)        # pixels, ignore small center offsets
         self.declare_parameter('deadzone_height', 10)        # pixels, ignore small height changes
+        self.declare_parameter('follow_enabled_topic', '/follow/enabled')
+        self.declare_parameter('bbox_timeout_sec', 0.8)
 
         # Get parameters
         self.image_width = self.get_parameter('image_width').value
@@ -58,6 +61,8 @@ class FollowControllerNode(Node):
         self.max_angular_vel = self.get_parameter('max_angular_velocity').value
         self.deadzone_center = self.get_parameter('deadzone_center').value
         self.deadzone_height = self.get_parameter('deadzone_height').value
+        self.follow_enabled_topic = self.get_parameter('follow_enabled_topic').value
+        self.bbox_timeout_sec = float(self.get_parameter('bbox_timeout_sec').value)
 
         # Calculate target height in pixels
         self.target_height = self.image_height * self.target_height_ratio
@@ -75,10 +80,15 @@ class FollowControllerNode(Node):
         # Subscriber for person bounding box
         self.bbox_subscriber = self.create_subscription(
             Float32MultiArray, '/vision/person_bbox', self.bbox_callback, qos_profile)
+        self.follow_enabled_subscriber = self.create_subscription(
+            Bool, self.follow_enabled_topic, self.follow_enabled_callback, qos_profile)
+        self.watchdog_timer = self.create_timer(0.1, self.watchdog_callback)
 
         # State
         self.last_bbox_time = self.get_clock().now()
         self.following_active = False
+        self.follow_enabled = False
+        self.last_command_was_nonzero = False
 
         self.get_logger().info("Follow controller node initialized")
         self._log_configuration()
@@ -92,10 +102,29 @@ class FollowControllerNode(Node):
         self.get_logger().info(f"  Target height ratio: {self.target_height_ratio} ({self.target_height:.0f}px)")
         self.get_logger().info(f"  Max velocities: linear={self.max_linear_vel}, angular={self.max_angular_vel}")
         self.get_logger().info(f"  Deadzones: center={self.deadzone_center}px, height={self.deadzone_height}px")
+        self.get_logger().info(f"  Follow enable topic: {self.follow_enabled_topic}")
+        self.get_logger().info(f"  BBox timeout: {self.bbox_timeout_sec:.2f}s")
+
+    def follow_enabled_callback(self, msg: Bool):
+        """Enable or disable following based on external control."""
+        new_state = bool(msg.data)
+        if new_state == self.follow_enabled:
+            return
+
+        self.follow_enabled = new_state
+        if not new_state:
+            self.following_active = False
+            self._publish_zero_velocity("follow disabled")
+
+        state = "enabled" if self.follow_enabled else "disabled"
+        self.get_logger().info(f"Follow controller {state}")
 
     def bbox_callback(self, msg: Float32MultiArray):
         """Process person bounding box and compute following velocities."""
         try:
+            if not self.follow_enabled:
+                return
+
             if len(msg.data) < 5:
                 self.get_logger().warn("Invalid bbox message format")
                 return
@@ -112,11 +141,27 @@ class FollowControllerNode(Node):
 
             # Publish velocity command
             self.cmd_publisher.publish(twist)
+            self.last_command_was_nonzero = not self._is_zero_twist(twist)
 
             self.get_logger().debug(f"Following person: x={x:.0f}, height={height:.0f}, vx={twist.linear.x:.3f}, wz={twist.angular.z:.3f}")
 
         except Exception as e:
             self.get_logger().error(f"Error processing bbox: {e}")
+
+    def watchdog_callback(self):
+        """Stop the robot if following is disabled or detections go stale."""
+        if not self.follow_enabled:
+            if self.last_command_was_nonzero:
+                self._publish_zero_velocity("follow disabled watchdog")
+            return
+
+        if not self.following_active:
+            return
+
+        elapsed = (self.get_clock().now() - self.last_bbox_time).nanoseconds / 1e9
+        if elapsed > self.bbox_timeout_sec:
+            self.following_active = False
+            self._publish_zero_velocity("bbox timeout")
 
     def _compute_follow_velocity(self, bbox_x, bbox_y, bbox_width, bbox_height):
         """
@@ -159,13 +204,25 @@ class FollowControllerNode(Node):
 
         return twist
 
+    def _is_zero_twist(self, twist: Twist) -> bool:
+        return (
+            abs(twist.linear.x) < 1e-4
+            and abs(twist.linear.y) < 1e-4
+            and abs(twist.angular.z) < 1e-4
+        )
+
+    def _publish_zero_velocity(self, reason: str):
+        zero_twist = Twist()
+        self.cmd_publisher.publish(zero_twist)
+        self.last_command_was_nonzero = False
+        self.get_logger().debug(f"Published zero follow velocity: {reason}")
+
     def destroy_node(self):
         """Clean shutdown."""
         self.get_logger().info("Shutting down follow controller node")
 
         # Publish zero velocity on shutdown for safety
-        zero_twist = Twist()
-        self.cmd_publisher.publish(zero_twist)
+        self._publish_zero_velocity("shutdown")
 
         super().destroy_node()
 

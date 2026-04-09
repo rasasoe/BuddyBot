@@ -20,6 +20,16 @@
 - 라즈베리파이 5: `BuddyBot`
 - 라즈베리파이 Pico: `firmware/pico_motor_controller`
 
+## 최신 현장 로그 / 다음 환경 인수인계
+
+최근 Pi5 실기 디버깅 기록과 다음 작업환경용 Codex 인수인계 문서는 아래를 먼저 보시면 됩니다.
+
+- 팀원이 다른 AI에게 바로 넘길 때: `AI_HANDOFF.md`
+- `docs/field_log.md`
+- `docs/bringup.md`
+
+특히 새 작업환경에서 mapping panel, LiDAR, camera bring-up을 다시 볼 때는 `docs/field_log.md`의 최신 날짜 항목부터 읽는 것을 권장합니다.
+
 ## 지금 바로 가능한 운용 모드
 
 ### 1. 오프라인 Standalone Mode
@@ -32,6 +42,7 @@
 - 추종 상태 전환
 - LiDAR 기반 안전 우회
 - 체크포인트 저장 / 이동
+- 브라우저 음성 입력 / 음성 응답
 - 맵 클릭으로 좌표 확인
 - 현재 위치 기준 체크포인트 저장
 
@@ -43,6 +54,7 @@
 - BuddyBot-ai로 채팅 전달
 - AI 비서 기능
 - 날씨 / 시간 / 메모리 / 상위 자연어 명령
+- 웹앱/패널에서 추종 / waypoint / voice 명령 연동
 
 ## 주요 패키지
 
@@ -50,7 +62,7 @@
 - `buddybot_system`: command mux, mode manager, safety supervisor, lidar avoidance
 - `buddybot_vision`: 사용자 추종 및 비전 제어
 - `buddybot_nav`: waypoint manager, navigation
-- `buddybot_voice`: Pi5에서 서버 AI로 연결되는 voice bridge
+- `buddybot_voice`: BuddyBot 오프라인 wake-word / command router, 필요 시 AI bridge
 - `buddybot_panel`: Pi5 로컬 웹 UI
 
 ## 하드웨어 기준

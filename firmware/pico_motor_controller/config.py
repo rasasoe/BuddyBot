@@ -42,5 +42,10 @@ WHEEL_RADIUS = 0.05
 WHEEL_BASE_WIDTH = 0.2  # Distance between left/right wheels
 WHEEL_BASE_LENGTH = 0.15  # Distance from back wheel to front axle
 
+# Manual teleop and ROS cmd_vel values are already normalized to roughly [-1, 1]
+# before they reach the Pico. Keep the rotational term in the same normalized
+# space so pure rotation does not get scaled down into a barely moving command.
+ROTATION_MIX_GAIN = 1.0
+
 # Status reporting interval (control loops)
 STATUS_REPORT_INTERVAL = 5  # Every 5 control loops (100ms at 50Hz)

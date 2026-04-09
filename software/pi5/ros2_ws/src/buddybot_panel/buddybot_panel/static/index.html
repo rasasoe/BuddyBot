@@ -351,6 +351,15 @@
       chatLog.scrollTop=chatLog.scrollHeight;
     }
 
+    function speak(text){
+      if(!("speechSynthesis" in window) || !text)return;
+      const utterance=new SpeechSynthesisUtterance(text);
+      utterance.lang=/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(text)?"ko-KR":"en-US";
+      utterance.rate=1;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    }
+
     function statusCard(label,value){
       return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;
     }
@@ -370,6 +379,7 @@
         statusCard("Pico",pico)+
         statusCard("Pico status",picoMode)+
         statusCard("LiDAR /scan",scanState)+
+        statusCard("Navigation",data.navigation_status||"idle")+
         statusCard("Manual",manualMode)+
         statusCard("Follow",data.follow_enabled?"on":"off")+
         statusCard("Map",data.map_available?"ready":"waiting")+
@@ -539,6 +549,8 @@
       addMsg("user",message);
       const data=await (await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})})).json();
       addMsg("bot",data.response);
+      speak(data.response);
+      await refreshStatus();
     }
 
     async function goWaypoint(){
@@ -615,9 +627,9 @@
     const voiceBtn=document.getElementById("voice-btn");
     if(SpeechRecognition){
       const rec=new SpeechRecognition();
-      rec.lang="en-US";
+      rec.lang=navigator.language||"ko-KR";
       rec.interimResults=false;
-      voiceBtn.onclick=()=>{rec.start();voiceBtn.textContent="Listening..."};
+      voiceBtn.onclick=()=>{rec.start();voiceBtn.textContent="듣는 중..."};
       rec.onresult=(e)=>sendChat(e.results[0][0].transcript);
       rec.onend=()=>{voiceBtn.textContent="Voice"};
     }else{

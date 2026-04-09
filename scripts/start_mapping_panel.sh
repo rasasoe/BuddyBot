@@ -58,6 +58,8 @@ CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
+ENABLE_OFFLINE_VOICE="${BUDDYBOT_ENABLE_OFFLINE_VOICE:-1}"
+ENABLE_MIC_LISTENER="${BUDDYBOT_ENABLE_MIC_LISTENER:-${MIC_AVAILABLE:-0}}"
 
 start_node() {
   local name="$1"
@@ -223,6 +225,8 @@ echo "[mapping] camera profile: ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}
 echo "[mapping] camera disabled: ${DISABLE_CAMERA}"
 echo "[mapping] pico disabled: ${DISABLE_PICO}"
 echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
+echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
+echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
 echo "[mapping] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[mapping] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[mapping] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
@@ -245,6 +249,13 @@ start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
+if [[ "$ENABLE_OFFLINE_VOICE" == "1" ]]; then
+  if [[ "$ENABLE_MIC_LISTENER" == "1" ]]; then
+    start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p enable_microphone:=true
+  else
+    start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p enable_microphone:=false
+  fi
+fi
 if [[ "$DISABLE_CAMERA" == "1" ]]; then
   echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"
 else
