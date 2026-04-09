@@ -95,6 +95,8 @@ class PanelBridge:
         self._manual_pub = None
         self._waypoint_goal_pub = None
         self._waypoint_save_pub = None
+        self._map_sub = None
+        self._scan_sub = None
         self._cv_bridge = CvBridge() if ROS2_AVAILABLE and CvBridge is not None else None
 
         self._lock = threading.Lock()
@@ -127,27 +129,37 @@ class PanelBridge:
             self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
             self._node.create_timer(0.1, self._manual_publish_timer)
 
-            self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, 10)
+            map_qos = 10
+            if QoSProfile is not None:
+                try:
+                    # OccupancyGrid from slam_toolbox is published as transient local.
+                    map_qos = QoSProfile(
+                        reliability=ReliabilityPolicy.RELIABLE,
+                        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                        history=HistoryPolicy.KEEP_LAST,
+                        depth=1,
+                    )
+                except Exception:
+                    map_qos = 10
+            self._map_sub = self._node.create_subscription(OccupancyGrid, "/map", self._map_callback, map_qos)
             self._node.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
             if LaserScan is not None:
-                scan_subscribed = False
+                scan_qos = 10
                 if QoSProfile is not None:
                     try:
+                        # Prefer a reliable scan subscription because the Pi LiDAR driver
+                        # in this stack publishes reliably.
                         scan_qos = QoSProfile(
-                            reliability=ReliabilityPolicy.BEST_EFFORT,
+                            reliability=ReliabilityPolicy.RELIABLE,
                             durability=DurabilityPolicy.VOLATILE,
                             history=HistoryPolicy.KEEP_LAST,
-                            depth=5,
+                            depth=10,
                         )
-                        self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
-                        scan_subscribed = True
                     except Exception:
-                        scan_subscribed = False
-                if not scan_subscribed:
-                    # Fallback: keep panel alive even when QoS profile wiring differs across environments.
-                    self._node.create_subscription(LaserScan, "/scan", self._scan_callback, 10)
+                        scan_qos = 10
+                self._scan_sub = self._node.create_subscription(LaserScan, "/scan", self._scan_callback, scan_qos)
             if Status is not None:
                 self._node.create_subscription(Status, "/buddybot/pico_status", self._pico_status_callback, 10)
             if Image is not None and self._cv_bridge is not None and QoSProfile is not None:
