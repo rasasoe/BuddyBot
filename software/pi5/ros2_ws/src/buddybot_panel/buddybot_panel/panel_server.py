@@ -23,6 +23,7 @@ try:
     from cv_bridge import CvBridge
     from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import OccupancyGrid, Odometry
+    from rclpy.executors import SingleThreadedExecutor
     from rclpy.node import Node
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import Image, LaserScan
@@ -40,6 +41,7 @@ except ImportError:
     OccupancyGrid = None
     Odometry = None
     Node = object
+    SingleThreadedExecutor = None
     QoSProfile = None
     ReliabilityPolicy = None
     DurabilityPolicy = None
@@ -97,6 +99,7 @@ class PanelBridge:
         self._waypoint_save_pub = None
         self._map_sub = None
         self._scan_sub = None
+        self._executor = None
         self._spin_error: Optional[str] = None
         self._last_scan_error: Optional[str] = None
         self._last_map_error: Optional[str] = None
@@ -174,6 +177,9 @@ class PanelBridge:
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
 
+            if SingleThreadedExecutor is not None:
+                self._executor = SingleThreadedExecutor()
+                self._executor.add_node(self._node)
             self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
             self._spin_thread.start()
             self.ros2_connected = True
@@ -185,7 +191,10 @@ class PanelBridge:
             return
         try:
             while rclpy.ok():
-                rclpy.spin_once(self._node, timeout_sec=0.2)
+                if self._executor is not None:
+                    self._executor.spin_once(timeout_sec=0.2)
+                else:
+                    rclpy.spin_once(self._node, timeout_sec=0.2)
         except Exception as exc:
             self._spin_error = repr(exc)
 
