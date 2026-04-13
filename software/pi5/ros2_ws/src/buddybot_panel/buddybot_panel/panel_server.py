@@ -19,6 +19,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 try:
+    from ament_index_python.packages import get_package_share_directory
+except Exception:
+    get_package_share_directory = None
+
+try:
     import cv2
     import rclpy
     from buddybot_msgs.msg import Status
@@ -56,10 +61,75 @@ except ImportError:
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = PACKAGE_DIR / "static"
-WAYPOINT_FILE = (
-    PACKAGE_DIR.parent.parent / "buddybot_nav" / "config" / "waypoints.yaml"
-).resolve()
+
+
+def _first_existing_path(candidates: List[Path]) -> Path:
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                return candidate.resolve()
+        except OSError:
+            continue
+    return candidates[0].resolve()
+
+
+def _resolve_static_dir() -> Path:
+    candidates: List[Path] = []
+
+    env_static = os.getenv("BUDDYBOT_PANEL_STATIC_DIR", "").strip()
+    if env_static:
+        candidates.append(Path(env_static))
+
+    candidates.append(PACKAGE_DIR / "static")
+    candidates.append(Path.cwd() / "software" / "pi5" / "ros2_ws" / "src" / "buddybot_panel" / "buddybot_panel" / "static")
+
+    if get_package_share_directory is not None:
+        try:
+            candidates.append(Path(get_package_share_directory("buddybot_panel")) / "static")
+        except Exception:
+            pass
+
+    return _first_existing_path(candidates)
+
+
+def _resolve_waypoint_file() -> Path:
+    candidates: List[Path] = []
+
+    env_waypoint = os.getenv("BUDDYBOT_WAYPOINT_FILE", "").strip()
+    if env_waypoint:
+        candidates.append(Path(env_waypoint))
+
+    candidates.append(Path.cwd() / "software" / "pi5" / "ros2_ws" / "src" / "buddybot_nav" / "config" / "waypoints.yaml")
+    candidates.append((PACKAGE_DIR.parent.parent / "buddybot_nav" / "config" / "waypoints.yaml").resolve())
+
+    if get_package_share_directory is not None:
+        try:
+            candidates.append(Path(get_package_share_directory("buddybot_nav")) / "config" / "waypoints.yaml")
+        except Exception:
+            pass
+
+    return _first_existing_path(candidates)
+
+
+def _derive_panel_build() -> str:
+    explicit = os.getenv("BUDDYBOT_PANEL_BUILD", "").strip()
+    if explicit:
+        return explicit
+
+    stamp_paths = [PACKAGE_DIR / "panel_server.py", _resolve_static_dir() / "index.html"]
+    newest = 0
+    for path in stamp_paths:
+        try:
+            newest = max(newest, int(path.stat().st_mtime))
+        except OSError:
+            continue
+    return f"panel-{newest}" if newest else "panel-unknown"
+
+
+STATIC_DIR = _resolve_static_dir()
+WAYPOINT_FILE = _resolve_waypoint_file()
+PANEL_BUILD = _derive_panel_build()
+INDEX_FILE = STATIC_DIR / "index.html"
 
 
 class AssistantSettings(BaseModel):
@@ -692,6 +762,9 @@ class PanelBridge:
     def status(self) -> Dict[str, Any]:
         pose = self.current_pose()
         return {
+            "panel_build": PANEL_BUILD,
+            "panel_static_dir": str(STATIC_DIR),
+            "waypoint_file": str(WAYPOINT_FILE),
             "mode": "assistant" if self.assistant_enabled else "standalone",
             "follow_enabled": self.follow_enabled,
             "navigation_status": self._navigation_status,
@@ -1452,6 +1525,7 @@ class PanelBridge:
             return yaml.safe_load(file) or {"waypoints": {}, "destinations": {}, "constraints": {}}
 
     def _save_waypoints(self, data: Dict[str, Any]) -> None:
+        WAYPOINT_FILE.parent.mkdir(parents=True, exist_ok=True)
         with WAYPOINT_FILE.open("w", encoding="utf-8") as file:
             yaml.safe_dump(data, file, allow_unicode=True, sort_keys=False)
 
@@ -1461,9 +1535,29 @@ app = FastAPI(title="BuddyBot Pi5 Panel")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+@app.middleware("http")
+async def disable_browser_cache(request, call_next):
+    response = await call_next(request)
+    path = request.url.path or "/"
+    if path == "/" or path.startswith("/api") or path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 @app.get("/")
 def root():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(INDEX_FILE, headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+
+
+@app.get("/api/version")
+def api_version():
+    return {
+        "panel_build": PANEL_BUILD,
+        "panel_static_dir": str(STATIC_DIR),
+        "waypoint_file": str(WAYPOINT_FILE),
+    }
 
 
 @app.get("/api/status")

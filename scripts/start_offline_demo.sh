@@ -44,6 +44,10 @@ eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 PICO_PORT="${PICO_PORT:-${BUDDYBOT_PICO_PORT:-}}"
 LIDAR_PORT="${LIDAR_PORT:-${BUDDYBOT_LIDAR_PORT:-}}"
 CAMERA_DEVICE="${CAMERA_DEVICE:-${BUDDYBOT_CAMERA_DEVICE:-}}"
+PANEL_BUILD="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+export BUDDYBOT_PANEL_BUILD="${BUDDYBOT_PANEL_BUILD:-$PANEL_BUILD}"
+export BUDDYBOT_PANEL_STATIC_DIR="${BUDDYBOT_PANEL_STATIC_DIR:-$ROOT_DIR/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static}"
+export BUDDYBOT_WAYPOINT_FILE="${BUDDYBOT_WAYPOINT_FILE:-$ROOT_DIR/software/pi5/ros2_ws/src/buddybot_nav/config/waypoints.yaml}"
 
 PIDS=()
 LIDAR_STARTED=0
@@ -229,6 +233,7 @@ echo "[demo] force lidar start: ${FORCE_LIDAR_START}"
 echo "[demo] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[demo] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
 echo "[demo] Pi speaker enabled: ${ENABLE_PI_SPEAKER}"
+echo "[demo] panel build: ${BUDDYBOT_PANEL_BUILD}"
 echo "[demo] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[demo] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[demo] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
@@ -268,7 +273,7 @@ else
     start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
   fi
   start_node detector ros2 run buddybot_vision detector_node
-  start_node follow_controller ros2 run buddybot_vision follow_controller_node
+  start_node follow_controller ros2 run buddybot_vision follow_controller_node --ros-args -p image_width:="${CAMERA_WIDTH}" -p image_height:="${CAMERA_HEIGHT}"
   ensure_lidar_stream "camera startup" || true
 fi
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node

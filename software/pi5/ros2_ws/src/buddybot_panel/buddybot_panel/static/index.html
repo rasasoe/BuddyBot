@@ -25,7 +25,7 @@
     .metric{border:1px solid var(--line);border-radius:18px;padding:12px 13px;background:linear-gradient(180deg,#fffdf9 0%,#f6f0e4 100%)}
     .metric span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
     .metric strong{display:block;margin-top:6px;font-size:.98rem;line-height:1.25}
-    .chip-row{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .chip-row{grid-template-columns:repeat(5,minmax(0,1fr))}
     .chip{display:flex;align-items:center;justify-content:center;padding:10px 12px;border-radius:999px;border:1px solid var(--line);background:#f3eee2;font-size:.88rem;font-weight:600;text-align:center}
     .hero-actions,.chat-form{grid-template-columns:1fr auto}
     .mission-actions{grid-template-columns:1fr}
@@ -82,6 +82,7 @@
           <button class="secondary" onclick="toggleAssistant()">Toggle Assistant</button>
         </div>
         <div class="chip-row">
+          <div class="chip" id="build-chip">Build: unknown</div>
           <div class="chip" id="mode-chip">Mode: standalone</div>
           <div class="chip" id="server-chip">Server: offline</div>
           <div class="chip" id="fusion-chip">Fusion: checking</div>
@@ -404,6 +405,7 @@
         statusCard("Manual", data.manual_active ? "active" : "idle"),
         statusCard("Last Command", data.last_command || "idle"),
       ].join("");
+      document.getElementById("build-chip").textContent = `Build: ${data.panel_build || "unknown"}`;
       document.getElementById("mode-chip").textContent = `Mode: ${data.mode}`;
       document.getElementById("server-chip").textContent = `Server: ${data.server_connected ? "online" : "offline"}`;
       document.getElementById("fusion-chip").textContent = `Fusion: ${fusion.fusion_ready ? "ready" : "partial"}`;
@@ -462,9 +464,12 @@
       const waypointData = await apiJson("/api/waypoints");
       lastMap = mapData;
       lastPose = mapData.pose || lastPose;
+      const syntheticReason = lastStatus?.scan_available
+        ? "LiDAR topic exists, but a usable live map has not been assembled yet. Check panel log and /scan freshness."
+        : "No /map or usable /scan has arrived yet. Check LiDAR power, /scan topic, and panel build.";
       const sourceLabel = mapData.source === "ros_map" ? "Map: live SLAM" : mapData.source === "mini_map" ? "Map: mini-map" : mapData.source === "scan_local" ? "Map: LiDAR local" : "Map: synthetic";
       document.getElementById("map-source-chip").textContent = sourceLabel;
-      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "Global SLAM map is available." : mapData.source === "mini_map" ? "A cumulative LiDAR mini-map is available for local checkpoint planning." : mapData.source === "scan_local" ? "Global map is not ready, so the panel is showing a LiDAR local map around the robot." : "No /map or usable /scan has arrived yet, so the panel fell back to a synthetic canvas.";
+      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "Global SLAM map is available." : mapData.source === "mini_map" ? "A cumulative LiDAR mini-map is available for local checkpoint planning." : mapData.source === "scan_local" ? "Global map is not ready, so the panel is showing a LiDAR local map around the robot." : syntheticReason;
       drawMap(mapData, waypointData.items || []);
     }
 
@@ -511,7 +516,16 @@
 
     async function manual(direction){
       try{
-        await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed:0.35})});
+        const speed = ({
+          forward: 0.35,
+          backward: 0.3,
+          strafe_left: 0.35,
+          strafe_right: 0.35,
+          rotate_left: 0.55,
+          rotate_right: 0.55,
+          stop: 0.0,
+        })[direction] ?? 0.35;
+        await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed})});
         addMsg("bot", direction === "stop" ? "Manual motion stopped." : `Manual command: ${direction}`);
         await refreshStatus();
       }catch(error){ showError(error); }
@@ -638,7 +652,7 @@
       if(!window.confirm(`Delete checkpoint ${name}?`)){ return; }
       try{
         const data = await apiJson(`/api/waypoints/${encodeURIComponent(name)}`, {method:"DELETE"});
-        addMsg("bot", `${data.deleted} deleted.`);
+        addMsg("bot", `${name} deleted.`);
         routeSequence = routeSequence.filter((item) => item !== name);
         syncRouteSequence();
         await refreshMissionData();
