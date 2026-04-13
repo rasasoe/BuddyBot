@@ -238,6 +238,21 @@ class PanelBridge:
         self._mini_map_completion_goal_cells = 7500
         self._mini_map_min_duration_sec = 18.0
         self._mini_map_target_duration_sec = 36.0
+        self._mini_map_known_cells = 0
+        self._mini_map_grid_dim = 200          # 20 m / 0.1 m per cell
+        self._mini_map_grid_resolution = 0.10  # metres per cell
+        self._mini_map_grid_size_m = 20.0
+        self._mini_map_cells: Optional[List[int]] = None
+        self._mini_map_origin_x = 0.0
+        self._mini_map_origin_y = 0.0
+        # Autonomous exploration state (used by _mini_map_timer / _explore_step)
+        self._explore_phase = "forward"      # "forward" | "turning"
+        self._explore_turn_direction = 1.0
+        self._explore_turn_remaining = 0.0
+        self._explore_last_step = 0.0
+        # Server connectivity cache
+        self._server_connected = False
+        self._server_check_at = 0.0
 
         self._init_ros()
 
@@ -770,7 +785,7 @@ class PanelBridge:
             "navigation_status": self._navigation_status,
             "ros2_connected": self.ros2_connected,
             "server_url": self.server_url,
-            "server_connected": self.check_server(),
+            "server_connected": self._cached_server_connected(),
             "last_command": self.last_command,
             "system_status": self._system_status,
             "map_available": self.map_available(),
@@ -1012,39 +1027,82 @@ class PanelBridge:
             self._manual_angular_z = float(angular_z)
 
     def _mini_map_timer(self) -> None:
+        # Always publish follow-enable state so follow_controller stays in sync.
+        if self.ros2_connected and self._follow_pub is not None:
+            fmsg = Bool()
+            fmsg.data = self.follow_enabled
+            self._follow_pub.publish(fmsg)
+
         with self._lock:
             active = bool(self._mini_map_active)
             scan_summary = dict(self._latest_scan_summary) if self._latest_scan_summary is not None else None
             safety_active = bool(self._safety_active)
             scan_stamp = self._latest_scan_stamp
+
         if not active:
             return
+
+        # Pause exploration on safety latch or stale scan data.
         if safety_active or scan_summary is None or scan_stamp is None or (time.time() - scan_stamp) > 2.0:
             self._clear_manual_motion()
             return
 
-        front_min = float(scan_summary.get("front_min", float("inf"))) if scan_summary else float("inf")
-        left_min = float(scan_summary.get("left_min", float("inf"))) if scan_summary else float("inf")
-        right_min = float(scan_summary.get("right_min", float("inf"))) if scan_summary else float("inf")
-        elapsed = 0.0
-        if self._mini_map_started_at is not None:
-            elapsed = max(0.0, time.time() - self._mini_map_started_at)
+        now = time.time()
+        front_min = float(scan_summary.get("front_min", float("inf")))
+        front_left_min = float(scan_summary.get("front_left_min", float("inf")))
+        front_right_min = float(scan_summary.get("front_right_min", float("inf")))
+        left_min = float(scan_summary.get("left_min", float("inf")))
+        right_min = float(scan_summary.get("right_min", float("inf")))
+        effective_front = min(front_min, front_left_min, front_right_min)
 
-        linear_x = 0.0
-        angular_z = 0.0
-        if front_min < 0.55:
-            angular_z = -0.48 if right_min > left_min else 0.48
-        elif left_min < 0.40 and right_min > left_min:
-            linear_x = 0.08
-            angular_z = -0.32
-        elif right_min < 0.40 and left_min > right_min:
-            linear_x = 0.08
-            angular_z = 0.32
-        else:
-            phase = int(elapsed // 8.0) % 3
-            linear_x = 0.15
-            angular_z = 0.16 if phase == 0 else -0.16 if phase == 1 else 0.0
-        self._set_manual_motion(linear_x, 0.0, angular_z)
+        TURN_SPD = 0.52   # rad/s for deliberate coverage turns
+        FWD_SPD = 0.15    # m/s forward cruise
+        OBST_FRONT = 0.55  # m – start in-place turn
+        OBST_SIDE = 0.40   # m – steer away from side wall
+        COVER_PERIOD = 8.0  # seconds between deliberate area sweeps
+
+        # --- Active turn phase (from _explore_* state) ---
+        if self._explore_phase == "turning":
+            if now - self._explore_last_step < self._explore_turn_remaining:
+                self._set_manual_motion(0.0, 0.0, TURN_SPD * self._explore_turn_direction)
+                return
+            self._explore_phase = "forward"
+
+        # --- Immediate obstacle avoidance (supplements lidar_avoidance_node) ---
+        if effective_front < OBST_FRONT:
+            # Choose turn direction away from the closer side obstacle.
+            # Also consider front_left vs front_right to pick opening.
+            open_left = min(left_min, front_left_min)
+            open_right = min(right_min, front_right_min)
+            direction = 1.0 if open_left >= open_right else -1.0
+            # Initiate an avoid-turn phase so we don't oscillate.
+            self._explore_phase = "turning"
+            self._explore_turn_remaining = 1.2
+            self._explore_turn_direction = direction
+            self._explore_last_step = now
+            self._set_manual_motion(0.0, 0.0, TURN_SPD * direction)
+            return
+
+        # --- Soft side-wall steering (gentle correction, no phase change) ---
+        if left_min < OBST_SIDE and right_min > left_min:
+            self._set_manual_motion(FWD_SPD * 0.6, 0.0, -0.28)
+            return
+        if right_min < OBST_SIDE and left_min > right_min:
+            self._set_manual_motion(FWD_SPD * 0.6, 0.0, 0.28)
+            return
+
+        # --- Periodic deliberate area-sweep turns for full room coverage ---
+        if now - self._explore_last_step >= COVER_PERIOD:
+            self._explore_last_step = now
+            # Alternate L/R each period; vary duration by frame count for randomness.
+            self._explore_turn_direction = 1.0 if (self._mini_map_frames % 4) < 2 else -1.0
+            self._explore_phase = "turning"
+            self._explore_turn_remaining = 1.0 + (self._mini_map_frames % 3) * 0.4  # 1.0–1.8 s
+            self._set_manual_motion(0.0, 0.0, TURN_SPD * self._explore_turn_direction)
+            return
+
+        # --- Default: cruise forward (lidar_avoidance_node handles hard obstacles) ---
+        self._set_manual_motion(FWD_SPD, 0.0, 0.0)
 
     def start_mini_map(self) -> Dict[str, Any]:
         anchor_pose = self.current_pose() or {"x": 0.0, "y": 0.0, "theta": 0.0, "source": "panel"}
@@ -1061,6 +1119,11 @@ class PanelBridge:
             self._mini_map_distance_m = 0.0
             self._mini_map_last_pose = {"x": float(anchor_pose["x"]), "y": float(anchor_pose["y"]), "theta": float(anchor_pose["theta"])}
         self.last_command = "minimap:start"
+        # Reset exploration state machine so every new session starts clean.
+        self._explore_phase = "forward"
+        self._explore_turn_direction = 1.0
+        self._explore_turn_remaining = 0.0
+        self._explore_last_step = time.time()
         return self.mini_map_status()
 
     def stop_mini_map(self, *, update_last_command: bool = True) -> Dict[str, Any]:
@@ -1156,6 +1219,17 @@ class PanelBridge:
         self.server_url = server_url.rstrip("/")
         self.last_command = f"assistant:{'on' if enabled else 'off'}"
         return self.status()
+
+    def _cached_server_connected(self) -> bool:
+        """Return cached server connectivity; refresh at most every 15 s to avoid blocking status polls."""
+        if not self.assistant_enabled:
+            self._server_connected = False
+            return False
+        now = time.time()
+        if (now - self._server_check_at) > 15.0:
+            self._server_connected = self.check_server()
+            self._server_check_at = now
+        return self._server_connected
 
     def check_server(self) -> bool:
         try:

@@ -295,12 +295,19 @@
   - `/voice/response` 응답 publish 유지
   - `SpeechRecognition`이 설치되면 로컬 마이크 listener를 optional로 사용 가능
 
-### C. 로컬 패널
+### C. 로컬 패널 (2026-04-13 추가 개선)
 
 패널 쪽 정리:
 - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py`
   - local command parser가 `버디봇` 호출에 응답
   - `버디봇, 좌회전` 같은 명령도 로컬에서 처리
+  - **`_mini_map_timer` 재작성**: `_explore_*` 상태 기계로 자율 탐색 구현
+    - 전방 장애물 0.55m → 1.2s 회전 후 재전진
+    - 측방 장애물 0.40m → soft 방향 보정
+    - 8s 주기 coverage sweep (1.0–1.8s 좌/우 교번)
+    - minimap 비활성 시에도 `/follow/enabled` 항상 publish
+  - **`_cached_server_connected()`**: status 폴링 블로킹 제거 (15s 캐시)
+  - **`start_mini_map()`**: `_explore_*` 상태 변수 매 세션 초기화
 - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
   - 브라우저 voice/TTS 경로는 이미 보강돼 있음
 
@@ -345,10 +352,11 @@ Pi 패키지 설치 추가:
 
 순서대로:
 
-1. Pi5에서 회전 실기 검증
+1. Pi5에서 회전 실기 검증 (`ROTATION_MIX_GAIN` 필요시 1.2~1.5로 재조정)
 2. 오프라인 voice node가 실제로 올라오는지 확인
 3. `버디봇` 호출 후 수동 제어 명령이 실제 base motion으로 이어지는지 확인
-4. Pico speaker는 핀 정보가 확인되면 그때 ACK tone부터 붙이기
+4. 미니맵 생성 버튼 → 자율 탐색 실기 확인 (장애물 회피, 8s sweep 동작 여부)
+5. Pico speaker는 핀 정보가 확인되면 그때 ACK tone부터 붙이기
 
 ## 6. Pi5에서 바로 실행할 명령
 

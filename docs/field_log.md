@@ -309,3 +309,39 @@ v4l2-ctl --list-devices
 4. `journalctl -k -b -1 | grep -Ei 'under-voltage|usb|disconnect|reset high-speed|descriptor read|over-current|enumerate|not enough power'`
 
 위 1, 2에서 C920이 사라져 있으면 소프트웨어보다 하드웨어/전원부터 봐야 한다.
+
+## 2026-04-13
+
+환경:
+- 장비: Raspberry Pi 5 (`pi@pi-desktop`)
+- 메인 레포: `BuddyBot`
+- 기준 커밋: `83ca43e` (Fix rotate mapping and localize mission panel)
+
+변경 내용:
+
+### panel_server.py 미니맵 탐색 / 추종 / 서버 상태 개선
+
+1. **`_mini_map_timer` 완전 재작성** — 기존 단순 phase sweep 방식을 `_explore_*` 상태 기계로 교체
+   - 상태: `"forward"` / `"turning"`
+   - 전방 장애물(0.55 m) 감지 시 1.2s 회전 후 재전진
+   - 측방 장애물(0.40 m) 감지 시 soft 방향 보정
+   - 8초마다 coverage sweep (1.0–1.8s 좌/우 교번)
+   - 안전 latch 또는 scan stale 시 즉시 정지
+   - minimap 비활성 상태에서도 `/follow/enabled` 항상 publish
+
+2. **`start_mini_map()`** — 탐색 상태 변수 매 세션 초기화 추가
+
+3. **`status()` 블로킹 수정** — `check_server()` (1s timeout 블로킹) → `_cached_server_connected()` (15s 캐시) 교체
+
+4. **`_cached_server_connected()` 신규 메서드** — assistant 미활성 시 즉시 False 반환, 이후 15s 간격 갱신
+
+5. **`__init__` 상태 변수 추가**
+   - `_explore_phase / _explore_turn_direction / _explore_turn_remaining / _explore_last_step`
+   - `_server_connected / _server_check_at`
+   - `_mini_map_known_cells / _mini_map_grid_*` (그리드 스캐폴딩, 현재 미사용)
+
+검증: Python AST parse `SYNTAX OK`
+
+미해결:
+- 실기에서 회전 정상화 여부 아직 미확인
+- 카메라 전원 문제 해결 안 됨 (하드웨어 이슈)
