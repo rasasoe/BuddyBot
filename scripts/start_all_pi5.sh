@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS_DIR="$ROOT_DIR/software/pi5/ros2_ws"
 ROS_DISTRO_NAME="${ROS_DISTRO:-jazzy}"
-MODE="${1:-demo}"
+MODE="${1:-mapping}"
 RUN_PREFLIGHT="${BUDDYBOT_PREFLIGHT_CHECK:-1}"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"

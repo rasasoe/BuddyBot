@@ -95,7 +95,20 @@ class CameraNode(Node):
     def _initialize_camera(self):
         """Initialize camera capture with error handling."""
         try:
-            selected_device = self._detect_camera_device()
+            # If a specific device was requested, retry a few times in case the
+            # previous process (e.g. preflight check) is still releasing the device.
+            requested = str(self.device).strip()
+            max_init_attempts = self.open_retries if (requested and requested.lower() != 'auto') else 1
+            selected_device = None
+            for attempt in range(max_init_attempts):
+                selected_device = self._detect_camera_device()
+                if selected_device is not None:
+                    break
+                if attempt < max_init_attempts - 1:
+                    self.get_logger().warn(
+                        f"Camera device not ready (attempt {attempt+1}/{max_init_attempts}), "
+                        f"retrying in {self.open_retry_delay}s...")
+                    time.sleep(self.open_retry_delay)
             if selected_device is None:
                 self.get_logger().error("Failed to find a working camera device")
                 return False
