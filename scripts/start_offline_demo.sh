@@ -146,6 +146,46 @@ camera_streaming() {
   wait_for_message "/camera/image_raw" "$timeout" || camera_available
 }
 
+read_throttled_state() {
+  if command -v vcgencmd >/dev/null 2>&1; then
+    vcgencmd get_throttled 2>/dev/null || true
+  fi
+}
+
+report_power_diagnostics() {
+  local throttled_line="unavailable"
+  local throttled_hex=""
+  local kernel_notes=""
+
+  throttled_line="$(read_throttled_state)"
+  if [[ "$throttled_line" =~ throttled=0x([0-9a-fA-F]+) ]]; then
+    throttled_hex="${BASH_REMATCH[1]}"
+  fi
+
+  echo "[demo] power/throttle: ${throttled_line:-unavailable}"
+
+  case "${throttled_hex,,}" in
+    ""|"0")
+      echo "[demo] power status: normal"
+      ;;
+    *)
+      echo "[demo] warning: Pi reported throttle/undervoltage flags (0x${throttled_hex})"
+      ;;
+  esac
+
+  if command -v journalctl >/dev/null 2>&1; then
+    kernel_notes="$(journalctl -k -b 2>/dev/null | grep -Ei 'under-voltage|voltage|usb|disconnect|reset high-speed|descriptor read|over-current|enumerate|not enough power' | tail -n 5 || true)"
+    if [[ -n "$kernel_notes" ]]; then
+      echo "[demo] recent kernel power/USB notes:"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "[demo]   $line"
+      done <<< "$kernel_notes"
+    else
+      echo "[demo] recent kernel power/USB notes: none"
+    fi
+  fi
+}
+
 stop_lidar_node() {
   if [[ -n "$LIDAR_PID" ]] && kill -0 "$LIDAR_PID" 2>/dev/null; then
     kill "$LIDAR_PID" 2>/dev/null || true
@@ -254,6 +294,7 @@ echo "[demo] panel build: ${BUDDYBOT_PANEL_BUILD}"
 echo "[demo] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[demo] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[demo] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
+report_power_diagnostics
 
 start_lidar_if_available
 if [[ "$LIDAR_STARTED" -eq 1 ]]; then
