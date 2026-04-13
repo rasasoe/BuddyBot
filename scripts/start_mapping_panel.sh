@@ -41,9 +41,9 @@ ros2 daemon stop >/dev/null 2>&1 || true
 ros2 daemon start >/dev/null 2>&1 || true
 sleep 2
 eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
-PICO_PORT="${BUDDYBOT_PICO_PORT:-${PICO_PORT:-}}"
-LIDAR_PORT="${BUDDYBOT_LIDAR_PORT:-${LIDAR_PORT:-}}"
-CAMERA_DEVICE="${BUDDYBOT_CAMERA_DEVICE:-${CAMERA_DEVICE:-}}"
+PICO_PORT="${PICO_PORT:-${BUDDYBOT_PICO_PORT:-}}"
+LIDAR_PORT="${LIDAR_PORT:-${BUDDYBOT_LIDAR_PORT:-}}"
+CAMERA_DEVICE="${CAMERA_DEVICE:-${BUDDYBOT_CAMERA_DEVICE:-}}"
 
 PIDS=()
 LIDAR_STARTED=0

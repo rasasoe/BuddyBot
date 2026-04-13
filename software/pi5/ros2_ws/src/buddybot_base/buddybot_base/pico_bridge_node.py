@@ -39,6 +39,10 @@ import glob
 import os
 from pathlib import Path
 import serial
+try:
+    from serial.tools import list_ports
+except Exception:
+    list_ports = None
 
 from .protocol import UARTProtocol
 from .serial_manager import SerialManager
@@ -328,10 +332,20 @@ class PicoBridgeNode(Node):
     def _candidate_serial_ports(self):
         ports = [self.serial_port]
         ports.extend(sorted(glob.glob("/dev/serial/by-id/*")))
+        ports.extend(sorted(glob.glob("/dev/serial/by-path/*")))
         ports.extend(sorted(glob.glob("/dev/ttyACM*")))
         ports.extend(sorted(glob.glob("/dev/ttyUSB*")))
+        if list_ports is not None:
+            try:
+                ports.extend(
+                    str(info.device)
+                    for info in list_ports.comports()
+                    if getattr(info, "device", "")
+                )
+            except Exception:
+                pass
         unique = []
-        for port in ports:
+        for port in sorted(ports, key=self._port_priority):
             label = self._port_label(port)
             if any(token in label for token in ("cp210", "silicon_labs", "lidar", "rplidar", "sllidar")):
                 continue
@@ -341,7 +355,51 @@ class PicoBridgeNode(Node):
 
     def _port_label(self, port: str) -> str:
         resolved = os.path.realpath(port)
-        return f"{resolved} {os.path.basename(resolved)} {os.path.basename(port)}".lower()
+        return f"{resolved} {os.path.basename(resolved)} {os.path.basename(port)} {self._usb_metadata_label(port)}".lower()
+
+    def _usb_metadata_label(self, port: str) -> str:
+        if list_ports is None:
+            return ""
+        resolved = os.path.realpath(port)
+        try:
+            for info in list_ports.comports():
+                info_device = getattr(info, "device", "") or ""
+                if not info_device:
+                    continue
+                if resolved not in {os.path.realpath(info_device), info_device} and port != info_device:
+                    continue
+                parts = [
+                    str(getattr(info, "description", "") or ""),
+                    str(getattr(info, "manufacturer", "") or ""),
+                    str(getattr(info, "product", "") or ""),
+                    str(getattr(info, "interface", "") or ""),
+                    str(getattr(info, "serial_number", "") or ""),
+                ]
+                vid = getattr(info, "vid", None)
+                pid = getattr(info, "pid", None)
+                if vid is not None and pid is not None:
+                    parts.append(f"{vid:04x}:{pid:04x}")
+                return " ".join(part for part in parts if part)
+        except Exception:
+            return ""
+        return ""
+
+    def _port_priority(self, port: str):
+        if port == self.serial_port:
+            return (0, port)
+        label = self._port_label(port)
+        resolved = os.path.realpath(port)
+        if "/dev/serial/by-id/" in port:
+            return (1, port)
+        if "/dev/serial/by-path/" in port:
+            return (2, port)
+        if any(token in label for token in ("raspberry pi pico", "micropython", "pico", "2e8a:0005", "2e8a:000a")):
+            return (3, port)
+        if resolved.startswith("/dev/ttyACM"):
+            return (4, port)
+        if resolved.startswith("/dev/ttyUSB"):
+            return (5, port)
+        return (6, port)
 
     def _probe_pico_port(self, port: str) -> bool:
         try:

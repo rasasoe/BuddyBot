@@ -19,9 +19,90 @@ try:
 except Exception:
     serial = None
 
+try:
+    from serial.tools import list_ports
+except Exception:
+    list_ports = None
+
 
 def _port_label(port: str) -> str:
-    return os.path.basename(os.path.realpath(port)).lower() + " " + os.path.basename(port).lower() + " " + port.lower()
+    resolved = os.path.realpath(port)
+    parts = [
+        os.path.basename(resolved).lower(),
+        os.path.basename(port).lower(),
+        port.lower(),
+        resolved.lower(),
+        _usb_metadata_label(port),
+    ]
+    return " ".join(part for part in parts if part)
+
+
+def _usb_metadata_label(port: str) -> str:
+    if list_ports is None:
+        return ""
+    resolved = os.path.realpath(port)
+    try:
+        for info in list_ports.comports():
+            info_device = getattr(info, "device", "") or ""
+            if not info_device:
+                continue
+            if resolved not in {os.path.realpath(info_device), info_device} and port != info_device:
+                continue
+            parts = [
+                str(getattr(info, "description", "") or ""),
+                str(getattr(info, "manufacturer", "") or ""),
+                str(getattr(info, "product", "") or ""),
+                str(getattr(info, "interface", "") or ""),
+                str(getattr(info, "serial_number", "") or ""),
+            ]
+            vid = getattr(info, "vid", None)
+            pid = getattr(info, "pid", None)
+            if vid is not None and pid is not None:
+                parts.append(f"{vid:04x}:{pid:04x}")
+            return " ".join(part.lower() for part in parts if part)
+    except Exception:
+        return ""
+    return ""
+
+
+def _port_priority(port: str) -> tuple[int, str]:
+    label = _port_label(port)
+    resolved = os.path.realpath(port)
+    if "/dev/serial/by-id/" in port:
+        return (0, port)
+    if "/dev/serial/by-path/" in port:
+        return (1, port)
+    if any(token in label for token in ("raspberry pi pico", "micropython", "2e8a:0005", "2e8a:000a", "pico")):
+        return (2, port)
+    if resolved.startswith("/dev/ttyACM"):
+        return (3, port)
+    if resolved.startswith("/dev/ttyUSB"):
+        return (4, port)
+    return (5, port)
+
+
+def serial_candidates() -> list[str]:
+    candidates: list[str] = []
+    candidates.extend(sorted(glob.glob("/dev/serial/by-id/*")))
+    candidates.extend(sorted(glob.glob("/dev/serial/by-path/*")))
+    candidates.extend(sorted(glob.glob("/dev/ttyACM*")))
+    candidates.extend(sorted(glob.glob("/dev/ttyUSB*")))
+    if list_ports is not None:
+        try:
+            for info in list_ports.comports():
+                if getattr(info, "device", ""):
+                    candidates.append(str(info.device))
+        except Exception:
+            pass
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for port in sorted(candidates, key=_port_priority):
+        if not port or port in seen:
+            continue
+        unique.append(port)
+        seen.add(port)
+    return unique
 
 
 def pico_probe_candidates(candidates: list[str]) -> list[str]:
@@ -31,7 +112,7 @@ def pico_probe_candidates(candidates: list[str]) -> list[str]:
         label = _port_label(port)
         if any(token in label for token in ("cp210", "silicon_labs", "lidar", "rplidar", "sllidar")):
             continue
-        if any(token in label for token in ("micropython", "pico", "ttyacm")):
+        if any(token in label for token in ("raspberry pi pico", "micropython", "pico", "ttyacm", "2e8a:0005", "2e8a:000a")):
             preferred.append(port)
         else:
             fallback.append(port)
@@ -165,9 +246,10 @@ def main() -> None:
     args = parser.parse_args()
 
     serial_by_id = sorted(glob.glob("/dev/serial/by-id/*"))
-    serial_candidates = serial_by_id + sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/ttyUSB*"))
-    pico_port = probe_pico_port(pico_probe_candidates(serial_candidates))
-    lidar_port = detect_lidar_port(serial_candidates, pico_port)
+    serial_by_path = sorted(glob.glob("/dev/serial/by-path/*"))
+    all_serial_candidates = serial_candidates()
+    pico_port = probe_pico_port(pico_probe_candidates(all_serial_candidates))
+    lidar_port = detect_lidar_port(all_serial_candidates, pico_port)
 
     v4l_by_id = sorted(glob.glob("/dev/v4l/by-id/*"))
     camera_device = ""
@@ -187,8 +269,9 @@ def main() -> None:
         "CAMERA_DEVICE": camera_device,
         "MIC_AVAILABLE": "1" if mic_ok else "0",
         "AI_SERVER_STATE": server_state,
-        "SERIAL_CANDIDATES": " ".join(serial_candidates),
+        "SERIAL_CANDIDATES": " ".join(all_serial_candidates),
         "SERIAL_BY_ID": " ".join(serial_by_id),
+        "SERIAL_BY_PATH": " ".join(serial_by_path),
         "V4L_BY_ID": " ".join(v4l_by_id),
         "MIC_INFO": mic_info.replace("\n", " | "),
     }
