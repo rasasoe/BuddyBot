@@ -50,6 +50,7 @@ class FollowControllerNode(Node):
         self.declare_parameter('deadzone_height', 10)        # pixels, ignore small height changes
         self.declare_parameter('follow_enabled_topic', '/follow/enabled')
         self.declare_parameter('bbox_timeout_sec', 0.8)
+        self.declare_parameter('min_detection_confidence', 0.15)
 
         # Get parameters
         self.image_width = self.get_parameter('image_width').value
@@ -63,6 +64,7 @@ class FollowControllerNode(Node):
         self.deadzone_height = self.get_parameter('deadzone_height').value
         self.follow_enabled_topic = self.get_parameter('follow_enabled_topic').value
         self.bbox_timeout_sec = float(self.get_parameter('bbox_timeout_sec').value)
+        self.min_detection_confidence = float(self.get_parameter('min_detection_confidence').value)
 
         # Calculate target height in pixels
         self.target_height = self.image_height * self.target_height_ratio
@@ -104,6 +106,7 @@ class FollowControllerNode(Node):
         self.get_logger().info(f"  Deadzones: center={self.deadzone_center}px, height={self.deadzone_height}px")
         self.get_logger().info(f"  Follow enable topic: {self.follow_enabled_topic}")
         self.get_logger().info(f"  BBox timeout: {self.bbox_timeout_sec:.2f}s")
+        self.get_logger().info(f"  Min detection confidence: {self.min_detection_confidence:.2f}")
 
     def follow_enabled_callback(self, msg: Bool):
         """Enable or disable following based on external control."""
@@ -131,6 +134,9 @@ class FollowControllerNode(Node):
 
             # Extract bounding box data
             x, y, width, height, confidence = msg.data[:5]
+            if float(confidence) < self.min_detection_confidence:
+                self.get_logger().debug(f"Ignoring low-confidence detection: {confidence:.2f}")
+                return
 
             # Update state
             self.last_bbox_time = self.get_clock().now()

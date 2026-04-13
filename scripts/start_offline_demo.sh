@@ -34,6 +34,21 @@ configure_offline_ros() {
   unset ROS_SUPER_CLIENT
 }
 
+is_truthy() {
+  case "${1:-0}" in
+    1|[Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+bool_param_value() {
+  if is_truthy "${1:-0}"; then
+    echo true
+  else
+    echo false
+  fi
+}
+
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
 configure_offline_ros
@@ -65,6 +80,8 @@ FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
 ENABLE_OFFLINE_VOICE="${BUDDYBOT_ENABLE_OFFLINE_VOICE:-1}"
 ENABLE_MIC_LISTENER="${BUDDYBOT_ENABLE_MIC_LISTENER:-${MIC_AVAILABLE:-0}}"
 ENABLE_PI_SPEAKER="${BUDDYBOT_ENABLE_PI_SPEAKER:-1}"
+VOICE_MIC_PARAM="$(bool_param_value "$ENABLE_MIC_LISTENER")"
+VOICE_SPEAKER_PARAM="$(bool_param_value "$ENABLE_PI_SPEAKER")"
 
 start_node() {
   local name="$1"
@@ -145,7 +162,7 @@ start_lidar_if_available() {
   local pkg_share=""
   local launch_file=""
 
-  if [[ "$FORCE_LIDAR_START" != "1" ]] && scan_available; then
+  if ! is_truthy "$FORCE_LIDAR_START" && scan_available; then
     echo "[demo] lidar scan already available"
     return
   fi
@@ -243,7 +260,7 @@ if [[ "$LIDAR_STARTED" -eq 1 ]]; then
   pause_before_node "$LIDAR_SETTLE_DELAY" "starting camera after lidar spin-up"
   ensure_lidar_stream "initial lidar startup" || true
 fi
-if [[ "$DISABLE_PICO" == "1" ]]; then
+if is_truthy "$DISABLE_PICO"; then
   echo "[demo] pico bridge disabled by BUDDYBOT_DISABLE_PICO=1"
 else
   if [[ -n "${PICO_PORT:-}" ]]; then
@@ -256,14 +273,10 @@ start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
-if [[ "$ENABLE_OFFLINE_VOICE" == "1" ]]; then
-  if [[ "$ENABLE_MIC_LISTENER" == "1" ]]; then
-    start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p enable_microphone:=true -p enable_speaker_output:="${ENABLE_PI_SPEAKER}"
-  else
-    start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p enable_microphone:=false -p enable_speaker_output:="${ENABLE_PI_SPEAKER}"
-  fi
+if is_truthy "$ENABLE_OFFLINE_VOICE"; then
+  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}"
 fi
-if [[ "$DISABLE_CAMERA" == "1" ]]; then
+if is_truthy "$DISABLE_CAMERA"; then
   echo "[demo] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"
 else
   pause_before_node "$CAMERA_START_DELAY" "starting camera"
@@ -319,7 +332,7 @@ then
 fi
 
 sleep 2
-if [[ "$DISABLE_CAMERA" != "1" ]] && ! camera_streaming 8; then
+if ! is_truthy "$DISABLE_CAMERA" && ! camera_streaming 8; then
   echo "[demo] warning: /camera/image_raw is not being published yet"
   echo "[demo] check: tail -n 120 $LOG_DIR/camera.log"
 fi

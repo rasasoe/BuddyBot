@@ -8,10 +8,13 @@
     :root{--bg:#f3efe7;--ink:#172126;--muted:#5e6a72;--card:#fffdf8;--line:#d6ccbc;--accent:#14685d;--accent-strong:#0e5249;--sand:#ede2cf;--rust:#a6582c;--gold:#c58a29;--danger:#b03e34;--shadow:0 20px 48px rgba(36,33,24,.12);--radius:22px}
     *{box-sizing:border-box}
     body{margin:0;color:var(--ink);font-family:"IBM Plex Sans","Noto Sans KR","Segoe UI",sans-serif;background:radial-gradient(circle at top left,rgba(20,104,93,.14),transparent 24%),radial-gradient(circle at bottom right,rgba(165,88,44,.14),transparent 28%),linear-gradient(180deg,#f7f4ee 0%,#ece5d8 100%)}
-    .shell{width:min(1540px,calc(100% - 28px));margin:0 auto;padding:20px 0 28px}
+    .shell{width:min(1560px,calc(100% - 28px));margin:0 auto;padding:22px 0 30px}
     .stack,.status-grid,.button-grid,.dual,.triple,.panel-list,.chat-log,.chip-row,.hero-actions,.mission-actions,.form-grid,.chat-form{display:grid;gap:12px}
     .hero{display:grid;grid-template-columns:1.35fr .95fr;gap:16px;margin-bottom:16px}
-    .main{display:grid;grid-template-columns:.95fr 1.28fr .92fr;gap:16px;align-items:start}
+    .main{display:grid;grid-template-columns:minmax(340px,430px) minmax(0,1fr);gap:16px;align-items:start}
+    .main > :nth-child(1){grid-column:1;grid-row:1}
+    .main > :nth-child(2){grid-column:2;grid-row:1 / span 2}
+    .main > :nth-child(3){grid-column:1;grid-row:2}
     .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
     h1,h2,h3,p{margin:0}
     h1{font-size:clamp(2.15rem,3.8vw,4.1rem);line-height:.95;letter-spacing:-.04em}
@@ -21,7 +24,7 @@
     .lead{margin-top:12px;color:var(--muted);line-height:1.55;max-width:780px}
     .section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
     .note{color:var(--muted);font-size:.9rem;line-height:1.5}
-    .status-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .status-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
     .metric{border:1px solid var(--line);border-radius:18px;padding:12px 13px;background:linear-gradient(180deg,#fffdf9 0%,#f6f0e4 100%)}
     .metric span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
     .metric strong{display:block;margin-top:6px;font-size:.98rem;line-height:1.25}
@@ -46,8 +49,8 @@
     .dual{grid-template-columns:repeat(2,minmax(0,1fr))}
     .triple{grid-template-columns:repeat(3,minmax(0,1fr))}
     .map-wrap,.camera-frame{position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--line);background:#f5f1e8}
-    .map-wrap{min-height:468px}
-    #map-canvas{display:block;width:100%;height:468px;cursor:crosshair;touch-action:manipulation}
+    .map-wrap{min-height:560px}
+    #map-canvas{display:block;width:100%;height:560px;cursor:crosshair;touch-action:manipulation}
     .camera-frame{aspect-ratio:16/9;background:#0f1518}
     .camera-frame img{display:block;width:100%;height:100%;object-fit:cover}
     .overlay{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
@@ -66,8 +69,8 @@
     .msg.bot{background:#f2e1d4;margin-right:28px}
     .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
     .callout strong{display:block;margin-bottom:6px}
-    @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}}
-    @media (max-width:860px){.status-grid,.chip-row,.button-grid,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions{grid-template-columns:1fr}.manual-stop{grid-column:auto}.shell{width:min(calc(100% - 16px),1540px)}}
+    @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}.main > :nth-child(1),.main > :nth-child(2),.main > :nth-child(3){grid-column:auto;grid-row:auto}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:860px){.status-grid,.chip-row,.button-grid,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions{grid-template-columns:1fr}.manual-stop{grid-column:auto}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}}
   </style>
 </head>
 <body>
@@ -75,17 +78,17 @@
     <section class="hero">
       <article class="card stack">
         <div class="eyebrow">BuddyBot Mission Console</div>
-        <h1>주행, 체크포인트, 추종 테스트를 한 화면에서 바로 다룹니다.</h1>
-        <p class="lead">수동 주행, 체크포인트 저장과 삭제, 즉시 경로 실행, 저장 경로 재생, 카메라 미리보기, LiDAR 지도, 추종 준비 상태를 한 번에 확인할 수 있습니다.</p>
+        <h1>오프라인 미니맵 생성부터 체크포인트, 사용자 추종까지 한 화면에서 마무리합니다.</h1>
+        <p class="lead">미니맵 생성 버튼을 누르면 버디봇이 로봇청소기처럼 천천히 회피 주행하며 방을 훑고, 생성이 끝나면 그 맵 위에 체크포인트를 자유롭게 저장, 삭제, 경로화할 수 있습니다.</p>
         <div class="hero-actions">
           <input id="server-url" value="http://127.0.0.1:8000">
           <button class="secondary" onclick="toggleAssistant()">어시스턴트 전환</button>
         </div>
         <div class="chip-row">
           <div class="chip" id="build-chip">빌드: unknown</div>
-          <div class="chip" id="mode-chip">모드: standalone</div>
-          <div class="chip" id="server-chip">서버: offline</div>
-          <div class="chip" id="fusion-chip">센서융합: 확인 중</div>
+          <div class="chip" id="mode-chip">모드: 독립</div>
+          <div class="chip" id="server-chip">서버: 오프라인</div>
+          <div class="chip" id="fusion-chip">운용 준비: 확인 중</div>
           <div class="chip" id="follow-chip">추종: off</div>
         </div>
       </article>
@@ -93,7 +96,7 @@
         <div class="section-head">
           <div>
             <h2>시스템 상태</h2>
-            <p class="note" id="system-note">Pi, Pico, LiDAR, 카메라, 안전 상태를 확인하고 있습니다.</p>
+            <p class="note" id="system-note">로봇 상태와 지금 막히는 항목을 한눈에 정리합니다.</p>
           </div>
         </div>
         <div class="status-grid" id="status-box"></div>
@@ -104,7 +107,7 @@
         <div class="section-head">
           <div>
             <h2>주행과 추종</h2>
-            <p class="note">수동 주행을 누르면 경로와 추종이 해제됩니다. 추종 준비 상태는 카메라, 사람 검출, LiDAR, 안전 래치를 함께 확인합니다.</p>
+            <p class="note">수동 주행을 누르면 경로와 추종이 해제됩니다. 추종 준비 상태는 카메라, 사람 검출기, LiDAR, 안전 래치를 함께 확인합니다.</p>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:15px;background:#f6f0e4">
@@ -131,18 +134,18 @@
         </div>
         <div class="callout"><strong>추종 시험 준비 상태</strong><div class="note" id="follow-note">실시간 센서 상태를 기다리는 중입니다.</div></div>
         <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
-        <div class="callout"><strong>센서 융합 요약</strong><div class="note" id="fusion-note">카메라, LiDAR, 위치, 맵 상태 요약이 여기에 표시됩니다.</div></div>
+        <div class="callout"><strong>운용 준비 요약</strong><div class="note" id="fusion-note">카메라, LiDAR, 위치, 맵, 사람 검출기 상태 요약이 여기에 표시됩니다.</div></div>
       </article>
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>맵, 체크포인트, 경로</h2>
-            <p class="note" id="map-summary">지도 데이터를 불러오는 중입니다.</p>
+            <h2>미니맵, 체크포인트, 경로</h2>
+            <p class="note" id="map-summary">생성 중인 미니맵이나 현재 사용 가능한 지도를 불러오는 중입니다.</p>
           </div>
           <button class="secondary" onclick="refreshMap()">맵 새로고침</button>
         </div>
         <div class="map-wrap">
-          <canvas id="map-canvas" width="980" height="468"></canvas>
+          <canvas id="map-canvas" width="980" height="560"></canvas>
           <div class="overlay">
             <div class="chip" id="map-source-chip">맵: 대기 중</div>
             <div class="chip" id="pose-chip">위치: 없음</div>
@@ -193,7 +196,7 @@
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>카메라와 콘솔</h2>
+            <h2>카메라 추종과 명령</h2>
             <p class="note" id="camera-summary">카메라를 열기 전까지 미리보기는 꺼져 있습니다.</p>
           </div>
           <div class="dual" style="min-width:220px"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 열기</button><button class="secondary" onclick="refreshCamera(true)">새로고침</button></div>
@@ -389,14 +392,13 @@
       const data = await apiJson("/api/status");
       const fusion = data.sensor_fusion || {};
       const minimap = data.minimap || {};
+      const detector = data.detector_status || {};
       const followStateLabel = ({tracking:"추종 중", armed:"대기 중", idle:"유휴"})[(fusion.follow_state || (data.follow_enabled ? "armed" : "idle"))] || (fusion.follow_state || "유휴");
       assistantEnabled = data.mode === "assistant";
       lastStatus = data;
       lastMiniMapStatus = minimap;
       lastPose = data.pose || null;
-      const scanState = data.scan_available ? `live ${data.scan_age_sec}s` : "waiting";
-      const cameraState = data.camera_available ? `live ${data.camera_age_sec}s` : "waiting";
-      const personState = data.person_detected ? `locked ${data.person_age_sec}s` : "none";
+      const detectorLabel = detector.ready ? `${String(detector.backend || "unknown").toUpperCase()} 준비` : `${detector.backend || "waiting"} 대기`;
       const picoState = data.pico_connected ? `${data.pico_status?.mode || "ok"} ${data.pico_status?.battery_voltage || ""}`.trim() : "waiting";
       const safetyState = data.safety_active ? data.safety_status : "clear";
       document.getElementById("status-box").innerHTML = [
@@ -404,6 +406,7 @@
         statusCard("Pico", picoState),
         statusCard("LiDAR", data.scan_available ? `정상 ${data.scan_age_sec}s` : "대기 중"),
         statusCard("카메라", data.camera_available ? `정상 ${data.camera_age_sec}s` : "대기 중"),
+        statusCard("검출기", detectorLabel),
         statusCard("위치", data.pose ? `${data.pose.x}, ${data.pose.y}` : "없음"),
         statusCard("맵", data.map_available ? "준비됨" : "대기 중"),
         statusCard("사람", data.person_detected ? `검출 ${data.person_age_sec}s` : "없음"),
@@ -414,24 +417,28 @@
         statusCard("마지막 명령", data.last_command || "idle"),
       ].join("");
       document.getElementById("build-chip").textContent = `빌드: ${data.panel_build || "unknown"}`;
-      document.getElementById("mode-chip").textContent = `모드: ${data.mode}`;
-      document.getElementById("server-chip").textContent = `서버: ${data.server_connected ? "online" : "offline"}`;
-      document.getElementById("fusion-chip").textContent = `센서융합: ${fusion.fusion_ready ? "준비 완료" : "부분 준비"}`;
-      document.getElementById("follow-chip").textContent = `추종: ${data.follow_enabled ? "on" : "off"}`;
+      document.getElementById("mode-chip").textContent = `모드: ${data.mode === "assistant" ? "어시스턴트" : "독립"}`;
+      document.getElementById("server-chip").textContent = `서버: ${data.server_connected ? "연결됨" : "오프라인"}`;
+      document.getElementById("fusion-chip").textContent = `운용 준비: ${fusion.operator_ready ? "준비 완료" : "점검 필요"}`;
+      document.getElementById("follow-chip").textContent = `추종: ${data.follow_enabled ? "켜짐" : "꺼짐"}`;
       document.getElementById("pose-chip").textContent = data.pose ? `위치: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})` : "위치: 없음";
       document.getElementById("camera-chip").textContent = data.camera_available ? `카메라: 정상 (${data.camera_age_sec}s 전)` : "카메라: 대기 중";
-      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 매핑, 경로 작업을 시작할 수 있는 상태입니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"}`;
-      document.getElementById("fusion-note").textContent = fusion.fusion_ready ? "카메라, LiDAR, 맵, 위치가 모두 살아 있습니다. 추종과 경로 검증을 진행할 수 있습니다." : `센서 융합이 아직 부분 상태입니다. 부족한 항목: ${(fusion.blockers || []).join(", ") || "unknown"}`;
-      document.getElementById("follow-note").textContent = fusion.follow_ready ? "추종 시험 준비가 끝났습니다. 추종을 켜고 사람 검출과 LiDAR 안전을 함께 확인하세요." : `추종을 막는 항목: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"}`;
+      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 미니맵 생성, 경로 작업을 바로 시작할 수 있습니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"}`;
+      document.getElementById("fusion-note").textContent = fusion.fusion_ready
+        ? `카메라, LiDAR, 맵, 위치가 모두 준비되었습니다. 사람 검출기는 ${detector.backend || "unknown"} 백엔드로 동작 중입니다.`
+        : `운용은 가능하지만 아직 비어 있는 항목이 있습니다. 부족한 항목: ${(fusion.blockers || []).join(", ") || "unknown"} | 검출기: ${detector.backend || "waiting"} (${detector.reason || "waiting"})`;
+      document.getElementById("follow-note").textContent = fusion.follow_ready
+        ? `추종 준비 완료. ${String(detector.backend || "unknown").toUpperCase()} 검출기를 쓰고 있으며, 사람을 화면에 잡으면 바로 따라갑니다.`
+        : `추종을 막는 항목: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"} | 검출기: ${detector.backend || "waiting"} (${detector.reason || "waiting"})`;
       document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 열기 전까지 미리보기는 꺼져 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
-      document.getElementById("camera-note").textContent = data.pico_connected ? "Pico 상태가 최신입니다. 베이스 브리지가 살아 있습니다." : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
+      document.getElementById("camera-note").textContent = data.pico_connected ? `Pico 상태가 최신입니다. 베이스 브리지가 살아 있고 검출기는 ${detector.backend || "waiting"} 상태입니다.` : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
       document.getElementById("minimap-note").textContent = minimap.active
-        ? `미니맵 생성 중: ${Math.round((minimap.progress || 0) * 100)}% | 프레임 ${minimap.frames || 0} | 확인된 셀 ${minimap.known_cells || 0} | 이동거리 ${minimap.distance_m || 0}m`
+        ? `미니맵 생성 중: ${minimap.progress_percent || Math.round((minimap.progress || 0) * 100)}% | 단계 ${minimap.explore_phase_label || "탐색"} | 전방 여유 ${minimap.front_clearance_m ?? "-"}m | 셀 ${minimap.known_cells || 0} | 이동거리 ${minimap.distance_m || 0}m`
         : minimap.completed
-          ? `미니맵 생성 완료. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 맵을 눌러 체크포인트를 저장할 수 있습니다.`
+          ? `미니맵 생성 완료. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 이 맵 위에서 체크포인트를 저장하고 삭제할 수 있습니다.`
           : minimap.map_available
-            ? `미니맵 일시 정지 상태입니다. 확인된 셀 ${minimap.known_cells || 0}. 다시 시작하거나 초기화할 수 있습니다.`
-            : "LiDAR 기반 로컬 미니맵을 만들고, 완성되면 그 맵에 바로 체크포인트를 저장할 수 있습니다.";
+            ? `미니맵 일시 정지 상태입니다. 마지막 단계는 ${minimap.explore_phase_label || "대기"}였고 확인된 셀은 ${minimap.known_cells || 0}개입니다.`
+            : "미니맵 생성 버튼을 누르면 버디봇이 회피 주행으로 방을 훑고, 완료되면 그 맵 위에서 체크포인트를 관리할 수 있습니다.";
     }
 
     async function refreshMissionData(){
@@ -477,7 +484,15 @@
         : "/map 이나 usable /scan 이 아직 오지 않았습니다. LiDAR 전원, /scan 토픽, panel build 를 확인하세요.";
       const sourceLabel = mapData.source === "ros_map" ? "맵: 실시간 SLAM" : mapData.source === "mini_map" ? "맵: 미니맵" : mapData.source === "scan_local" ? "맵: LiDAR 로컬" : "맵: synthetic";
       document.getElementById("map-source-chip").textContent = sourceLabel;
-      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "전역 SLAM 맵이 준비되었습니다." : mapData.source === "mini_map" ? "누적 LiDAR 미니맵이 준비되어 이 맵 위에 체크포인트를 저장할 수 있습니다." : mapData.source === "scan_local" ? "전역 맵이 아직 준비되지 않아 로봇 주변 LiDAR 로컬 맵을 보여주고 있습니다." : syntheticReason;
+      document.getElementById("map-summary").textContent = mapData.source === "ros_map"
+        ? "전역 SLAM 맵이 준비되었습니다."
+        : mapData.source === "mini_map"
+          ? lastMiniMapStatus?.active
+            ? `생성 중인 미니맵을 우선 표시하고 있습니다. 현재 단계는 ${lastMiniMapStatus?.explore_phase_label || "탐색"}입니다.`
+            : "누적 LiDAR 미니맵이 준비되어 이 맵 위에 체크포인트를 저장하고 삭제할 수 있습니다."
+          : mapData.source === "scan_local"
+            ? "전역 맵이 아직 준비되지 않아 로봇 주변 LiDAR 로컬 맵을 보여주고 있습니다."
+            : syntheticReason;
       drawMap(mapData, waypointData.items || []);
     }
 
@@ -496,7 +511,7 @@
       try{
         const data = await apiJson("/api/minimap/start", {method:"POST"});
         lastMiniMapStatus = data;
-        addMsg("bot", "미니맵 생성을 시작했습니다. 버디봇이 LiDAR 회피를 유지하며 천천히 움직입니다.");
+        addMsg("bot", "미니맵 생성을 시작했습니다. 버디봇이 로봇청소기처럼 회피 주행하며 방을 훑습니다.");
         await refreshStatus();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -567,7 +582,8 @@
 
     async function startFollowTrial(){
       const blockers = lastStatus?.sensor_fusion?.follow_blockers || [];
-      addMsg("bot", blockers.length ? `추종 시험을 시작했지만 막히는 항목이 있습니다: ${blockers.join(", ")}` : "추종 시험을 시작했습니다. 사람 검출과 LiDAR 안전 상태를 함께 확인하세요.");
+      const detector = lastStatus?.detector_status || {};
+      addMsg("bot", blockers.length ? `추종 시험을 시작했지만 막히는 항목이 있습니다: ${blockers.join(", ")} | 검출기 ${detector.backend || "waiting"}` : `추종 시험을 시작했습니다. 검출기 ${detector.backend || "unknown"} 와 LiDAR 안전 상태를 함께 확인하세요.`);
       await setFollow(true);
     }
 
@@ -796,7 +812,7 @@
     }
 
     syncRouteSequence();
-    addMsg("bot", "미션 패널 준비가 끝났습니다. 체크포인트를 저장하고, 경로를 만들고, 추종 모드를 시험해 보세요.");
+    addMsg("bot", "패널 준비가 끝났습니다. 미니맵을 만들고, 체크포인트를 찍고, 사용자 추종을 시험해 보세요.");
     refreshAll();
     setInterval(refreshStatus, 1500);
     setInterval(() => refreshCamera(false), 1000);

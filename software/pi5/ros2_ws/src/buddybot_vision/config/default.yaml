@@ -15,6 +15,9 @@ detector:
   model_weights: 'models/mobilenet_ssd_v2_coco.pb'
   confidence_threshold: 0.5
   detection_interval: 5  # Process every N frames
+  allow_hog_fallback: true
+  hog_confidence_threshold: 0.12
+  hog_resize_width: 480
   input_size: [300, 300]
   mean_values: [127.5, 127.5, 127.5]
   scale_factor: 0.007843
@@ -32,6 +35,7 @@ follow_controller:
   max_angular_velocity: 0.5  # rad/s
   deadzone_center: 20        # pixels, ignore small center offsets
   deadzone_height: 10        # pixels, ignore small height changes
+  min_detection_confidence: 0.15
 
 # Time-to-collision settings
 ttc:

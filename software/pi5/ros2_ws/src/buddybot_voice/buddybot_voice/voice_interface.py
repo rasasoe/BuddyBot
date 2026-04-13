@@ -198,6 +198,7 @@ class VoiceInterface(Node):
             return "네, 말씀하세요."
 
         if any(keyword in command_text for keyword in ("stop", "halt", "brake", "정지", "멈춰", "스톱")):
+            self._set_follow_enabled(False)
             self._clear_manual_motion()
             self._cancel_navigation()
             return "정지합니다."
@@ -290,6 +291,7 @@ class VoiceInterface(Node):
         self.follow_pub.publish(msg)
         if enabled:
             self._clear_manual_motion()
+            self._cancel_navigation()
 
     def _cancel_navigation(self) -> None:
         msg = String()
@@ -299,6 +301,7 @@ class VoiceInterface(Node):
     def _send_waypoint(self, name: str) -> None:
         self._set_follow_enabled(False)
         self._clear_manual_motion()
+        self._cancel_navigation()
         msg = String()
         msg.data = name
         self.waypoint_goal_pub.publish(msg)

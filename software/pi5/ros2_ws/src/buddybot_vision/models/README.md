@@ -2,6 +2,10 @@
 
 This directory contains neural network models used by the BuddyBot vision system.
 
+If these files are missing, `detector_node` now falls back to the built-in OpenCV
+HOG people detector so offline follow mode can still be tested. The DNN model is
+still recommended because it is more stable and less prone to false positives.
+
 ## Required Models
 
 ### MobileNet-SSD v2 (Person Detection)
@@ -36,3 +40,4 @@ Model paths are configured via ROS parameters in the detector node:
 - MobileNet-SSD v2 provides good balance of accuracy and speed
 - Detection interval can be adjusted to reduce CPU load
 - Consider quantization for further optimization if needed
+- HOG fallback requires no extra downloads, but accuracy is lower than the DNN model

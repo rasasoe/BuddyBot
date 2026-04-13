@@ -214,6 +214,7 @@ class PanelBridge:
         self._scan_frames_received = 0
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
+        self._latest_detector_status: Optional[Dict[str, Any]] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._latest_person_bbox: Optional[Dict[str, float]] = None
         self._latest_person_stamp: Optional[float] = None
@@ -245,11 +246,12 @@ class PanelBridge:
         self._mini_map_cells: Optional[List[int]] = None
         self._mini_map_origin_x = 0.0
         self._mini_map_origin_y = 0.0
-        # Autonomous exploration state (used by _mini_map_timer / _explore_step)
-        self._explore_phase = "forward"      # "forward" | "turning"
+        # Autonomous exploration state for minimap coverage.
+        self._explore_phase = "forward"      # "forward" | "turning" | "backing" | "strafing"
         self._explore_turn_direction = 1.0
         self._explore_turn_remaining = 0.0
         self._explore_last_step = 0.0
+        self._explore_last_sweep_at = 0.0
         # Server connectivity cache
         self._server_connected = False
         self._server_check_at = 0.0
@@ -321,6 +323,7 @@ class PanelBridge:
                     depth=1,
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
+            self._node.create_subscription(String, "/vision/detector_status", self._detector_status_callback, 10)
             if Float32MultiArray is not None:
                 self._node.create_subscription(Float32MultiArray, "/vision/person_bbox", self._person_bbox_callback, 10)
 
@@ -404,6 +407,25 @@ class PanelBridge:
                 self._latest_camera_stamp = time.time()
         except Exception:
             return
+
+    def _detector_status_callback(self, msg: String) -> None:
+        payload: Dict[str, Any]
+        try:
+            parsed = json.loads(msg.data)
+            if isinstance(parsed, dict):
+                payload = dict(parsed)
+            else:
+                payload = {"details": str(parsed)}
+        except Exception:
+            payload = {"details": msg.data}
+
+        payload.setdefault("backend", "unknown")
+        payload.setdefault("ready", False)
+        payload.setdefault("reason", "unparsed_status")
+        payload["stamp"] = time.time()
+
+        with self._lock:
+            self._latest_detector_status = payload
 
     def _person_bbox_callback(self, msg: Float32MultiArray) -> None:
         try:
@@ -569,8 +591,11 @@ class PanelBridge:
 
         return {
             "front_min": round(min(sector_min(0.0, 0.08), sector_min(0.92, 1.0)), 3),
+            "front_left_min": round(sector_min(0.08, 0.20), 3),
+            "front_right_min": round(sector_min(0.80, 0.92), 3),
             "left_min": round(sector_min(0.20, 0.38), 3),
             "right_min": round(sector_min(0.62, 0.80), 3),
+            "rear_min": round(sector_min(0.42, 0.58), 3),
             "valid_points": float(
                 sum(
                     1
@@ -793,6 +818,7 @@ class PanelBridge:
             "pose": pose,
             "camera_available": self.camera_available(),
             "camera_age_sec": self.camera_age_sec(),
+            "detector_status": self.detector_status(),
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
@@ -817,9 +843,12 @@ class PanelBridge:
         with self._lock:
             return dict(self._latest_pose) if self._latest_pose is not None else None
 
+    def _mini_map_has_data(self, mini_map: Optional[Dict[str, Any]]) -> bool:
+        return mini_map is not None and any(int(cell) >= 0 for cell in mini_map.get("cells", []))
+
     def map_available(self) -> bool:
         with self._lock:
-            mini_map_ready = self._mini_map is not None and any(int(cell) >= 0 for cell in self._mini_map.get("cells", []))
+            mini_map_ready = self._mini_map_has_data(self._mini_map)
             return self._latest_map is not None or self._latest_scan_map is not None or mini_map_ready
 
     def camera_available(self) -> bool:
@@ -850,6 +879,30 @@ class PanelBridge:
     def scan_frames_received(self) -> int:
         with self._lock:
             return int(self._scan_frames_received)
+
+    def detector_status(self, stale_after_sec: float = 4.0) -> Dict[str, Any]:
+        with self._lock:
+            detector = dict(self._latest_detector_status) if self._latest_detector_status is not None else None
+
+        if detector is None:
+            return {
+                "backend": "waiting",
+                "ready": False,
+                "live": False,
+                "reason": "waiting_for_detector",
+                "details": "Detector status topic has not published yet.",
+                "age_sec": None,
+            }
+
+        stamp = float(detector.pop("stamp", 0.0))
+        age_sec = round(max(0.0, time.time() - stamp), 2) if stamp else None
+        live = age_sec is not None and age_sec <= stale_after_sec
+        detector["age_sec"] = age_sec
+        detector["live"] = live
+        detector["ready"] = bool(detector.get("ready", False)) and live
+        if not live and detector.get("reason") == "model_loaded":
+            detector["reason"] = "stale_status"
+        return detector
 
     def get_camera_frame(self) -> Optional[bytes]:
         with self._lock:
@@ -908,6 +961,8 @@ class PanelBridge:
         camera_live = self.camera_available()
         map_live = self.map_available()
         person_live = self.person_detected()
+        detector = self.detector_status()
+        detector_ready = bool(detector.get("ready", False))
         pico_live = self.pico_connected()
         safety_clear = not self.safety_active()
 
@@ -928,7 +983,9 @@ class PanelBridge:
         follow_blockers: List[str] = []
         if not camera_live:
             follow_blockers.append("camera_missing")
-        if not person_live:
+        if not detector_ready:
+            follow_blockers.append("detector_unavailable")
+        if detector_ready and not person_live:
             follow_blockers.append("person_not_detected")
         if not lidar_live:
             follow_blockers.append("lidar_missing")
@@ -947,6 +1004,7 @@ class PanelBridge:
 
         return {
             "camera_lidar_ready": camera_live and lidar_live,
+            "vision_ready": camera_live and detector_ready,
             "fusion_ready": camera_live and lidar_live and pose_ready and map_live,
             "follow_ready": not follow_blockers,
             "follow_state": (
@@ -956,6 +1014,8 @@ class PanelBridge:
             ),
             "nav_ready": not nav_blockers,
             "operator_ready": not blockers,
+            "detector_backend": detector.get("backend", "waiting"),
+            "detector_reason": detector.get("reason", "waiting_for_detector"),
             "blockers": blockers,
             "follow_blockers": follow_blockers,
             "nav_blockers": nav_blockers,
@@ -971,6 +1031,7 @@ class PanelBridge:
             frames = int(self._mini_map_frames)
             distance_m = round(float(self._mini_map_distance_m), 2)
             scan_summary = dict(self._latest_scan_summary) if self._latest_scan_summary is not None else None
+            explore_phase = str(self._explore_phase)
 
         duration_sec = round(max(0.0, time.time() - started_at), 2) if started_at else 0.0
         known_cells = 0
@@ -992,6 +1053,24 @@ class PanelBridge:
         elif mini_map is not None:
             status = "paused"
 
+        effective_front = None
+        if scan_summary is not None:
+            front_values = [
+                float(scan_summary.get("front_min", float("inf"))),
+                float(scan_summary.get("front_left_min", float("inf"))),
+                float(scan_summary.get("front_right_min", float("inf"))),
+            ]
+            finite_front = [value for value in front_values if math.isfinite(value)]
+            if finite_front:
+                effective_front = round(min(finite_front), 2)
+
+        phase_label = {
+            "forward": "전진 탐색",
+            "turning": "회전 회피",
+            "backing": "후진 복구",
+            "strafing": "측면 보정",
+        }.get(explore_phase, "대기")
+
         return {
             "active": active,
             "completed": completed,
@@ -1002,9 +1081,13 @@ class PanelBridge:
             "known_cells": known_cells,
             "occupied_cells": occupied_cells,
             "progress": progress,
+            "progress_percent": int(round(progress * 100)),
             "completed_at": completed_at,
             "scan_summary": scan_summary,
             "map_available": mini_map is not None and known_cells > 0,
+            "explore_phase": explore_phase,
+            "explore_phase_label": phase_label,
+            "front_clearance_m": effective_front,
         }
 
     def _mini_map_should_complete(self, now: float) -> bool:
@@ -1025,6 +1108,14 @@ class PanelBridge:
             self._manual_linear_x = float(linear_x)
             self._manual_linear_y = float(linear_y)
             self._manual_angular_z = float(angular_z)
+
+    def _set_explore_phase(self, phase: str, duration_sec: float, direction: float, now: Optional[float] = None) -> None:
+        started_at = time.time() if now is None else float(now)
+        self._explore_phase = phase
+        self._explore_turn_direction = 1.0 if direction >= 0.0 else -1.0
+        self._explore_turn_remaining = max(0.0, float(duration_sec))
+        self._explore_last_step = started_at
+        self._explore_last_sweep_at = started_at
 
     def _mini_map_timer(self) -> None:
         # Always publish follow-enable state so follow_controller stays in sync.
@@ -1054,54 +1145,82 @@ class PanelBridge:
         left_min = float(scan_summary.get("left_min", float("inf")))
         right_min = float(scan_summary.get("right_min", float("inf")))
         effective_front = min(front_min, front_left_min, front_right_min)
+        open_left = min(left_min, front_left_min)
+        open_right = min(right_min, front_right_min)
+        turn_direction = 1.0 if open_left >= open_right else -1.0
+        phase_elapsed = now - self._explore_last_step
 
-        TURN_SPD = 0.52   # rad/s for deliberate coverage turns
-        FWD_SPD = 0.15    # m/s forward cruise
-        OBST_FRONT = 0.55  # m – start in-place turn
-        OBST_SIDE = 0.40   # m – steer away from side wall
-        COVER_PERIOD = 8.0  # seconds between deliberate area sweeps
+        TURN_SPD = 0.56
+        FWD_SPD = 0.16
+        STRAFE_SPD = 0.11
+        BACK_SPD = -0.10
+        VERY_CLOSE_FRONT = 0.32
+        FRONT_BLOCKED = 0.55
+        SIDE_TIGHT = 0.30
+        SIDE_NEAR = 0.44
+        COVER_PERIOD = 7.0
 
-        # --- Active turn phase (from _explore_* state) ---
+        if self._explore_phase == "backing":
+            if phase_elapsed < self._explore_turn_remaining:
+                self._set_manual_motion(BACK_SPD, STRAFE_SPD * 0.35 * self._explore_turn_direction, 0.0)
+                return
+            self._set_explore_phase("turning", 1.15, turn_direction, now)
+            self._set_manual_motion(0.0, 0.0, TURN_SPD * self._explore_turn_direction)
+            return
+
         if self._explore_phase == "turning":
-            if now - self._explore_last_step < self._explore_turn_remaining:
+            if phase_elapsed < self._explore_turn_remaining:
                 self._set_manual_motion(0.0, 0.0, TURN_SPD * self._explore_turn_direction)
                 return
             self._explore_phase = "forward"
 
-        # --- Immediate obstacle avoidance (supplements lidar_avoidance_node) ---
-        if effective_front < OBST_FRONT:
-            # Choose turn direction away from the closer side obstacle.
-            # Also consider front_left vs front_right to pick opening.
-            open_left = min(left_min, front_left_min)
-            open_right = min(right_min, front_right_min)
-            direction = 1.0 if open_left >= open_right else -1.0
-            # Initiate an avoid-turn phase so we don't oscillate.
-            self._explore_phase = "turning"
-            self._explore_turn_remaining = 1.2
-            self._explore_turn_direction = direction
-            self._explore_last_step = now
-            self._set_manual_motion(0.0, 0.0, TURN_SPD * direction)
+        if self._explore_phase == "strafing":
+            if phase_elapsed < self._explore_turn_remaining:
+                self._set_manual_motion(
+                    FWD_SPD * 0.55,
+                    STRAFE_SPD * self._explore_turn_direction,
+                    0.18 * self._explore_turn_direction,
+                )
+                return
+            self._explore_phase = "forward"
+
+        if effective_front < VERY_CLOSE_FRONT:
+            self._set_explore_phase("backing", 0.7, turn_direction, now)
+            self._set_manual_motion(BACK_SPD, STRAFE_SPD * 0.3 * self._explore_turn_direction, 0.0)
             return
 
-        # --- Soft side-wall steering (gentle correction, no phase change) ---
-        if left_min < OBST_SIDE and right_min > left_min:
-            self._set_manual_motion(FWD_SPD * 0.6, 0.0, -0.28)
-            return
-        if right_min < OBST_SIDE and left_min > right_min:
-            self._set_manual_motion(FWD_SPD * 0.6, 0.0, 0.28)
-            return
-
-        # --- Periodic deliberate area-sweep turns for full room coverage ---
-        if now - self._explore_last_step >= COVER_PERIOD:
-            self._explore_last_step = now
-            # Alternate L/R each period; vary duration by frame count for randomness.
-            self._explore_turn_direction = 1.0 if (self._mini_map_frames % 4) < 2 else -1.0
-            self._explore_phase = "turning"
-            self._explore_turn_remaining = 1.0 + (self._mini_map_frames % 3) * 0.4  # 1.0–1.8 s
+        if effective_front < FRONT_BLOCKED:
+            turn_duration = 1.0 + max(0.0, FRONT_BLOCKED - effective_front) * 1.7
+            self._set_explore_phase("turning", min(1.8, turn_duration), turn_direction, now)
             self._set_manual_motion(0.0, 0.0, TURN_SPD * self._explore_turn_direction)
             return
 
-        # --- Default: cruise forward (lidar_avoidance_node handles hard obstacles) ---
+        if left_min < SIDE_TIGHT and right_min > left_min + 0.06:
+            self._set_explore_phase("strafing", 0.85, -1.0, now)
+            self._set_manual_motion(FWD_SPD * 0.55, -STRAFE_SPD, -0.18)
+            return
+
+        if right_min < SIDE_TIGHT and left_min > right_min + 0.06:
+            self._set_explore_phase("strafing", 0.85, 1.0, now)
+            self._set_manual_motion(FWD_SPD * 0.55, STRAFE_SPD, 0.18)
+            return
+
+        if left_min < SIDE_NEAR and right_min > left_min + 0.05:
+            self._set_manual_motion(FWD_SPD * 0.78, -STRAFE_SPD * 0.45, -0.12)
+            return
+
+        if right_min < SIDE_NEAR and left_min > right_min + 0.05:
+            self._set_manual_motion(FWD_SPD * 0.78, STRAFE_SPD * 0.45, 0.12)
+            return
+
+        if now - self._explore_last_sweep_at >= COVER_PERIOD:
+            sweep_direction = 1.0 if (self._mini_map_frames // 12) % 2 == 0 else -1.0
+            if min(open_left, open_right) < SIDE_NEAR:
+                sweep_direction = turn_direction
+            self._set_explore_phase("turning", 0.9 if effective_front > 0.9 else 0.65, sweep_direction, now)
+            self._set_manual_motion(0.0, 0.0, TURN_SPD * self._explore_turn_direction)
+            return
+
         self._set_manual_motion(FWD_SPD, 0.0, 0.0)
 
     def start_mini_map(self) -> Dict[str, Any]:
@@ -1124,12 +1243,14 @@ class PanelBridge:
         self._explore_turn_direction = 1.0
         self._explore_turn_remaining = 0.0
         self._explore_last_step = time.time()
+        self._explore_last_sweep_at = self._explore_last_step
         return self.mini_map_status()
 
     def stop_mini_map(self, *, update_last_command: bool = True) -> Dict[str, Any]:
         with self._lock:
             self._mini_map_active = False
         self._clear_manual_motion()
+        self._explore_phase = "forward"
         if update_last_command:
             self.last_command = "minimap:stop"
         return self.mini_map_status()
@@ -1145,6 +1266,10 @@ class PanelBridge:
             self._mini_map_distance_m = 0.0
             self._mini_map_last_pose = None
         self._clear_manual_motion()
+        self._explore_phase = "forward"
+        self._explore_turn_remaining = 0.0
+        self._explore_last_step = 0.0
+        self._explore_last_sweep_at = 0.0
         self.last_command = "minimap:reset"
         return self.mini_map_status()
 
@@ -1203,9 +1328,14 @@ class PanelBridge:
         ):
             self._poll_scan_from_cli()
         with self._lock:
-            if self._latest_map is not None:
+            prefer_mini_map = self._mini_map is not None and (
+                self._mini_map_active or self._mini_map_completed or self._mini_map_started_at is not None
+            )
+            if prefer_mini_map:
+                payload = dict(self._mini_map)
+            elif self._latest_map is not None:
                 payload = dict(self._latest_map)
-            elif self._mini_map is not None and any(int(cell) >= 0 for cell in self._mini_map.get("cells", [])):
+            elif self._mini_map_has_data(self._mini_map):
                 payload = dict(self._mini_map)
             elif self._latest_scan_map is not None:
                 payload = dict(self._latest_scan_map)

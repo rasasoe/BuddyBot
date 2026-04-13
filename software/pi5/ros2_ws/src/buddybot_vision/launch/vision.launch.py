@@ -29,6 +29,7 @@ def generate_launch_description():
             {'model_weights': 'models/mobilenet_ssd_v2_coco.pb'},
             {'confidence_threshold': 0.5},
             {'detection_interval': 5},
+            {'allow_hog_fallback': True},
             {'publish_debug_image': False}
         ]
     )
@@ -45,7 +46,8 @@ def generate_launch_description():
             {'height_gain': 0.0005},
             {'target_height_ratio': 0.6},
             {'max_linear_velocity': 0.3},
-            {'max_angular_velocity': 0.5}
+            {'max_angular_velocity': 0.5},
+            {'min_detection_confidence': 0.15}
         ]
     )
 
