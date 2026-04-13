@@ -1,9 +1,4 @@
-"""
-BuddyBot Kinematics
-
-This module handles conversion between robot velocities and wheel velocities
-for a 3-wheel omnidirectional drive.
-"""
+"""Kinematics helpers for the real BuddyBot 3-wheel base."""
 
 from config import ROTATION_MIX_GAIN, WHEEL_BASE_LENGTH, WHEEL_BASE_WIDTH
 
@@ -26,13 +21,19 @@ class Kinematics:
         wz: normalized angular velocity
         Returns: dict of wheel velocities (left, right, back)
         """
-        # Keep the existing translation feel, but mix rotation in normalized
-        # command space. The previous implementation multiplied angular.z by the
-        # physical base dimensions, which reduced pure rotation to about 10% of
-        # the translational command magnitude and made rotate-in-place appear dead.
-        left = vx - vy - (wz * self.rotation_mix_gain)
-        right = vx + vy - (wz * self.rotation_mix_gain)
-        back = vy + (wz * self.rotation_mix_gain)
+        # Keep the translation feel the team already tuned in the field, but
+        # correct the rotation contribution so positive angular.z means a real
+        # left turn and can spin in place.
+        #
+        # The previous mixer applied the same rotation sign to the left and
+        # right wheels, which caused arc-like motion and "rotate only while
+        # moving forward" behavior on the real base. Field behavior matched a
+        # front pair that must oppose each other for yaw, while the rear wheel
+        # should share the left wheel's sign for a clean in-place spin.
+        rotation = wz * self.rotation_mix_gain
+        left = vx - vy - rotation
+        right = vx + vy + rotation
+        back = vy - rotation
 
         max_mag = max(1.0, abs(left), abs(right), abs(back))
         wheel_velocities = {

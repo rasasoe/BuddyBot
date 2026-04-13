@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BuddyBot Mission Panel</title>
+  <title>버디봇 미션 패널</title>
   <style>
     :root{--bg:#f3efe7;--ink:#172126;--muted:#5e6a72;--card:#fffdf8;--line:#d6ccbc;--accent:#14685d;--accent-strong:#0e5249;--sand:#ede2cf;--rust:#a6582c;--gold:#c58a29;--danger:#b03e34;--shadow:0 20px 48px rgba(36,33,24,.12);--radius:22px}
     *{box-sizing:border-box}
@@ -75,25 +75,25 @@
     <section class="hero">
       <article class="card stack">
         <div class="eyebrow">BuddyBot Mission Console</div>
-        <h1>Drive cleanly, route checkpoints, and test follow mode without the clutter.</h1>
-        <p class="lead">One Pi panel for motion control, checkpoint CRUD, ad-hoc route sending, saved route playback, camera preview, LiDAR map view, and follow readiness.</p>
+        <h1>주행, 체크포인트, 추종 테스트를 한 화면에서 바로 다룹니다.</h1>
+        <p class="lead">수동 주행, 체크포인트 저장과 삭제, 즉시 경로 실행, 저장 경로 재생, 카메라 미리보기, LiDAR 지도, 추종 준비 상태를 한 번에 확인할 수 있습니다.</p>
         <div class="hero-actions">
           <input id="server-url" value="http://127.0.0.1:8000">
-          <button class="secondary" onclick="toggleAssistant()">Toggle Assistant</button>
+          <button class="secondary" onclick="toggleAssistant()">어시스턴트 전환</button>
         </div>
         <div class="chip-row">
-          <div class="chip" id="build-chip">Build: unknown</div>
-          <div class="chip" id="mode-chip">Mode: standalone</div>
-          <div class="chip" id="server-chip">Server: offline</div>
-          <div class="chip" id="fusion-chip">Fusion: checking</div>
-          <div class="chip" id="follow-chip">Follow: off</div>
+          <div class="chip" id="build-chip">빌드: unknown</div>
+          <div class="chip" id="mode-chip">모드: standalone</div>
+          <div class="chip" id="server-chip">서버: offline</div>
+          <div class="chip" id="fusion-chip">센서융합: 확인 중</div>
+          <div class="chip" id="follow-chip">추종: off</div>
         </div>
       </article>
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>System Snapshot</h2>
-            <p class="note" id="system-note">Checking Pi, Pico, LiDAR, camera, and safety state.</p>
+            <h2>시스템 상태</h2>
+            <p class="note" id="system-note">Pi, Pico, LiDAR, 카메라, 안전 상태를 확인하고 있습니다.</p>
           </div>
         </div>
         <div class="status-grid" id="status-box"></div>
@@ -103,100 +103,100 @@
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>Drive and Follow</h2>
-            <p class="note">Manual motion cancels routes and follow mode. Follow readiness checks camera, person detection, LiDAR, and safety latch state.</p>
+            <h2>주행과 추종</h2>
+            <p class="note">수동 주행을 누르면 경로와 추종이 해제됩니다. 추종 준비 상태는 카메라, 사람 검출, LiDAR, 안전 래치를 함께 확인합니다.</p>
           </div>
         </div>
         <div class="button-grid">
-          <button class="secondary" onclick="manual('forward')">Forward</button>
-          <button class="danger manual-stop" onclick="manual('stop')">Stop</button>
-          <button class="secondary" onclick="manual('backward')">Backward</button>
-          <button class="secondary" onclick="manual('strafe_left')">Strafe Left</button>
-          <button class="warn" onclick="cancelNavigation()">Cancel Route</button>
-          <button class="secondary" onclick="manual('strafe_right')">Strafe Right</button>
-          <button onclick="manual('rotate_left')">Rotate Left</button>
-          <button onclick="manual('rotate_right')">Rotate Right</button>
-          <button class="accent" onclick="sendChat('status')">Speak Status</button>
+          <button class="secondary" onclick="manual('forward')">전진</button>
+          <button class="danger manual-stop" onclick="manual('stop')">정지</button>
+          <button class="secondary" onclick="manual('backward')">후진</button>
+          <button class="secondary" onclick="manual('strafe_left')">왼쪽 이동</button>
+          <button class="warn" onclick="cancelNavigation()">경로 취소</button>
+          <button class="secondary" onclick="manual('strafe_right')">오른쪽 이동</button>
+          <button onclick="manual('rotate_left')">좌회전</button>
+          <button onclick="manual('rotate_right')">우회전</button>
+          <button class="accent" onclick="sendChat('status')">상태 말해줘</button>
         </div>
         <div class="dual">
-          <button class="secondary" onclick="startFollowTrial()">Arm Follow Trial</button>
-          <button class="secondary" onclick="setFollow(false)">Follow Off</button>
+          <button class="secondary" onclick="startFollowTrial()">추종 시험 시작</button>
+          <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
         </div>
-        <div class="callout"><strong>Follow Trial Readiness</strong><div class="note" id="follow-note">Waiting for live sensor status.</div></div>
-        <div class="callout"><strong>Quick Commands</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">Start Follow</button><button class="accent" onclick="sendChat('stop')">Emergency Stop</button><button class="accent" onclick="sendChat('kitchen')">Go Kitchen</button><button class="accent" onclick="sendChat('charge')">Go Charge</button></div></div>
-        <div class="callout"><strong>Sensor Fusion Summary</strong><div class="note" id="fusion-note">Camera + LiDAR + pose + map summary will appear here.</div></div>
+        <div class="callout"><strong>추종 시험 준비 상태</strong><div class="note" id="follow-note">실시간 센서 상태를 기다리는 중입니다.</div></div>
+        <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
+        <div class="callout"><strong>센서 융합 요약</strong><div class="note" id="fusion-note">카메라, LiDAR, 위치, 맵 상태 요약이 여기에 표시됩니다.</div></div>
       </article>
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>Map, Checkpoints, and Routes</h2>
-            <p class="note" id="map-summary">Loading map data.</p>
+            <h2>맵, 체크포인트, 경로</h2>
+            <p class="note" id="map-summary">지도 데이터를 불러오는 중입니다.</p>
           </div>
-          <button class="secondary" onclick="refreshMap()">Refresh Map</button>
+          <button class="secondary" onclick="refreshMap()">맵 새로고침</button>
         </div>
         <div class="map-wrap">
           <canvas id="map-canvas" width="980" height="468"></canvas>
           <div class="overlay">
-            <div class="chip" id="map-source-chip">Map: waiting</div>
-            <div class="chip" id="pose-chip">Pose: none</div>
+            <div class="chip" id="map-source-chip">맵: 대기 중</div>
+            <div class="chip" id="pose-chip">위치: 없음</div>
           </div>
         </div>
         <div class="callout">
-          <strong>Mini-map Generator</strong>
-          <div class="note" id="minimap-note">Generate a local LiDAR mini-map with avoidance driving, then save checkpoints directly on that map.</div>
+          <strong>미니맵 생성기</strong>
+          <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 만들고, 완성되면 그 맵에 바로 체크포인트를 저장할 수 있습니다.</div>
           <div class="dual">
-            <button class="accent" onclick="startMiniMap()">Generate Mini-map</button>
-            <button class="secondary" onclick="stopMiniMap()">Stop Mini-map</button>
+            <button class="accent" onclick="startMiniMap()">미니맵 생성</button>
+            <button class="secondary" onclick="stopMiniMap()">미니맵 중지</button>
           </div>
           <div class="dual">
-            <button class="secondary" onclick="refreshMiniMapStatus()">Refresh Mini-map</button>
-            <button class="danger" onclick="resetMiniMap()">Reset Mini-map</button>
+            <button class="secondary" onclick="refreshMiniMapStatus()">미니맵 새로고침</button>
+            <button class="danger" onclick="resetMiniMap()">미니맵 초기화</button>
           </div>
         </div>
         <div class="mission-actions">
           <select id="waypoint-select"></select>
           <div class="dual">
-            <button class="accent" onclick="goWaypoint()">Go Checkpoint</button>
-            <button class="danger" onclick="deleteSelectedWaypoint()">Delete Checkpoint</button>
+            <button class="accent" onclick="goWaypoint()">체크포인트 이동</button>
+            <button class="danger" onclick="deleteSelectedWaypoint()">체크포인트 삭제</button>
           </div>
         </div>
         <div class="dual">
-          <button class="secondary" onclick="fillCurrentPose()">Use Current Pose</button>
-          <button class="secondary" onclick="saveCurrentPoseWaypoint()">Save Current Pose</button>
+          <button class="secondary" onclick="fillCurrentPose()">현재 위치 입력</button>
+          <button class="secondary" onclick="saveCurrentPoseWaypoint()">현재 위치 저장</button>
         </div>
         <form class="form-grid" onsubmit="saveWaypoint(event)">
-          <div><h3>Save New Checkpoint</h3><p class="note" id="clicked-point-note">Click the map to copy x and y into the form. If SLAM is not ready, the panel falls back to a LiDAR local map.</p></div>
-          <input id="wp-name" placeholder="checkpoint name">
+          <div><h3>새 체크포인트 저장</h3><p class="note" id="clicked-point-note">맵을 클릭하면 x, y가 입력됩니다. SLAM 맵이 아직 없으면 LiDAR 로컬 맵 기준으로 저장합니다.</p></div>
+          <input id="wp-name" placeholder="체크포인트 이름">
           <div class="triple"><input id="wp-x" type="number" step="0.01" placeholder="x"><input id="wp-y" type="number" step="0.01" placeholder="y"><input id="wp-theta" type="number" step="0.01" placeholder="theta"></div>
-          <div class="dual"><button type="button" class="accent" onclick="saveClickedWaypoint()">Save Clicked Point</button><button type="button" class="secondary" onclick="clearClickedPoint()">Clear Selection</button></div>
-          <button type="submit">Save Typed Checkpoint</button>
+          <div class="dual"><button type="button" class="accent" onclick="saveClickedWaypoint()">선택 지점 저장</button><button type="button" class="secondary" onclick="clearClickedPoint()">선택 해제</button></div>
+          <button type="submit">직접 입력해서 저장</button>
         </form>
         <div class="stack">
-          <div><h3>Route Builder</h3><p class="note">Add checkpoints from the list below, then send the route immediately or save it for reuse.</p></div>
+          <div><h3>경로 빌더</h3><p class="note">아래 체크포인트를 추가한 뒤 바로 실행하거나 저장 경로로 남길 수 있습니다.</p></div>
           <div class="route-sequence" id="route-sequence"></div>
-          <input id="route-name" placeholder="route name">
-          <div class="dual"><button class="accent" onclick="runRouteNow()">Run Selected Route</button><button class="secondary" onclick="saveRoute()">Save Route</button></div>
-          <div class="dual"><button class="secondary" onclick="clearRouteSequence()">Clear Route</button><button class="danger" onclick="clearAllWaypoints()">Clear All Checkpoints</button></div>
+          <input id="route-name" placeholder="경로 이름">
+          <div class="dual"><button class="accent" onclick="runRouteNow()">선택 경로 실행</button><button class="secondary" onclick="saveRoute()">경로 저장</button></div>
+          <div class="dual"><button class="secondary" onclick="clearRouteSequence()">경로 비우기</button><button class="danger" onclick="clearAllWaypoints()">체크포인트 전체 삭제</button></div>
         </div>
         <div class="dual">
-          <div class="stack"><div class="section-head"><div><h3>Saved Checkpoints</h3><p class="note" id="waypoint-count-note">Checking checkpoint list.</p></div></div><div class="panel-list" id="waypoint-list"></div></div>
-          <div class="stack"><div class="section-head"><div><h3>Saved Routes</h3><p class="note" id="route-count-note">Checking saved routes.</p></div></div><div class="panel-list" id="destination-list"></div></div>
+          <div class="stack"><div class="section-head"><div><h3>저장된 체크포인트</h3><p class="note" id="waypoint-count-note">체크포인트 목록 확인 중입니다.</p></div></div><div class="panel-list" id="waypoint-list"></div></div>
+          <div class="stack"><div class="section-head"><div><h3>저장된 경로</h3><p class="note" id="route-count-note">저장된 경로 확인 중입니다.</p></div></div><div class="panel-list" id="destination-list"></div></div>
         </div>
       </article>
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>Camera and Console</h2>
-            <p class="note" id="camera-summary">Camera preview is off until you open it.</p>
+            <h2>카메라와 콘솔</h2>
+            <p class="note" id="camera-summary">카메라를 열기 전까지 미리보기는 꺼져 있습니다.</p>
           </div>
-          <div class="dual" style="min-width:220px"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">Open Camera</button><button class="secondary" onclick="refreshCamera(true)">Refresh</button></div>
+          <div class="dual" style="min-width:220px"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 열기</button><button class="secondary" onclick="refreshCamera(true)">새로고침</button></div>
         </div>
-        <div class="camera-frame" id="camera-frame" style="display:none"><img id="camera-feed" alt="BuddyBot camera feed"><div class="overlay"><div class="chip" id="camera-chip">Camera: waiting</div></div></div>
-        <p class="note" id="camera-note">Preview appears when /camera/image_raw is publishing.</p>
-        <div class="callout"><strong>Companion Console</strong><div class="note">Use short commands such as status, kitchen, stop, follow, rotate left, or charge. Browser voice input and browser TTS stay available here.</div></div>
-        <div class="dual"><button id="voice-btn">Voice</button><button class="secondary" onclick="sendChat('status')">Summarize State</button></div>
+        <div class="camera-frame" id="camera-frame" style="display:none"><img id="camera-feed" alt="버디봇 카메라 화면"><div class="overlay"><div class="chip" id="camera-chip">카메라: 대기 중</div></div></div>
+        <p class="note" id="camera-note">/camera/image_raw 가 퍼블리시되면 미리보기가 표시됩니다.</p>
+        <div class="callout"><strong>명령 콘솔</strong><div class="note">상태, 주방, 정지, 추종, 좌회전, 충전 같은 짧은 명령을 바로 보낼 수 있습니다. 브라우저 음성 입력과 브라우저 TTS도 여기서 계속 쓸 수 있습니다.</div></div>
+        <div class="dual"><button id="voice-btn">음성 입력</button><button class="secondary" onclick="sendChat('status')">상태 요약</button></div>
         <div class="chat-log" id="chat-log"></div>
-        <div class="chat-form"><input id="chat-input" placeholder="Try: status, stop, follow, kitchen, charge"><button onclick="sendChat()">Send</button></div>
+        <div class="chat-form"><input id="chat-input" placeholder="예: 상태, 정지, 추종, 주방, 충전"><button onclick="sendChat()">전송</button></div>
       </article>
     </section>
   </main>
@@ -356,10 +356,10 @@
 
     function syncRouteSequence(){
       if(!routeSequence.length){
-        routeSequenceBox.innerHTML = `<span class="note">No checkpoints selected yet. Use Add to Route from the checkpoint list.</span>`;
+        routeSequenceBox.innerHTML = `<span class="note">아직 선택된 체크포인트가 없습니다. 아래 목록에서 경로에 추가해 주세요.</span>`;
         return;
       }
-      routeSequenceBox.innerHTML = routeSequence.map((name, index) => `<span class="route-token">${index + 1}. ${escapeHtml(name)}<button type="button" onclick="removeRouteStop(${index})">Remove</button></span>`).join("");
+      routeSequenceBox.innerHTML = routeSequence.map((name, index) => `<span class="route-token">${index + 1}. ${escapeHtml(name)}<button type="button" onclick="removeRouteStop(${index})">삭제</button></span>`).join("");
     }
 
     function removeRouteStop(index){
@@ -370,7 +370,7 @@
     function addToRoute(name){
       routeSequence.push(name);
       syncRouteSequence();
-      addMsg("bot", `${name} added to the current route.`);
+      addMsg("bot", `${name} 체크포인트를 현재 경로에 추가했습니다.`);
     }
 
     function clearRouteSequence(){
@@ -382,6 +382,7 @@
       const data = await apiJson("/api/status");
       const fusion = data.sensor_fusion || {};
       const minimap = data.minimap || {};
+      const followStateLabel = ({tracking:"추종 중", armed:"대기 중", idle:"유휴"})[(fusion.follow_state || (data.follow_enabled ? "armed" : "idle"))] || (fusion.follow_state || "유휴");
       assistantEnabled = data.mode === "assistant";
       lastStatus = data;
       lastMiniMapStatus = minimap;
@@ -392,38 +393,38 @@
       const picoState = data.pico_connected ? `${data.pico_status?.mode || "ok"} ${data.pico_status?.battery_voltage || ""}`.trim() : "waiting";
       const safetyState = data.safety_active ? data.safety_status : "clear";
       document.getElementById("status-box").innerHTML = [
-        statusCard("ROS2", data.ros2_connected ? "connected" : "offline"),
+        statusCard("ROS2", data.ros2_connected ? "연결됨" : "오프라인"),
         statusCard("Pico", picoState),
-        statusCard("LiDAR", scanState),
-        statusCard("Camera", cameraState),
-        statusCard("Pose", data.pose ? `${data.pose.x}, ${data.pose.y}` : "missing"),
-        statusCard("Map", data.map_available ? "ready" : "waiting"),
-        statusCard("Person", personState),
-        statusCard("Follow", fusion.follow_state || (data.follow_enabled ? "armed" : "idle")),
-        statusCard("Navigation", data.navigation_status || "idle"),
-        statusCard("Safety", safetyState),
-        statusCard("Manual", data.manual_active ? "active" : "idle"),
-        statusCard("Last Command", data.last_command || "idle"),
+        statusCard("LiDAR", data.scan_available ? `정상 ${data.scan_age_sec}s` : "대기 중"),
+        statusCard("카메라", data.camera_available ? `정상 ${data.camera_age_sec}s` : "대기 중"),
+        statusCard("위치", data.pose ? `${data.pose.x}, ${data.pose.y}` : "없음"),
+        statusCard("맵", data.map_available ? "준비됨" : "대기 중"),
+        statusCard("사람", data.person_detected ? `검출 ${data.person_age_sec}s` : "없음"),
+        statusCard("추종", followStateLabel),
+        statusCard("내비게이션", data.navigation_status || "idle"),
+        statusCard("안전", safetyState),
+        statusCard("수동 조작", data.manual_active ? "동작 중" : "유휴"),
+        statusCard("마지막 명령", data.last_command || "idle"),
       ].join("");
-      document.getElementById("build-chip").textContent = `Build: ${data.panel_build || "unknown"}`;
-      document.getElementById("mode-chip").textContent = `Mode: ${data.mode}`;
-      document.getElementById("server-chip").textContent = `Server: ${data.server_connected ? "online" : "offline"}`;
-      document.getElementById("fusion-chip").textContent = `Fusion: ${fusion.fusion_ready ? "ready" : "partial"}`;
-      document.getElementById("follow-chip").textContent = `Follow: ${data.follow_enabled ? "on" : "off"}`;
-      document.getElementById("pose-chip").textContent = data.pose ? `Pose: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})` : "Pose: none";
-      document.getElementById("camera-chip").textContent = data.camera_available ? `Camera: live (${data.camera_age_sec}s ago)` : "Camera: waiting";
-      document.getElementById("system-note").textContent = fusion.operator_ready ? "Operator stack is healthy enough for drive, mapping, and route work." : `Operator blockers: ${(fusion.blockers || []).join(", ") || "waiting for topics"}`;
-      document.getElementById("fusion-note").textContent = fusion.fusion_ready ? "Camera, LiDAR, map, and pose are all live. Perception stack is ready for route and follow validation." : `Fusion is partial. Missing or stale pieces: ${(fusion.blockers || []).join(", ") || "unknown"}`;
-      document.getElementById("follow-note").textContent = fusion.follow_ready ? "Follow trial is ready. Turn it on and verify person tracking with LiDAR safety active." : `Follow is blocked by: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"}`;
-      document.getElementById("camera-summary").textContent = !cameraEnabled ? "Camera preview is off until you open it." : data.camera_available ? "Live preview from /camera/image_raw is active." : "No camera frame yet. Check camera_node and USB camera power.";
-      document.getElementById("camera-note").textContent = data.pico_connected ? "Pico status is fresh. Base bridge looks alive." : "Pico status is stale. Check the USB serial bridge.";
+      document.getElementById("build-chip").textContent = `빌드: ${data.panel_build || "unknown"}`;
+      document.getElementById("mode-chip").textContent = `모드: ${data.mode}`;
+      document.getElementById("server-chip").textContent = `서버: ${data.server_connected ? "online" : "offline"}`;
+      document.getElementById("fusion-chip").textContent = `센서융합: ${fusion.fusion_ready ? "준비 완료" : "부분 준비"}`;
+      document.getElementById("follow-chip").textContent = `추종: ${data.follow_enabled ? "on" : "off"}`;
+      document.getElementById("pose-chip").textContent = data.pose ? `위치: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})` : "위치: 없음";
+      document.getElementById("camera-chip").textContent = data.camera_available ? `카메라: 정상 (${data.camera_age_sec}s 전)` : "카메라: 대기 중";
+      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 매핑, 경로 작업을 시작할 수 있는 상태입니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"}`;
+      document.getElementById("fusion-note").textContent = fusion.fusion_ready ? "카메라, LiDAR, 맵, 위치가 모두 살아 있습니다. 추종과 경로 검증을 진행할 수 있습니다." : `센서 융합이 아직 부분 상태입니다. 부족한 항목: ${(fusion.blockers || []).join(", ") || "unknown"}`;
+      document.getElementById("follow-note").textContent = fusion.follow_ready ? "추종 시험 준비가 끝났습니다. 추종을 켜고 사람 검출과 LiDAR 안전을 함께 확인하세요." : `추종을 막는 항목: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"}`;
+      document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 열기 전까지 미리보기는 꺼져 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
+      document.getElementById("camera-note").textContent = data.pico_connected ? "Pico 상태가 최신입니다. 베이스 브리지가 살아 있습니다." : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
       document.getElementById("minimap-note").textContent = minimap.active
-        ? `Mini-map building: ${Math.round((minimap.progress || 0) * 100)}% | frames ${minimap.frames || 0} | known cells ${minimap.known_cells || 0} | distance ${minimap.distance_m || 0}m`
+        ? `미니맵 생성 중: ${Math.round((minimap.progress || 0) * 100)}% | 프레임 ${minimap.frames || 0} | 확인된 셀 ${minimap.known_cells || 0} | 이동거리 ${minimap.distance_m || 0}m`
         : minimap.completed
-          ? `Mini-map complete. Known cells ${minimap.known_cells || 0}, frames ${minimap.frames || 0}. You can click it to save checkpoints.`
+          ? `미니맵 생성 완료. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 맵을 눌러 체크포인트를 저장할 수 있습니다.`
           : minimap.map_available
-            ? `Mini-map paused. Known cells ${minimap.known_cells || 0}. Resume or reset it anytime.`
-            : "Generate a local LiDAR mini-map with avoidance driving, then save checkpoints directly on that map.";
+            ? `미니맵 일시 정지 상태입니다. 확인된 셀 ${minimap.known_cells || 0}. 다시 시작하거나 초기화할 수 있습니다.`
+            : "LiDAR 기반 로컬 미니맵을 만들고, 완성되면 그 맵에 바로 체크포인트를 저장할 수 있습니다.";
     }
 
     async function refreshMissionData(){
@@ -432,7 +433,7 @@
       const destinations = destinationData.items || [];
       waypointSelect.innerHTML = "";
       if(!waypoints.length){
-        waypointSelect.innerHTML = `<option value="">No checkpoints saved</option>`;
+        waypointSelect.innerHTML = `<option value="">저장된 체크포인트가 없습니다</option>`;
       }else{
         waypoints.forEach((item) => {
           const option = document.createElement("option");
@@ -444,16 +445,16 @@
 
       waypointList.innerHTML = waypoints.length ? waypoints.map((item) => {
         const encodedName = encodeURIComponent(item.name);
-        return `<div class="panel-item"><strong>${escapeHtml(item.name)}</strong><div class="meta">x=${item.x}, y=${item.y}, th=${item.theta}</div><div class="meta">${escapeHtml(item.description || "checkpoint")}</div><div class="actions"><button type="button" class="accent" onclick='goWaypointByName(decodeURIComponent("${encodedName}"))'>Go</button><button type="button" class="secondary" onclick='addToRoute(decodeURIComponent("${encodedName}"))'>Add to Route</button><button type="button" class="danger" onclick='deleteWaypoint(decodeURIComponent("${encodedName}"))'>Delete</button></div></div>`;
-      }).join("") : `<div class="panel-item"><div class="meta">No checkpoints saved yet.</div></div>`;
+        return `<div class="panel-item"><strong>${escapeHtml(item.name)}</strong><div class="meta">x=${item.x}, y=${item.y}, th=${item.theta}</div><div class="meta">${escapeHtml(item.description || "체크포인트")}</div><div class="actions"><button type="button" class="accent" onclick='goWaypointByName(decodeURIComponent("${encodedName}"))'>이동</button><button type="button" class="secondary" onclick='addToRoute(decodeURIComponent("${encodedName}"))'>경로에 추가</button><button type="button" class="danger" onclick='deleteWaypoint(decodeURIComponent("${encodedName}"))'>삭제</button></div></div>`;
+      }).join("") : `<div class="panel-item"><div class="meta">저장된 체크포인트가 아직 없습니다.</div></div>`;
 
       destinationList.innerHTML = destinations.length ? destinations.map((item) => {
         const encodedName = encodeURIComponent(item.name);
-        return `<div class="panel-item route"><strong>${escapeHtml(item.name)}</strong><div class="meta">${escapeHtml((item.sequence || []).join(" -> "))}</div><div class="meta">${escapeHtml(item.description || `${item.stops} stop route`)}</div><div class="actions"><button type="button" class="accent" onclick='goDestination(decodeURIComponent("${encodedName}"))'>Run Route</button><button type="button" class="danger" onclick='deleteDestination(decodeURIComponent("${encodedName}"))'>Delete Route</button></div></div>`;
-      }).join("") : `<div class="panel-item"><div class="meta">No saved routes yet.</div></div>`;
+        return `<div class="panel-item route"><strong>${escapeHtml(item.name)}</strong><div class="meta">${escapeHtml((item.sequence || []).join(" -> "))}</div><div class="meta">${escapeHtml(item.description || `${item.stops}개 경유 경로`)}</div><div class="actions"><button type="button" class="accent" onclick='goDestination(decodeURIComponent("${encodedName}"))'>경로 실행</button><button type="button" class="danger" onclick='deleteDestination(decodeURIComponent("${encodedName}"))'>경로 삭제</button></div></div>`;
+      }).join("") : `<div class="panel-item"><div class="meta">저장된 경로가 아직 없습니다.</div></div>`;
 
-      document.getElementById("waypoint-count-note").textContent = `${waypoints.length} checkpoint(s) available.`;
-      document.getElementById("route-count-note").textContent = `${destinations.length} saved route(s) available.`;
+      document.getElementById("waypoint-count-note").textContent = `체크포인트 ${waypoints.length}개`;
+      document.getElementById("route-count-note").textContent = `저장 경로 ${destinations.length}개`;
       if(lastMap){
         drawMap(lastMap, waypoints);
       }
@@ -465,11 +466,11 @@
       lastMap = mapData;
       lastPose = mapData.pose || lastPose;
       const syntheticReason = lastStatus?.scan_available
-        ? "LiDAR topic exists, but a usable live map has not been assembled yet. Check panel log and /scan freshness."
-        : "No /map or usable /scan has arrived yet. Check LiDAR power, /scan topic, and panel build.";
-      const sourceLabel = mapData.source === "ros_map" ? "Map: live SLAM" : mapData.source === "mini_map" ? "Map: mini-map" : mapData.source === "scan_local" ? "Map: LiDAR local" : "Map: synthetic";
+        ? "LiDAR 토픽은 보이지만 실제로 쓸 수 있는 실시간 맵이 아직 조립되지 않았습니다. panel 로그와 /scan freshness 를 확인하세요."
+        : "/map 이나 usable /scan 이 아직 오지 않았습니다. LiDAR 전원, /scan 토픽, panel build 를 확인하세요.";
+      const sourceLabel = mapData.source === "ros_map" ? "맵: 실시간 SLAM" : mapData.source === "mini_map" ? "맵: 미니맵" : mapData.source === "scan_local" ? "맵: LiDAR 로컬" : "맵: synthetic";
       document.getElementById("map-source-chip").textContent = sourceLabel;
-      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "Global SLAM map is available." : mapData.source === "mini_map" ? "A cumulative LiDAR mini-map is available for local checkpoint planning." : mapData.source === "scan_local" ? "Global map is not ready, so the panel is showing a LiDAR local map around the robot." : syntheticReason;
+      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "전역 SLAM 맵이 준비되었습니다." : mapData.source === "mini_map" ? "누적 LiDAR 미니맵이 준비되어 이 맵 위에 체크포인트를 저장할 수 있습니다." : mapData.source === "scan_local" ? "전역 맵이 아직 준비되지 않아 로봇 주변 LiDAR 로컬 맵을 보여주고 있습니다." : syntheticReason;
       drawMap(mapData, waypointData.items || []);
     }
 
@@ -488,7 +489,7 @@
       try{
         const data = await apiJson("/api/minimap/start", {method:"POST"});
         lastMiniMapStatus = data;
-        addMsg("bot", "Mini-map generation started. BuddyBot will wander slowly with LiDAR avoidance.");
+        addMsg("bot", "미니맵 생성을 시작했습니다. 버디봇이 LiDAR 회피를 유지하며 천천히 움직입니다.");
         await refreshStatus();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -498,17 +499,17 @@
       try{
         const data = await apiJson("/api/minimap/stop", {method:"POST"});
         lastMiniMapStatus = data;
-        addMsg("bot", "Mini-map generation stopped.");
+        addMsg("bot", "미니맵 생성을 중지했습니다.");
         await refreshStatus();
       }catch(error){ showError(error); }
     }
 
     async function resetMiniMap(){
-      if(!window.confirm("Reset the current mini-map?")){ return; }
+      if(!window.confirm("현재 미니맵을 초기화할까요?")){ return; }
       try{
         const data = await apiJson("/api/minimap", {method:"DELETE"});
         lastMiniMapStatus = data;
-        addMsg("bot", "Mini-map reset.");
+        addMsg("bot", "미니맵을 초기화했습니다.");
         await refreshStatus();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -516,6 +517,15 @@
 
     async function manual(direction){
       try{
+        const label = ({
+          forward: "전진",
+          backward: "후진",
+          strafe_left: "왼쪽 이동",
+          strafe_right: "오른쪽 이동",
+          rotate_left: "좌회전",
+          rotate_right: "우회전",
+          stop: "정지",
+        })[direction] || direction;
         const speed = ({
           forward: 0.35,
           backward: 0.3,
@@ -526,7 +536,7 @@
           stop: 0.0,
         })[direction] ?? 0.35;
         await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed})});
-        addMsg("bot", direction === "stop" ? "Manual motion stopped." : `Manual command: ${direction}`);
+        addMsg("bot", direction === "stop" ? "수동 주행을 멈췄습니다." : `수동 명령: ${label}`);
         await refreshStatus();
       }catch(error){ showError(error); }
     }
@@ -534,7 +544,7 @@
     async function cancelNavigation(){
       try{
         const data = await apiJson("/api/navigation/cancel", {method:"POST"});
-        addMsg("bot", data.message);
+        addMsg("bot", "경로 실행을 취소했습니다.");
         await refreshStatus();
       }catch(error){ showError(error); }
     }
@@ -542,14 +552,14 @@
     async function setFollow(enabled){
       try{
         await apiJson("/api/follow", {method:"POST", body:JSON.stringify({enabled})});
-        addMsg("bot", enabled ? "Follow mode enabled." : "Follow mode disabled.");
+        addMsg("bot", enabled ? "추종 모드를 켰습니다." : "추종 모드를 껐습니다.");
         await refreshStatus();
       }catch(error){ showError(error); }
     }
 
     async function startFollowTrial(){
       const blockers = lastStatus?.sensor_fusion?.follow_blockers || [];
-      addMsg("bot", blockers.length ? `Follow trial armed with blockers: ${blockers.join(", ")}` : "Follow trial armed. Watch LiDAR safety and person lock.");
+      addMsg("bot", blockers.length ? `추종 시험을 시작했지만 막히는 항목이 있습니다: ${blockers.join(", ")}` : "추종 시험을 시작했습니다. 사람 검출과 LiDAR 안전 상태를 함께 확인하세요.");
       await setFollow(true);
     }
 
@@ -557,7 +567,7 @@
       try{
         const serverUrl = document.getElementById("server-url").value.trim();
         const data = await apiJson("/api/assistant", {method:"POST", body:JSON.stringify({enabled:!assistantEnabled, server_url:serverUrl})});
-        addMsg("bot", data.mode === "assistant" ? "Assistant mode enabled." : "Standalone mode enabled.");
+        addMsg("bot", data.mode === "assistant" ? "어시스턴트 모드를 켰습니다." : "독립 모드를 켰습니다.");
         await refreshStatus();
       }catch(error){ showError(error); }
     }
@@ -578,7 +588,7 @@
 
     async function goWaypoint(){
       const name = waypointSelect.value;
-      if(!name){ addMsg("bot", "Select a checkpoint first."); return; }
+      if(!name){ addMsg("bot", "먼저 체크포인트를 선택하세요."); return; }
       await goWaypointByName(name);
     }
 
@@ -595,10 +605,10 @@
       try{
         const rawX = document.getElementById("wp-x").value;
         const rawY = document.getElementById("wp-y").value;
-        if(rawX === "" || rawY === ""){ addMsg("bot", "Enter x and y or use current pose / map click."); return; }
-        const payload = {name:document.getElementById("wp-name").value.trim(), x:Number(rawX), y:Number(rawY), theta:Number(document.getElementById("wp-theta").value || 0), description:"saved from mission panel"};
+        if(rawX === "" || rawY === ""){ addMsg("bot", "x, y 를 입력하거나 현재 위치/맵 클릭을 사용하세요."); return; }
+        const payload = {name:document.getElementById("wp-name").value.trim(), x:Number(rawX), y:Number(rawY), theta:Number(document.getElementById("wp-theta").value || 0), description:"미션 패널에서 저장"};
         await apiJson("/api/waypoints", {method:"POST", body:JSON.stringify(payload)});
-        addMsg("bot", `${payload.name} saved.`);
+        addMsg("bot", `${payload.name} 체크포인트를 저장했습니다.`);
         event.target.reset();
         await refreshMissionData();
         await refreshMap();
@@ -608,9 +618,9 @@
     async function saveCurrentPoseWaypoint(){
       try{
         const name = document.getElementById("wp-name").value.trim();
-        if(!name){ addMsg("bot", "Type a checkpoint name first."); return; }
-        await apiJson("/api/waypoints/current", {method:"POST", body:JSON.stringify({name, description:"saved from current pose"})});
-        addMsg("bot", `${name} saved from current pose.`);
+        if(!name){ addMsg("bot", "먼저 체크포인트 이름을 입력하세요."); return; }
+        await apiJson("/api/waypoints/current", {method:"POST", body:JSON.stringify({name, description:"현재 위치에서 저장"})});
+        addMsg("bot", `${name} 을(를) 현재 위치로 저장했습니다.`);
         await refreshMissionData();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -619,10 +629,10 @@
     async function saveClickedWaypoint(){
       try{
         const name = document.getElementById("wp-name").value.trim();
-        if(!name){ addMsg("bot", "Type a checkpoint name first."); return; }
-        if(!lastClickedPoint){ addMsg("bot", "Click the map first."); return; }
-        await apiJson("/api/waypoints", {method:"POST", body:JSON.stringify({name, x:lastClickedPoint.x, y:lastClickedPoint.y, theta:Number(document.getElementById("wp-theta").value || 0), description:"saved from map click"})});
-        addMsg("bot", `${name} saved from clicked point.`);
+        if(!name){ addMsg("bot", "먼저 체크포인트 이름을 입력하세요."); return; }
+        if(!lastClickedPoint){ addMsg("bot", "먼저 맵을 클릭하세요."); return; }
+        await apiJson("/api/waypoints", {method:"POST", body:JSON.stringify({name, x:lastClickedPoint.x, y:lastClickedPoint.y, theta:Number(document.getElementById("wp-theta").value || 0), description:"맵 클릭으로 저장"})});
+        addMsg("bot", `${name} 을(를) 선택한 지점으로 저장했습니다.`);
         await refreshMissionData();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -630,29 +640,29 @@
 
     function clearClickedPoint(){
       lastClickedPoint = null;
-      document.getElementById("clicked-point-note").textContent = "Click the map to copy x and y into the form. If SLAM is not ready, the panel falls back to a LiDAR local map.";
+      document.getElementById("clicked-point-note").textContent = "맵을 클릭하면 x, y가 입력됩니다. SLAM 맵이 아직 없으면 LiDAR 로컬 맵 기준으로 저장합니다.";
       if(lastMap){ apiJson("/api/waypoints").then((data) => drawMap(lastMap, data.items || [])).catch(() => {}); }
     }
 
     function fillCurrentPose(){
-      if(!lastPose){ addMsg("bot", "Current pose is not available yet."); return; }
+      if(!lastPose){ addMsg("bot", "현재 위치가 아직 없습니다."); return; }
       document.getElementById("wp-x").value = lastPose.x;
       document.getElementById("wp-y").value = lastPose.y;
       document.getElementById("wp-theta").value = lastPose.theta;
-      addMsg("bot", "Copied current pose into the checkpoint form.");
+      addMsg("bot", "현재 위치를 체크포인트 입력칸에 복사했습니다.");
     }
 
     async function deleteSelectedWaypoint(){
       const name = waypointSelect.value;
-      if(!name){ addMsg("bot", "Select a checkpoint first."); return; }
+      if(!name){ addMsg("bot", "먼저 체크포인트를 선택하세요."); return; }
       await deleteWaypoint(name);
     }
 
     async function deleteWaypoint(name){
-      if(!window.confirm(`Delete checkpoint ${name}?`)){ return; }
+      if(!window.confirm(`${name} 체크포인트를 삭제할까요?`)){ return; }
       try{
         const data = await apiJson(`/api/waypoints/${encodeURIComponent(name)}`, {method:"DELETE"});
-        addMsg("bot", `${name} deleted.`);
+        addMsg("bot", `${name} 체크포인트를 삭제했습니다.`);
         routeSequence = routeSequence.filter((item) => item !== name);
         syncRouteSequence();
         await refreshMissionData();
@@ -661,10 +671,10 @@
     }
 
     async function clearAllWaypoints(){
-      if(!window.confirm("Clear all checkpoints and saved routes?")){ return; }
+      if(!window.confirm("모든 체크포인트와 저장 경로를 삭제할까요?")){ return; }
       try{
         const data = await apiJson("/api/waypoints", {method:"DELETE"});
-        addMsg("bot", `Cleared ${data.cleared_waypoints} checkpoint(s) and ${data.cleared_destinations} route(s).`);
+        addMsg("bot", `체크포인트 ${data.cleared_waypoints}개와 경로 ${data.cleared_destinations}개를 삭제했습니다.`);
         routeSequence = [];
         syncRouteSequence();
         await refreshMissionData();
@@ -676,17 +686,17 @@
     async function saveRoute(){
       try{
         const name = document.getElementById("route-name").value.trim();
-        if(!name){ addMsg("bot", "Type a route name first."); return; }
-        if(!routeSequence.length){ addMsg("bot", "Add checkpoints to the route first."); return; }
-        const data = await apiJson("/api/destinations", {method:"POST", body:JSON.stringify({name, sequence:routeSequence, description:"saved from mission panel"})});
-        addMsg("bot", `${name} route saved with ${data.destination.sequence.length} stop(s).`);
+        if(!name){ addMsg("bot", "먼저 경로 이름을 입력하세요."); return; }
+        if(!routeSequence.length){ addMsg("bot", "먼저 체크포인트를 경로에 추가하세요."); return; }
+        const data = await apiJson("/api/destinations", {method:"POST", body:JSON.stringify({name, sequence:routeSequence, description:"미션 패널에서 저장"})});
+        addMsg("bot", `${name} 경로를 ${data.destination.sequence.length}개 경유지로 저장했습니다.`);
         await refreshMissionData();
       }catch(error){ showError(error); }
     }
 
     async function runRouteNow(){
       try{
-        if(!routeSequence.length){ addMsg("bot", "Add checkpoints to the route first."); return; }
+        if(!routeSequence.length){ addMsg("bot", "먼저 체크포인트를 경로에 추가하세요."); return; }
         const routeName = document.getElementById("route-name").value.trim() || "route_now";
         const data = await apiJson("/api/routes/run", {method:"POST", body:JSON.stringify({name:routeName, sequence:routeSequence})});
         addMsg("bot", data.message);
@@ -703,10 +713,10 @@
     }
 
     async function deleteDestination(name){
-      if(!window.confirm(`Delete route ${name}?`)){ return; }
+      if(!window.confirm(`${name} 경로를 삭제할까요?`)){ return; }
       try{
         await apiJson(`/api/destinations/${encodeURIComponent(name)}`, {method:"DELETE"});
-        addMsg("bot", `${name} route deleted.`);
+        addMsg("bot", `${name} 경로를 삭제했습니다.`);
         await refreshMissionData();
       }catch(error){ showError(error); }
     }
@@ -714,10 +724,10 @@
     function toggleCamera(){
       cameraEnabled = !cameraEnabled;
       document.getElementById("camera-frame").style.display = cameraEnabled ? "block" : "none";
-      document.getElementById("camera-toggle-btn").textContent = cameraEnabled ? "Close Camera" : "Open Camera";
+      document.getElementById("camera-toggle-btn").textContent = cameraEnabled ? "카메라 닫기" : "카메라 열기";
       if(cameraEnabled){ refreshCamera(true); }
       else{
-        document.getElementById("camera-summary").textContent = "Camera preview is off until you open it.";
+        document.getElementById("camera-summary").textContent = "카메라를 열기 전까지 미리보기는 꺼져 있습니다.";
         document.getElementById("camera-feed").removeAttribute("src");
       }
     }
@@ -735,7 +745,7 @@
       lastClickedPoint = {x:Number(point.x.toFixed(2)), y:Number(point.y.toFixed(2))};
       document.getElementById("wp-x").value = lastClickedPoint.x.toFixed(2);
       document.getElementById("wp-y").value = lastClickedPoint.y.toFixed(2);
-      document.getElementById("clicked-point-note").textContent = `Selected point x=${lastClickedPoint.x}, y=${lastClickedPoint.y}. Save it or clear it.`;
+      document.getElementById("clicked-point-note").textContent = `선택한 지점 x=${lastClickedPoint.x}, y=${lastClickedPoint.y}. 저장하거나 선택 해제할 수 있습니다.`;
       apiJson("/api/waypoints").then((data) => drawMap(lastMap, data.items || [])).catch(() => {});
     });
 
@@ -758,14 +768,14 @@
         document.getElementById("chat-input").value = transcript;
         sendChat();
       };
-      recognition.onend = () => { voiceBtn.textContent = "Voice"; };
+      recognition.onend = () => { voiceBtn.textContent = "음성 입력"; };
       voiceBtn.onclick = () => {
         recognition.start();
-        voiceBtn.textContent = "Listening...";
+        voiceBtn.textContent = "듣는 중...";
       };
     }else{
       voiceBtn.disabled = true;
-      voiceBtn.textContent = "Voice Unsupported";
+      voiceBtn.textContent = "음성 미지원";
     }
 
     async function refreshAll(){
@@ -778,7 +788,7 @@
     }
 
     syncRouteSequence();
-    addMsg("bot", "Mission panel ready. Save fresh checkpoints, build a route, and test follow mode from here.");
+    addMsg("bot", "미션 패널 준비가 끝났습니다. 체크포인트를 저장하고, 경로를 만들고, 추종 모드를 시험해 보세요.");
     refreshAll();
     setInterval(refreshStatus, 1500);
     setInterval(() => refreshCamera(false), 1000);
