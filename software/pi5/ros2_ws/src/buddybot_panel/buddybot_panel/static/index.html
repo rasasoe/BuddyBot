@@ -47,7 +47,7 @@
     .triple{grid-template-columns:repeat(3,minmax(0,1fr))}
     .map-wrap,.camera-frame{position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--line);background:#f5f1e8}
     .map-wrap{min-height:468px}
-    #map-canvas{display:block;width:100%;height:468px;cursor:crosshair}
+    #map-canvas{display:block;width:100%;height:468px;cursor:crosshair;touch-action:manipulation}
     .camera-frame{aspect-ratio:16/9;background:#0f1518}
     .camera-frame img{display:block;width:100%;height:100%;object-fit:cover}
     .overlay{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
@@ -140,6 +140,18 @@
             <div class="chip" id="pose-chip">Pose: none</div>
           </div>
         </div>
+        <div class="callout">
+          <strong>Mini-map Generator</strong>
+          <div class="note" id="minimap-note">Generate a local LiDAR mini-map with avoidance driving, then save checkpoints directly on that map.</div>
+          <div class="dual">
+            <button class="accent" onclick="startMiniMap()">Generate Mini-map</button>
+            <button class="secondary" onclick="stopMiniMap()">Stop Mini-map</button>
+          </div>
+          <div class="dual">
+            <button class="secondary" onclick="refreshMiniMapStatus()">Refresh Mini-map</button>
+            <button class="danger" onclick="resetMiniMap()">Reset Mini-map</button>
+          </div>
+        </div>
         <div class="mission-actions">
           <select id="waypoint-select"></select>
           <div class="dual">
@@ -193,6 +205,7 @@
     let lastMap = null;
     let lastPose = null;
     let lastStatus = null;
+    let lastMiniMapStatus = null;
     let lastClickedPoint = null;
     let routeSequence = [];
 
@@ -260,10 +273,12 @@
       return mapCanvas.height - (((y - mapData.origin.y) / (mapData.height * mapData.resolution)) * mapCanvas.height);
     }
 
-    function canvasToWorld(x, y, mapData){
+    function canvasToWorld(x, y, mapData, rect){
+      const renderWidth = rect?.width || mapCanvas.width;
+      const renderHeight = rect?.height || mapCanvas.height;
       return {
-        x: mapData.origin.x + (x / mapCanvas.width) * (mapData.width * mapData.resolution),
-        y: mapData.origin.y + ((mapCanvas.height - y) / mapCanvas.height) * (mapData.height * mapData.resolution),
+        x: mapData.origin.x + (x / renderWidth) * (mapData.width * mapData.resolution),
+        y: mapData.origin.y + ((renderHeight - y) / renderHeight) * (mapData.height * mapData.resolution),
       };
     }
 
@@ -365,8 +380,10 @@
     async function refreshStatus(){
       const data = await apiJson("/api/status");
       const fusion = data.sensor_fusion || {};
+      const minimap = data.minimap || {};
       assistantEnabled = data.mode === "assistant";
       lastStatus = data;
+      lastMiniMapStatus = minimap;
       lastPose = data.pose || null;
       const scanState = data.scan_available ? `live ${data.scan_age_sec}s` : "waiting";
       const cameraState = data.camera_available ? `live ${data.camera_age_sec}s` : "waiting";
@@ -398,6 +415,13 @@
       document.getElementById("follow-note").textContent = fusion.follow_ready ? "Follow trial is ready. Turn it on and verify person tracking with LiDAR safety active." : `Follow is blocked by: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"}`;
       document.getElementById("camera-summary").textContent = !cameraEnabled ? "Camera preview is off until you open it." : data.camera_available ? "Live preview from /camera/image_raw is active." : "No camera frame yet. Check camera_node and USB camera power.";
       document.getElementById("camera-note").textContent = data.pico_connected ? "Pico status is fresh. Base bridge looks alive." : "Pico status is stale. Check the USB serial bridge.";
+      document.getElementById("minimap-note").textContent = minimap.active
+        ? `Mini-map building: ${Math.round((minimap.progress || 0) * 100)}% | frames ${minimap.frames || 0} | known cells ${minimap.known_cells || 0} | distance ${minimap.distance_m || 0}m`
+        : minimap.completed
+          ? `Mini-map complete. Known cells ${minimap.known_cells || 0}, frames ${minimap.frames || 0}. You can click it to save checkpoints.`
+          : minimap.map_available
+            ? `Mini-map paused. Known cells ${minimap.known_cells || 0}. Resume or reset it anytime.`
+            : "Generate a local LiDAR mini-map with avoidance driving, then save checkpoints directly on that map.";
     }
 
     async function refreshMissionData(){
@@ -438,10 +462,51 @@
       const waypointData = await apiJson("/api/waypoints");
       lastMap = mapData;
       lastPose = mapData.pose || lastPose;
-      const sourceLabel = mapData.source === "ros_map" ? "Map: live SLAM" : mapData.source === "scan_local" ? "Map: LiDAR local" : "Map: synthetic";
+      const sourceLabel = mapData.source === "ros_map" ? "Map: live SLAM" : mapData.source === "mini_map" ? "Map: mini-map" : mapData.source === "scan_local" ? "Map: LiDAR local" : "Map: synthetic";
       document.getElementById("map-source-chip").textContent = sourceLabel;
-      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "Global SLAM map is available." : mapData.source === "scan_local" ? "Global map is not ready, so the panel is showing a LiDAR local map around the robot." : "No ROS map yet. A synthetic canvas is being rendered from saved checkpoints.";
+      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "Global SLAM map is available." : mapData.source === "mini_map" ? "A cumulative LiDAR mini-map is available for local checkpoint planning." : mapData.source === "scan_local" ? "Global map is not ready, so the panel is showing a LiDAR local map around the robot." : "No /map or usable /scan has arrived yet, so the panel fell back to a synthetic canvas.";
       drawMap(mapData, waypointData.items || []);
+    }
+
+    async function refreshMiniMapStatus(){
+      try{
+        lastMiniMapStatus = await apiJson("/api/minimap");
+        if(lastStatus){
+          lastStatus.minimap = lastMiniMapStatus;
+        }
+        await refreshStatus();
+        await refreshMap();
+      }catch(error){ showError(error); }
+    }
+
+    async function startMiniMap(){
+      try{
+        const data = await apiJson("/api/minimap/start", {method:"POST"});
+        lastMiniMapStatus = data;
+        addMsg("bot", "Mini-map generation started. BuddyBot will wander slowly with LiDAR avoidance.");
+        await refreshStatus();
+        await refreshMap();
+      }catch(error){ showError(error); }
+    }
+
+    async function stopMiniMap(){
+      try{
+        const data = await apiJson("/api/minimap/stop", {method:"POST"});
+        lastMiniMapStatus = data;
+        addMsg("bot", "Mini-map generation stopped.");
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function resetMiniMap(){
+      if(!window.confirm("Reset the current mini-map?")){ return; }
+      try{
+        const data = await apiJson("/api/minimap", {method:"DELETE"});
+        lastMiniMapStatus = data;
+        addMsg("bot", "Mini-map reset.");
+        await refreshStatus();
+        await refreshMap();
+      }catch(error){ showError(error); }
     }
 
     async function manual(direction){
@@ -652,7 +717,7 @@
     mapCanvas.addEventListener("click", (event) => {
       if(!lastMap){ return; }
       const rect = mapCanvas.getBoundingClientRect();
-      const point = canvasToWorld(event.clientX - rect.left, event.clientY - rect.top, lastMap);
+      const point = canvasToWorld(event.clientX - rect.left, event.clientY - rect.top, lastMap, rect);
       lastClickedPoint = {x:Number(point.x.toFixed(2)), y:Number(point.y.toFixed(2))};
       document.getElementById("wp-x").value = lastClickedPoint.x.toFixed(2);
       document.getElementById("wp-y").value = lastClickedPoint.y.toFixed(2);

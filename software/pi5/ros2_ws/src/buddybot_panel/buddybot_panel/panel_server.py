@@ -140,6 +140,7 @@ class PanelBridge:
         self._latest_map: Optional[Dict[str, Any]] = None
         self._latest_scan_map: Optional[Dict[str, Any]] = None
         self._latest_scan_stamp: Optional[float] = None
+        self._latest_scan_summary: Optional[Dict[str, float]] = None
         self._scan_frames_received = 0
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
@@ -156,6 +157,17 @@ class PanelBridge:
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
         self._last_cli_scan_attempt = 0.0
+        self._mini_map: Optional[Dict[str, Any]] = None
+        self._mini_map_active = False
+        self._mini_map_completed = False
+        self._mini_map_started_at: Optional[float] = None
+        self._mini_map_completed_at: Optional[float] = None
+        self._mini_map_frames = 0
+        self._mini_map_distance_m = 0.0
+        self._mini_map_last_pose: Optional[Dict[str, float]] = None
+        self._mini_map_completion_goal_cells = 7500
+        self._mini_map_min_duration_sec = 18.0
+        self._mini_map_target_duration_sec = 36.0
 
         self._init_ros()
 
@@ -178,6 +190,7 @@ class PanelBridge:
             self._destination_delete_pub = self._node.create_publisher(String, "/nav/destination_delete", 10)
             self._nav_cancel_pub = self._node.create_publisher(String, "/nav/cancel", 10)
             self._node.create_timer(0.1, self._manual_publish_timer)
+            self._node.create_timer(0.2, self._mini_map_timer)
 
             map_qos = 10
             if QoSProfile is not None:
@@ -281,11 +294,14 @@ class PanelBridge:
             with self._lock:
                 pose = dict(self._latest_pose) if self._latest_pose is not None else None
             scan_map = self._build_scan_map(msg, pose)
+            scan_summary = self._summarize_scan(msg)
             with self._lock:
                 self._latest_scan_map = scan_map
                 self._latest_scan_stamp = time.time()
+                self._latest_scan_summary = scan_summary
                 self._scan_frames_received += 1
                 self._last_scan_error = None
+            self._accumulate_mini_map_scan(msg, pose)
         except Exception as exc:
             self._last_scan_error = repr(exc)
             return
@@ -452,6 +468,140 @@ class PanelBridge:
             "cells": cells,
         }
 
+    def _summarize_scan(self, msg: LaserScan) -> Dict[str, float]:
+        def sector_min(start_ratio: float, end_ratio: float) -> float:
+            count = len(msg.ranges)
+            if count <= 0:
+                return float("inf")
+            start = max(0, min(count, int(count * start_ratio)))
+            end = max(start + 1, min(count, int(count * end_ratio)))
+            values = []
+            for raw_range in msg.ranges[start:end]:
+                distance = float(raw_range)
+                if math.isfinite(distance) and msg.range_min <= distance <= msg.range_max:
+                    values.append(distance)
+            return min(values) if values else float("inf")
+
+        return {
+            "front_min": round(min(sector_min(0.0, 0.08), sector_min(0.92, 1.0)), 3),
+            "left_min": round(sector_min(0.20, 0.38), 3),
+            "right_min": round(sector_min(0.62, 0.80), 3),
+            "valid_points": float(
+                sum(
+                    1
+                    for raw_range in msg.ranges
+                    if math.isfinite(float(raw_range)) and msg.range_min <= float(raw_range) <= msg.range_max
+                )
+            ),
+        }
+
+    def _new_mini_map(self, anchor_pose: Optional[Dict[str, float]], size_m: float = 14.0, resolution: float = 0.05) -> Dict[str, Any]:
+        width = max(1, int(size_m / resolution))
+        height = width
+        anchor_x = float(anchor_pose["x"]) if anchor_pose is not None else 0.0
+        anchor_y = float(anchor_pose["y"]) if anchor_pose is not None else 0.0
+        return {
+            "source": "mini_map",
+            "width": width,
+            "height": height,
+            "resolution": resolution,
+            "origin": {
+                "x": anchor_x - (size_m / 2.0),
+                "y": anchor_y - (size_m / 2.0),
+            },
+            "cells": [-1] * (width * height),
+        }
+
+    def _grid_index(self, width: int, height: int, cx: int, cy: int) -> Optional[int]:
+        if not (0 <= cx < width and 0 <= cy < height):
+            return None
+        return cy * width + cx
+
+    def _mini_map_world_to_grid(self, x: float, y: float, mini_map: Dict[str, Any]) -> tuple[int, int]:
+        origin = mini_map["origin"]
+        resolution = float(mini_map["resolution"])
+        return (
+            int((x - float(origin["x"])) / resolution),
+            int((y - float(origin["y"])) / resolution),
+        )
+
+    def _trace_ray(self, mini_map: Dict[str, Any], start: tuple[int, int], end: tuple[int, int], occupied: bool) -> None:
+        width = int(mini_map["width"])
+        height = int(mini_map["height"])
+        cells = mini_map["cells"]
+        x0, y0 = start
+        x1, y1 = end
+        dx = abs(x1 - x0)
+        sx = 1 if x0 < x1 else -1
+        dy = -abs(y1 - y0)
+        sy = 1 if y0 < y1 else -1
+        err = dx + dy
+        x, y = x0, y0
+        while True:
+            if (x, y) != (x1, y1):
+                idx = self._grid_index(width, height, x, y)
+                if idx is not None and cells[idx] < 0:
+                    cells[idx] = 0
+            if x == x1 and y == y1:
+                break
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x += sx
+            if e2 <= dx:
+                err += dx
+                y += sy
+        if occupied:
+            idx = self._grid_index(width, height, x1, y1)
+            if idx is not None:
+                cells[idx] = 100
+
+    def _accumulate_mini_map_scan(self, msg: LaserScan, pose: Optional[Dict[str, float]]) -> None:
+        with self._lock:
+            mini_map = self._mini_map
+            active = self._mini_map_active
+
+        if mini_map is None:
+            return
+
+        base_pose = pose or self.current_pose() or {"x": 0.0, "y": 0.0, "theta": 0.0}
+        base_x = float(base_pose["x"])
+        base_y = float(base_pose["y"])
+        theta = float(base_pose["theta"])
+        start = self._mini_map_world_to_grid(base_x, base_y, mini_map)
+        half_span = (float(mini_map["width"]) * float(mini_map["resolution"])) / 2.0
+
+        angle = float(msg.angle_min)
+        range_min = float(msg.range_min)
+        range_max = float(msg.range_max)
+        for raw_range in msg.ranges:
+            distance = float(raw_range)
+            is_valid = math.isfinite(distance) and range_min <= distance <= range_max
+            clipped_distance = min(distance, half_span) if is_valid else half_span
+            heading = theta + angle
+            end_x = base_x + math.cos(heading) * clipped_distance
+            end_y = base_y + math.sin(heading) * clipped_distance
+            end = self._mini_map_world_to_grid(end_x, end_y, mini_map)
+            self._trace_ray(mini_map, start, end, occupied=is_valid and distance <= half_span)
+            angle += float(msg.angle_increment)
+
+        now = time.time()
+        with self._lock:
+            self._mini_map = mini_map
+            self._mini_map_frames += 1
+            last_pose = self._mini_map_last_pose
+            if last_pose is not None:
+                self._mini_map_distance_m += math.hypot(base_x - float(last_pose["x"]), base_y - float(last_pose["y"]))
+            self._mini_map_last_pose = {"x": base_x, "y": base_y, "theta": theta}
+            if active and self._mini_map_should_complete(now):
+                self._mini_map_active = False
+                self._mini_map_completed = True
+                self._mini_map_completed_at = now
+                self._manual_active = False
+                self._manual_linear_x = 0.0
+                self._manual_linear_y = 0.0
+                self._manual_angular_z = 0.0
+
     def _build_synthetic_map(self) -> Dict[str, Any]:
         waypoints = self.list_waypoints()
         if not waypoints:
@@ -527,10 +677,13 @@ class PanelBridge:
             with self._lock:
                 pose = dict(self._latest_pose) if self._latest_pose is not None else None
             scan_map = self._build_scan_map(scan_msg, pose)
+            scan_summary = self._summarize_scan(scan_msg)
             with self._lock:
                 self._latest_scan_map = scan_map
                 self._latest_scan_stamp = now
+                self._latest_scan_summary = scan_summary
                 self._last_scan_error = None
+            self._accumulate_mini_map_scan(scan_msg, pose)
             return True
         except Exception as exc:
             self._last_scan_error = repr(exc)
@@ -569,6 +722,7 @@ class PanelBridge:
             "person_bbox": self.person_bbox(),
             "person_frames_received": self.person_frames_received(),
             "sensor_fusion": self.sensor_fusion_summary(),
+            "minimap": self.mini_map_status(),
         }
 
     def current_pose(self) -> Optional[Dict[str, float]]:
@@ -577,11 +731,12 @@ class PanelBridge:
 
     def map_available(self) -> bool:
         with self._lock:
-            return self._latest_map is not None or self._latest_scan_map is not None
+            mini_map_ready = self._mini_map is not None and any(int(cell) >= 0 for cell in self._mini_map.get("cells", []))
+            return self._latest_map is not None or self._latest_scan_map is not None or mini_map_ready
 
     def camera_available(self) -> bool:
         with self._lock:
-            return self._latest_camera_jpeg is not None
+            return self._latest_camera_jpeg is not None and self._latest_camera_stamp is not None and (time.time() - self._latest_camera_stamp) < 3.0
 
     def camera_age_sec(self) -> Optional[float]:
         with self._lock:
@@ -590,8 +745,13 @@ class PanelBridge:
             return round(max(0.0, time.time() - self._latest_camera_stamp), 2)
 
     def scan_available(self) -> bool:
+        needs_probe = False
         with self._lock:
-            return self._latest_scan_map is not None
+            needs_probe = self._latest_scan_map is None or self._latest_scan_stamp is None or (time.time() - self._latest_scan_stamp) >= 3.0
+        if needs_probe:
+            self._poll_scan_from_cli(min_interval_sec=3.0)
+        with self._lock:
+            return self._latest_scan_map is not None and self._latest_scan_stamp is not None and (time.time() - self._latest_scan_stamp) < 3.0
 
     def scan_age_sec(self) -> Optional[float]:
         with self._lock:
@@ -713,6 +873,145 @@ class PanelBridge:
             "nav_blockers": nav_blockers,
         }
 
+    def mini_map_status(self) -> Dict[str, Any]:
+        with self._lock:
+            mini_map = dict(self._mini_map) if self._mini_map is not None else None
+            active = bool(self._mini_map_active)
+            completed = bool(self._mini_map_completed)
+            started_at = self._mini_map_started_at
+            completed_at = self._mini_map_completed_at
+            frames = int(self._mini_map_frames)
+            distance_m = round(float(self._mini_map_distance_m), 2)
+            scan_summary = dict(self._latest_scan_summary) if self._latest_scan_summary is not None else None
+
+        duration_sec = round(max(0.0, time.time() - started_at), 2) if started_at else 0.0
+        known_cells = 0
+        occupied_cells = 0
+        progress = 0.0
+        if mini_map is not None:
+            cells = mini_map.get("cells", [])
+            known_cells = sum(1 for cell in cells if int(cell) >= 0)
+            occupied_cells = sum(1 for cell in cells if int(cell) >= 65)
+            cell_progress = min(1.0, known_cells / float(self._mini_map_completion_goal_cells))
+            time_progress = min(1.0, duration_sec / float(self._mini_map_target_duration_sec))
+            progress = round(min(1.0, (cell_progress * 0.75) + (time_progress * 0.25)), 3)
+
+        status = "idle"
+        if active:
+            status = "building"
+        elif completed:
+            status = "complete"
+        elif mini_map is not None:
+            status = "paused"
+
+        return {
+            "active": active,
+            "completed": completed,
+            "status": status,
+            "duration_sec": duration_sec,
+            "frames": frames,
+            "distance_m": distance_m,
+            "known_cells": known_cells,
+            "occupied_cells": occupied_cells,
+            "progress": progress,
+            "completed_at": completed_at,
+            "scan_summary": scan_summary,
+            "map_available": mini_map is not None and known_cells > 0,
+        }
+
+    def _mini_map_should_complete(self, now: float) -> bool:
+        if self._mini_map is None or self._mini_map_started_at is None:
+            return False
+        elapsed = now - self._mini_map_started_at
+        if elapsed < self._mini_map_min_duration_sec or self._mini_map_frames < 45:
+            return False
+        cells = self._mini_map.get("cells", [])
+        known_cells = sum(1 for cell in cells if int(cell) >= 0)
+        if known_cells >= self._mini_map_completion_goal_cells:
+            return True
+        return elapsed >= self._mini_map_target_duration_sec and known_cells >= max(1800, self._mini_map_completion_goal_cells // 3)
+
+    def _set_manual_motion(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+        with self._lock:
+            self._manual_active = True
+            self._manual_linear_x = float(linear_x)
+            self._manual_linear_y = float(linear_y)
+            self._manual_angular_z = float(angular_z)
+
+    def _mini_map_timer(self) -> None:
+        with self._lock:
+            active = bool(self._mini_map_active)
+            scan_summary = dict(self._latest_scan_summary) if self._latest_scan_summary is not None else None
+            safety_active = bool(self._safety_active)
+            scan_stamp = self._latest_scan_stamp
+        if not active:
+            return
+        if safety_active or scan_summary is None or scan_stamp is None or (time.time() - scan_stamp) > 2.0:
+            self._clear_manual_motion()
+            return
+
+        front_min = float(scan_summary.get("front_min", float("inf"))) if scan_summary else float("inf")
+        left_min = float(scan_summary.get("left_min", float("inf"))) if scan_summary else float("inf")
+        right_min = float(scan_summary.get("right_min", float("inf"))) if scan_summary else float("inf")
+        elapsed = 0.0
+        if self._mini_map_started_at is not None:
+            elapsed = max(0.0, time.time() - self._mini_map_started_at)
+
+        linear_x = 0.0
+        angular_z = 0.0
+        if front_min < 0.55:
+            angular_z = -0.48 if right_min > left_min else 0.48
+        elif left_min < 0.40 and right_min > left_min:
+            linear_x = 0.08
+            angular_z = -0.32
+        elif right_min < 0.40 and left_min > right_min:
+            linear_x = 0.08
+            angular_z = 0.32
+        else:
+            phase = int(elapsed // 8.0) % 3
+            linear_x = 0.15
+            angular_z = 0.16 if phase == 0 else -0.16 if phase == 1 else 0.0
+        self._set_manual_motion(linear_x, 0.0, angular_z)
+
+    def start_mini_map(self) -> Dict[str, Any]:
+        anchor_pose = self.current_pose() or {"x": 0.0, "y": 0.0, "theta": 0.0, "source": "panel"}
+        self.set_follow_enabled(False, update_last_command=False)
+        self.cancel_navigation()
+        self._clear_manual_motion()
+        with self._lock:
+            self._mini_map = self._new_mini_map(anchor_pose)
+            self._mini_map_active = True
+            self._mini_map_completed = False
+            self._mini_map_started_at = time.time()
+            self._mini_map_completed_at = None
+            self._mini_map_frames = 0
+            self._mini_map_distance_m = 0.0
+            self._mini_map_last_pose = {"x": float(anchor_pose["x"]), "y": float(anchor_pose["y"]), "theta": float(anchor_pose["theta"])}
+        self.last_command = "minimap:start"
+        return self.mini_map_status()
+
+    def stop_mini_map(self, *, update_last_command: bool = True) -> Dict[str, Any]:
+        with self._lock:
+            self._mini_map_active = False
+        self._clear_manual_motion()
+        if update_last_command:
+            self.last_command = "minimap:stop"
+        return self.mini_map_status()
+
+    def reset_mini_map(self) -> Dict[str, Any]:
+        with self._lock:
+            self._mini_map = None
+            self._mini_map_active = False
+            self._mini_map_completed = False
+            self._mini_map_started_at = None
+            self._mini_map_completed_at = None
+            self._mini_map_frames = 0
+            self._mini_map_distance_m = 0.0
+            self._mini_map_last_pose = None
+        self._clear_manual_motion()
+        self.last_command = "minimap:reset"
+        return self.mini_map_status()
+
     def _publish_follow_state(self, enabled: bool) -> None:
         if not self.ros2_connected or self._follow_pub is None:
             return
@@ -737,6 +1036,8 @@ class PanelBridge:
         self._nav_cancel_pub.publish(msg)
 
     def set_follow_enabled(self, enabled: bool, *, update_last_command: bool = True) -> None:
+        if enabled:
+            self.stop_mini_map(update_last_command=False)
         self.follow_enabled = bool(enabled)
         if self.follow_enabled:
             self._clear_manual_motion()
@@ -761,11 +1062,15 @@ class PanelBridge:
         self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
-        if self._latest_map is None and self._latest_scan_map is None:
+        if self._latest_map is None and (
+            self._latest_scan_map is None or self._latest_scan_stamp is None or (time.time() - self._latest_scan_stamp) > 2.5
+        ):
             self._poll_scan_from_cli()
         with self._lock:
             if self._latest_map is not None:
                 payload = dict(self._latest_map)
+            elif self._mini_map is not None and any(int(cell) >= 0 for cell in self._mini_map.get("cells", [])):
+                payload = dict(self._mini_map)
             elif self._latest_scan_map is not None:
                 payload = dict(self._latest_scan_map)
             else:
@@ -866,6 +1171,7 @@ class PanelBridge:
 
     def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
+        self.stop_mini_map(update_last_command=False)
         self.follow_enabled = False
         self._publish_follow_state(False)
         self.cancel_navigation()
@@ -893,14 +1199,11 @@ class PanelBridge:
         if not self.ros2_connected or self._manual_pub is None:
             return
 
-        with self._lock:
-            self._manual_active = True
-            self._manual_linear_x = linear_x
-            self._manual_linear_y = linear_y
-            self._manual_angular_z = angular_z
+        self._set_manual_motion(linear_x, linear_y, angular_z)
 
     def go_waypoint(self, name: str) -> None:
         self.last_command = f"nav:{name}"
+        self.stop_mini_map(update_last_command=False)
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
         if self.ros2_connected and self._waypoint_goal_pub is not None:
@@ -910,6 +1213,7 @@ class PanelBridge:
 
     def run_destination(self, name: str) -> None:
         self.last_command = f"destination:{name}"
+        self.stop_mini_map(update_last_command=False)
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
         if self.ros2_connected and self._destination_goal_pub is not None:
@@ -928,6 +1232,7 @@ class PanelBridge:
             raise ValueError(f"Unknown checkpoints in route: {', '.join(missing)}")
 
         self.last_command = f"route:{name}"
+        self.stop_mini_map(update_last_command=False)
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
 
@@ -1169,6 +1474,26 @@ def api_status():
 @app.get("/api/map")
 def api_map():
     return bridge.get_map_payload()
+
+
+@app.get("/api/minimap")
+def api_minimap():
+    return bridge.mini_map_status()
+
+
+@app.post("/api/minimap/start")
+def api_start_minimap():
+    return bridge.start_mini_map()
+
+
+@app.post("/api/minimap/stop")
+def api_stop_minimap():
+    return bridge.stop_mini_map()
+
+
+@app.delete("/api/minimap")
+def api_reset_minimap():
+    return bridge.reset_mini_map()
 
 
 @app.get("/api/camera.jpg")
