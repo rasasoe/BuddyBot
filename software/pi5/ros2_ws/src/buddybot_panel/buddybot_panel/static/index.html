@@ -3,654 +3,708 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BuddyBot Operator Panel</title>
+  <title>BuddyBot Mission Panel</title>
   <style>
-    :root{
-      --bg:#f5f1e8;
-      --ink:#162025;
-      --muted:#5c6c74;
-      --card:#fffdf9;
-      --line:#d8d0c2;
-      --teal:#1c7a6e;
-      --teal-dark:#12574f;
-      --rust:#b45b2b;
-      --sand:#efe6d3;
-      --danger:#be4333;
-      --shadow:0 20px 50px rgba(42,36,24,.12);
-      --radius:22px;
-    }
+    :root{--bg:#f3efe7;--ink:#172126;--muted:#5e6a72;--card:#fffdf8;--line:#d6ccbc;--accent:#14685d;--accent-strong:#0e5249;--sand:#ede2cf;--rust:#a6582c;--gold:#c58a29;--danger:#b03e34;--shadow:0 20px 48px rgba(36,33,24,.12);--radius:22px}
     *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:"Segoe UI",system-ui,sans-serif;
-      color:var(--ink);
-      background:
-        radial-gradient(circle at top left, rgba(28,122,110,.12), transparent 24%),
-        radial-gradient(circle at bottom right, rgba(180,91,43,.12), transparent 28%),
-        linear-gradient(180deg, #f8f4ec 0%, #efe7da 100%);
-    }
-    .shell{width:min(1500px,calc(100% - 28px));margin:0 auto;padding:18px 0 26px}
-    .topbar,.main{display:grid;gap:16px}
-    .topbar{grid-template-columns:1.6fr 1fr}
-    .main{grid-template-columns:1.08fr 1.2fr .92fr;align-items:start}
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      padding:18px;
-      box-shadow:var(--shadow);
-    }
+    body{margin:0;color:var(--ink);font-family:"IBM Plex Sans","Noto Sans KR","Segoe UI",sans-serif;background:radial-gradient(circle at top left,rgba(20,104,93,.14),transparent 24%),radial-gradient(circle at bottom right,rgba(165,88,44,.14),transparent 28%),linear-gradient(180deg,#f7f4ee 0%,#ece5d8 100%)}
+    .shell{width:min(1540px,calc(100% - 28px));margin:0 auto;padding:20px 0 28px}
+    .stack,.status-grid,.button-grid,.dual,.triple,.panel-list,.chat-log,.chip-row,.hero-actions,.mission-actions,.form-grid,.chat-form{display:grid;gap:12px}
+    .hero{display:grid;grid-template-columns:1.35fr .95fr;gap:16px;margin-bottom:16px}
+    .main{display:grid;grid-template-columns:.95fr 1.28fr .92fr;gap:16px;align-items:start}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
     h1,h2,h3,p{margin:0}
-    h1{font-size:clamp(2.2rem,4vw,4.2rem);line-height:.94;letter-spacing:-.04em}
-    h2{font-size:1.1rem;margin-bottom:12px}
-    h3{font-size:.95rem;margin-bottom:10px}
-    .eyebrow{font-size:.78rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
-    .lead{margin-top:12px;color:var(--muted);max-width:760px;line-height:1.55}
-    .status-grid,.stack,.waypoint-list,.chat-log,.control-stack{display:grid;gap:10px}
-    .status-grid{grid-template-columns:1fr 1fr}
-    .metric{
-      padding:12px 14px;
-      border:1px solid var(--line);
-      border-radius:18px;
-      background:linear-gradient(180deg,#fffdf9 0%,#f6efe2 100%);
-    }
-    .metric span{display:block;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-    .metric strong{display:block;margin-top:5px;font-size:1rem}
-    .chip-row{display:flex;flex-wrap:wrap;gap:8px}
-    .chip{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:9px 12px;
-      border-radius:999px;
-      background:#f0ebdf;
-      color:var(--ink);
-      font-size:.88rem;
-      border:1px solid var(--line);
-    }
-    .hero-actions,.row,.toolbar,.chat-form,.assistant-row{display:grid;gap:10px}
-    .hero-actions,.toolbar,.chat-form,.assistant-row{grid-template-columns:1fr auto}
-    .button-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-    button,input,select{
-      font:inherit;
-      border-radius:16px;
-    }
-    button{
-      border:0;
-      padding:12px 16px;
-      font-weight:700;
-      cursor:pointer;
-      color:white;
-      background:var(--teal);
-    }
-    button:hover{background:var(--teal-dark)}
-    button.secondary{background:#e9e2d5;color:var(--ink)}
-    button.secondary:hover{background:#ddd3c1}
+    h1{font-size:clamp(2.15rem,3.8vw,4.1rem);line-height:.95;letter-spacing:-.04em}
+    h2{font-size:1.08rem}
+    h3{font-size:.92rem}
+    .eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.18em;color:var(--muted)}
+    .lead{margin-top:12px;color:var(--muted);line-height:1.55;max-width:780px}
+    .section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+    .note{color:var(--muted);font-size:.9rem;line-height:1.5}
+    .status-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .metric{border:1px solid var(--line);border-radius:18px;padding:12px 13px;background:linear-gradient(180deg,#fffdf9 0%,#f6f0e4 100%)}
+    .metric span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+    .metric strong{display:block;margin-top:6px;font-size:.98rem;line-height:1.25}
+    .chip-row{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .chip{display:flex;align-items:center;justify-content:center;padding:10px 12px;border-radius:999px;border:1px solid var(--line);background:#f3eee2;font-size:.88rem;font-weight:600;text-align:center}
+    .hero-actions,.chat-form{grid-template-columns:1fr auto}
+    .mission-actions{grid-template-columns:1fr}
+    input,select{width:100%;padding:12px 14px;border-radius:15px;border:1px solid var(--line);background:#fffdf8;font:inherit;color:var(--ink)}
+    button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent)}
+    button:hover{background:var(--accent-strong)}
+    button.secondary{background:#e6ded0;color:var(--ink)}
+    button.secondary:hover{background:#d8cdbb}
     button.accent{background:var(--rust)}
-    button.accent:hover{background:#8f461e}
+    button.accent:hover{background:#84411c}
+    button.warn{background:var(--gold)}
+    button.warn:hover{background:#a96d13}
     button.danger{background:var(--danger)}
-    input,select{
-      width:100%;
-      border:1px solid var(--line);
-      padding:12px 14px;
-      background:#fffcf7;
-      color:var(--ink);
-    }
-    .map-stage,.camera-frame{
-      position:relative;
-      overflow:hidden;
-      border-radius:20px;
-      border:1px solid var(--line);
-      background:#f8f5ee;
-    }
-    .map-stage{min-height:460px}
-    .camera-frame{aspect-ratio:16/9;background:#0b1012}
-    #map-canvas{display:block;width:100%;height:460px;cursor:crosshair}
-    .camera-frame img{display:block;width:100%;height:100%;object-fit:cover}
-    .overlay{
-      position:absolute;
-      top:12px;
-      left:12px;
-      right:12px;
-      display:flex;
-      justify-content:space-between;
-      gap:8px;
-      pointer-events:none;
-    }
-    .overlay .chip{background:rgba(255,252,247,.85);backdrop-filter:blur(10px)}
-    .teleop-grid{
-      display:grid;
-      grid-template-columns:78px 78px 78px;
-      gap:10px;
-      justify-content:center;
-      margin-bottom:12px;
-    }
-    .teleop-grid button,.rotate-grid button,.quick-grid button{padding:0;min-height:70px}
-    .rotate-grid,.quick-grid,.waypoint-actions,.triple{
-      display:grid;
-      gap:10px;
-    }
-    .rotate-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .waypoint-actions{grid-template-columns:1fr 1fr}
+    button.danger:hover{background:#903228}
+    .button-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .button-grid button,.manual-stop{min-height:64px}
+    .manual-stop{grid-column:2}
+    .dual{grid-template-columns:repeat(2,minmax(0,1fr))}
     .triple{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .button-emoji{display:block;font-size:1.1rem;margin-bottom:4px}
-    .button-label{display:block;font-size:.82rem}
-    .note{
-      color:var(--muted);
-      font-size:.9rem;
-      line-height:1.5;
-    }
-    .waypoint-item,.brief{
-      border:1px solid var(--line);
-      border-radius:18px;
-      padding:12px 14px;
-      background:#fffaf2;
-    }
-    .brief strong{display:block;margin-bottom:6px}
-    .chat-log{
-      min-height:250px;
-      max-height:320px;
-      overflow:auto;
-      padding:12px;
-      border:1px solid var(--line);
-      border-radius:18px;
-      background:#fffaf1;
-    }
-    .msg{
-      padding:11px 13px;
-      border-radius:16px;
-      line-height:1.5;
-    }
-    .msg.user{background:#e0f0ec;margin-left:26px}
-    .msg.bot{background:#f6e5d8;margin-right:26px}
-    @media (max-width:1180px){
-      .topbar,.main{grid-template-columns:1fr}
-      .status-grid{grid-template-columns:1fr 1fr}
-    }
-    @media (max-width:720px){
-      .status-grid,.hero-actions,.toolbar,.chat-form,.assistant-row,.button-row,.quick-grid,.rotate-grid,.waypoint-actions,.triple{grid-template-columns:1fr}
-      .teleop-grid{grid-template-columns:repeat(3,1fr)}
-      .shell{width:min(100% - 16px,1500px)}
-    }
+    .map-wrap,.camera-frame{position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--line);background:#f5f1e8}
+    .map-wrap{min-height:468px}
+    #map-canvas{display:block;width:100%;height:468px;cursor:crosshair}
+    .camera-frame{aspect-ratio:16/9;background:#0f1518}
+    .camera-frame img{display:block;width:100%;height:100%;object-fit:cover}
+    .overlay{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+    .overlay .chip{background:rgba(255,252,247,.86);backdrop-filter:blur(10px)}
+    .panel-list{max-height:320px;overflow:auto}
+    .panel-item{border:1px solid var(--line);border-radius:18px;padding:12px 14px;background:#fffaf1;display:grid;gap:10px}
+    .panel-item .meta{font-size:.88rem;color:var(--muted)}
+    .panel-item .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .panel-item.route .actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .route-sequence{min-height:62px;padding:12px;border:1px dashed var(--line);border-radius:18px;background:#faf5ea;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+    .route-token{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:#e4efe9;border:1px solid rgba(20,104,93,.18);font-size:.86rem;font-weight:600}
+    .route-token button{min-height:auto;padding:4px 8px;border-radius:999px;background:rgba(176,62,52,.14);color:var(--danger)}
+    .chat-log{min-height:240px;max-height:320px;overflow:auto;padding:12px;border:1px solid var(--line);border-radius:18px;background:#fffaf2}
+    .msg{padding:11px 13px;border-radius:15px;line-height:1.45;margin-bottom:10px}
+    .msg.user{background:#ddeadf;margin-left:28px}
+    .msg.bot{background:#f2e1d4;margin-right:28px}
+    .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
+    .callout strong{display:block;margin-bottom:6px}
+    @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}}
+    @media (max-width:860px){.status-grid,.chip-row,.button-grid,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions{grid-template-columns:1fr}.manual-stop{grid-column:auto}.shell{width:min(calc(100% - 16px),1540px)}}
   </style>
 </head>
 <body>
   <main class="shell">
-    <section class="topbar">
-      <article class="card">
-        <p class="eyebrow">BuddyBot Offline Operator</p>
-        <h1>Walkable assistant, not a control dump.</h1>
-        <p class="lead">Drive holonomically, watch camera and local scan map, save waypoints, and keep BuddyBot in an operator-friendly offline mode before reconnecting remote AI services.</p>
-        <div class="hero-actions" style="margin-top:16px">
-          <input id="server-url" value="http://127.0.0.1:8000" />
+    <section class="hero">
+      <article class="card stack">
+        <div class="eyebrow">BuddyBot Mission Console</div>
+        <h1>Drive cleanly, route checkpoints, and test follow mode without the clutter.</h1>
+        <p class="lead">One Pi panel for motion control, checkpoint CRUD, ad-hoc route sending, saved route playback, camera preview, LiDAR map view, and follow readiness.</p>
+        <div class="hero-actions">
+          <input id="server-url" value="http://127.0.0.1:8000">
           <button class="secondary" onclick="toggleAssistant()">Toggle Assistant</button>
         </div>
+        <div class="chip-row">
+          <div class="chip" id="mode-chip">Mode: standalone</div>
+          <div class="chip" id="server-chip">Server: offline</div>
+          <div class="chip" id="fusion-chip">Fusion: checking</div>
+          <div class="chip" id="follow-chip">Follow: off</div>
+        </div>
       </article>
-      <article class="card">
-        <h2>System Snapshot</h2>
+      <article class="card stack">
+        <div class="section-head">
+          <div>
+            <h2>System Snapshot</h2>
+            <p class="note" id="system-note">Checking Pi, Pico, LiDAR, camera, and safety state.</p>
+          </div>
+        </div>
         <div class="status-grid" id="status-box"></div>
       </article>
     </section>
-
     <section class="main">
-      <article class="card control-stack">
-        <div>
-          <h2>Manual Control</h2>
-          <p class="note">Forward/backward, strafe, and rotation are separated so the operator can tell whether the base truly behaves like a holonomic platform.</p>
-        </div>
-
-        <div class="brief">
-          <strong>Translation Pad</strong>
-          <div class="teleop-grid">
-            <button class="secondary" onclick="manual('forward')"><span class="button-emoji">↑</span><span class="button-label">Forward</span></button>
-            <button class="danger" onclick="manual('stop')"><span class="button-emoji">■</span><span class="button-label">Stop</span></button>
-            <button class="secondary" onclick="manual('backward')"><span class="button-emoji">↓</span><span class="button-label">Backward</span></button>
-            <button class="secondary" onclick="manual('strafe_left')"><span class="button-emoji">←</span><span class="button-label">Strafe Left</span></button>
-            <button class="accent" onclick="sendChat('status')"><span class="button-emoji">◎</span><span class="button-label">Status</span></button>
-            <button class="secondary" onclick="manual('strafe_right')"><span class="button-emoji">→</span><span class="button-label">Strafe Right</span></button>
-          </div>
-        </div>
-
-        <div class="brief">
-          <strong>Rotation and Behaviors</strong>
-          <div class="rotate-grid">
-            <button onclick="manual('rotate_left')"><span class="button-emoji">↺</span><span class="button-label">Rotate Left</span></button>
-            <button onclick="manual('rotate_right')"><span class="button-emoji">↻</span><span class="button-label">Rotate Right</span></button>
-            <button class="secondary" onclick="setFollow(true)"><span class="button-emoji">◎</span><span class="button-label">Follow On</span></button>
-          </div>
-          <div class="button-row" style="margin-top:10px">
-            <button class="secondary" onclick="setFollow(false)">Follow Off</button>
-            <button class="secondary" onclick="sendChat('stop')">Emergency Stop</button>
-          </div>
-        </div>
-
-        <div class="brief">
-          <strong>Assistant Cues</strong>
-          <div class="quick-grid">
-            <button class="accent" onclick="sendChat('status')">Ask Status</button>
-            <button class="accent" onclick="sendChat('follow')">Start Follow</button>
-            <button class="accent" onclick="sendChat('kitchen')">Go Kitchen</button>
-            <button class="accent" onclick="sendChat('charge')">Go Charge</button>
-          </div>
-        </div>
-
-        <div class="stack">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-            <div>
-              <h2>Camera</h2>
-              <p class="note" id="camera-summary">Camera preview is off. Open it only when needed.</p>
-            </div>
-            <div class="button-row" style="min-width:220px">
-              <button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">Open Camera</button>
-              <button class="secondary" onclick="refreshCamera(true)">Refresh</button>
-            </div>
-          </div>
-          <div class="camera-frame" id="camera-frame" style="display:none">
-            <img id="camera-feed" alt="BuddyBot camera feed">
-            <div class="overlay">
-              <span class="chip" id="camera-chip">Camera: waiting</span>
-            </div>
-          </div>
-          <p class="note" id="camera-note">The preview appears when the camera node is publishing.</p>
-        </div>
-      </article>
-
       <article class="card stack">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+        <div class="section-head">
           <div>
-            <h2>Map and Waypoints</h2>
-            <p class="note" id="map-summary">Loading map status...</p>
+            <h2>Drive and Follow</h2>
+            <p class="note">Manual motion cancels routes and follow mode. Follow readiness checks camera, person detection, LiDAR, and safety latch state.</p>
           </div>
-          <button class="secondary" onclick="refreshMap()">Refresh</button>
         </div>
-
-        <div class="map-stage">
-          <canvas id="map-canvas" width="900" height="460"></canvas>
+        <div class="button-grid">
+          <button class="secondary" onclick="manual('forward')">Forward</button>
+          <button class="danger manual-stop" onclick="manual('stop')">Stop</button>
+          <button class="secondary" onclick="manual('backward')">Backward</button>
+          <button class="secondary" onclick="manual('strafe_left')">Strafe Left</button>
+          <button class="warn" onclick="cancelNavigation()">Cancel Route</button>
+          <button class="secondary" onclick="manual('strafe_right')">Strafe Right</button>
+          <button onclick="manual('rotate_left')">Rotate Left</button>
+          <button onclick="manual('rotate_right')">Rotate Right</button>
+          <button class="accent" onclick="sendChat('status')">Speak Status</button>
+        </div>
+        <div class="dual">
+          <button class="secondary" onclick="startFollowTrial()">Arm Follow Trial</button>
+          <button class="secondary" onclick="setFollow(false)">Follow Off</button>
+        </div>
+        <div class="callout"><strong>Follow Trial Readiness</strong><div class="note" id="follow-note">Waiting for live sensor status.</div></div>
+        <div class="callout"><strong>Quick Commands</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">Start Follow</button><button class="accent" onclick="sendChat('stop')">Emergency Stop</button><button class="accent" onclick="sendChat('kitchen')">Go Kitchen</button><button class="accent" onclick="sendChat('charge')">Go Charge</button></div></div>
+        <div class="callout"><strong>Sensor Fusion Summary</strong><div class="note" id="fusion-note">Camera + LiDAR + pose + map summary will appear here.</div></div>
+      </article>
+      <article class="card stack">
+        <div class="section-head">
+          <div>
+            <h2>Map, Checkpoints, and Routes</h2>
+            <p class="note" id="map-summary">Loading map data.</p>
+          </div>
+          <button class="secondary" onclick="refreshMap()">Refresh Map</button>
+        </div>
+        <div class="map-wrap">
+          <canvas id="map-canvas" width="980" height="468"></canvas>
           <div class="overlay">
-            <span class="chip" id="map-source-chip">Map: waiting</span>
-            <span class="chip" id="pose-chip">Pose: none</span>
+            <div class="chip" id="map-source-chip">Map: waiting</div>
+            <div class="chip" id="pose-chip">Pose: none</div>
           </div>
         </div>
-
-        <div class="toolbar">
+        <div class="mission-actions">
           <select id="waypoint-select"></select>
-          <button class="accent" onclick="goWaypoint()">Go Waypoint</button>
+          <div class="dual">
+            <button class="accent" onclick="goWaypoint()">Go Checkpoint</button>
+            <button class="danger" onclick="deleteSelectedWaypoint()">Delete Checkpoint</button>
+          </div>
         </div>
-
-        <form class="stack" onsubmit="saveWaypoint(event)">
-          <div>
-            <h3>Save Waypoint</h3>
-            <p class="note" id="clicked-point-note">Click the map to copy x/y into the form. If no SLAM map exists, the panel shows a local LiDAR minimap around the robot.</p>
-          </div>
-          <input id="wp-name" placeholder="e.g. lobby_edge" />
-          <div class="triple">
-            <input id="wp-x" type="number" step="0.01" placeholder="x" />
-            <input id="wp-y" type="number" step="0.01" placeholder="y" />
-            <input id="wp-theta" type="number" step="0.01" placeholder="theta" />
-          </div>
-          <div class="waypoint-actions">
-            <button type="button" class="secondary" onclick="fillCurrentPose()">Use Current Pose</button>
-            <button type="button" class="secondary" onclick="saveCurrentPoseWaypoint()">Save Current Pose</button>
-          </div>
-          <div class="waypoint-actions">
-            <button type="button" class="accent" onclick="saveClickedWaypoint()">Save Clicked Point</button>
-            <button type="button" class="secondary" onclick="clearClickedPoint()">Clear Selection</button>
-          </div>
-          <button type="submit">Save Typed Waypoint</button>
+        <div class="dual">
+          <button class="secondary" onclick="fillCurrentPose()">Use Current Pose</button>
+          <button class="secondary" onclick="saveCurrentPoseWaypoint()">Save Current Pose</button>
+        </div>
+        <form class="form-grid" onsubmit="saveWaypoint(event)">
+          <div><h3>Save New Checkpoint</h3><p class="note" id="clicked-point-note">Click the map to copy x and y into the form. If SLAM is not ready, the panel falls back to a LiDAR local map.</p></div>
+          <input id="wp-name" placeholder="checkpoint name">
+          <div class="triple"><input id="wp-x" type="number" step="0.01" placeholder="x"><input id="wp-y" type="number" step="0.01" placeholder="y"><input id="wp-theta" type="number" step="0.01" placeholder="theta"></div>
+          <div class="dual"><button type="button" class="accent" onclick="saveClickedWaypoint()">Save Clicked Point</button><button type="button" class="secondary" onclick="clearClickedPoint()">Clear Selection</button></div>
+          <button type="submit">Save Typed Checkpoint</button>
         </form>
-
-        <div class="waypoint-list" id="waypoint-list"></div>
+        <div class="stack">
+          <div><h3>Route Builder</h3><p class="note">Add checkpoints from the list below, then send the route immediately or save it for reuse.</p></div>
+          <div class="route-sequence" id="route-sequence"></div>
+          <input id="route-name" placeholder="route name">
+          <div class="dual"><button class="accent" onclick="runRouteNow()">Run Selected Route</button><button class="secondary" onclick="saveRoute()">Save Route</button></div>
+          <div class="dual"><button class="secondary" onclick="clearRouteSequence()">Clear Route</button><button class="danger" onclick="clearAllWaypoints()">Clear All Checkpoints</button></div>
+        </div>
+        <div class="dual">
+          <div class="stack"><div class="section-head"><div><h3>Saved Checkpoints</h3><p class="note" id="waypoint-count-note">Checking checkpoint list.</p></div></div><div class="panel-list" id="waypoint-list"></div></div>
+          <div class="stack"><div class="section-head"><div><h3>Saved Routes</h3><p class="note" id="route-count-note">Checking saved routes.</p></div></div><div class="panel-list" id="destination-list"></div></div>
+        </div>
       </article>
-
       <article class="card stack">
-        <div>
-          <h2>Companion Console</h2>
-          <p class="note">This should feel like a mobile voice companion, not a dev dashboard. Use short, intent-like commands and keep the robot in standalone mode until remote AI is really needed.</p>
+        <div class="section-head">
+          <div>
+            <h2>Camera and Console</h2>
+            <p class="note" id="camera-summary">Camera preview is off until you open it.</p>
+          </div>
+          <div class="dual" style="min-width:220px"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">Open Camera</button><button class="secondary" onclick="refreshCamera(true)">Refresh</button></div>
         </div>
-
-        <div class="chip-row">
-          <span class="chip" id="mode-chip">Mode: standalone</span>
-          <span class="chip" id="server-chip">Server: offline</span>
-          <span class="chip" id="follow-chip">Follow: off</span>
-        </div>
-
-        <div class="brief" id="assistant-brief">
-          <strong>BuddyBot Focus</strong>
-          <span class="note">Offline escort mode. Drive, watch surroundings, and save checkpoints before turning on remote assistant features.</span>
-        </div>
-
-        <div class="button-row">
-          <button id="voice-btn">Voice</button>
-          <button class="secondary" onclick="sendChat('status')">Summarize State</button>
-        </div>
-
+        <div class="camera-frame" id="camera-frame" style="display:none"><img id="camera-feed" alt="BuddyBot camera feed"><div class="overlay"><div class="chip" id="camera-chip">Camera: waiting</div></div></div>
+        <p class="note" id="camera-note">Preview appears when /camera/image_raw is publishing.</p>
+        <div class="callout"><strong>Companion Console</strong><div class="note">Use short commands such as status, kitchen, stop, follow, rotate left, or charge. Browser voice input and browser TTS stay available here.</div></div>
+        <div class="dual"><button id="voice-btn">Voice</button><button class="secondary" onclick="sendChat('status')">Summarize State</button></div>
         <div class="chat-log" id="chat-log"></div>
-
-        <div class="chat-form">
-          <input id="chat-input" placeholder="Try: strafe left, rotate right, stop, status, kitchen" />
-          <button onclick="sendChat()">Send</button>
-        </div>
+        <div class="chat-form"><input id="chat-input" placeholder="Try: status, stop, follow, kitchen, charge"><button onclick="sendChat()">Send</button></div>
       </article>
     </section>
   </main>
-
   <script>
-    let assistantEnabled=false,lastMap=null,lastPose=null,lastStatus=null,cameraEnabled=false,lastClickedPoint=null;
-    const chatLog=document.getElementById("chat-log");
-    const waypointSelect=document.getElementById("waypoint-select");
-    const waypointList=document.getElementById("waypoint-list");
-    const mapCanvas=document.getElementById("map-canvas");
-    const mapCtx=mapCanvas.getContext("2d");
+    let assistantEnabled = false;
+    let cameraEnabled = false;
+    let lastMap = null;
+    let lastPose = null;
+    let lastStatus = null;
+    let lastClickedPoint = null;
+    let routeSequence = [];
 
-    function addMsg(role,text){
-      const div=document.createElement("div");
-      div.className=`msg ${role}`;
-      div.textContent=text;
+    const chatLog = document.getElementById("chat-log");
+    const waypointSelect = document.getElementById("waypoint-select");
+    const waypointList = document.getElementById("waypoint-list");
+    const destinationList = document.getElementById("destination-list");
+    const routeSequenceBox = document.getElementById("route-sequence");
+    const mapCanvas = document.getElementById("map-canvas");
+    const mapCtx = mapCanvas.getContext("2d");
+
+    function escapeHtml(value){
+      return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#39;");
+    }
+
+    async function apiJson(url, options = {}){
+      const request = {...options};
+      if(request.body && !request.headers){
+        request.headers = {"Content-Type":"application/json"};
+      }
+      const response = await fetch(url, request);
+      const text = await response.text();
+      let data = {};
+      if(text){
+        try{ data = JSON.parse(text); } catch { data = {detail:text}; }
+      }
+      if(!response.ok){
+        throw new Error(data.detail || `Request failed: ${response.status}`);
+      }
+      return data;
+    }
+
+    function addMsg(role, text){
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      div.textContent = text;
       chatLog.appendChild(div);
-      chatLog.scrollTop=chatLog.scrollHeight;
+      chatLog.scrollTop = chatLog.scrollHeight;
     }
 
     function speak(text){
-      if(!("speechSynthesis" in window) || !text)return;
-      const utterance=new SpeechSynthesisUtterance(text);
-      utterance.lang=/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(text)?"ko-KR":"en-US";
-      utterance.rate=1;
+      if(!("speechSynthesis" in window) || !text){
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = /[^\x00-\x7F]/.test(text) ? "ko-KR" : "en-US";
+      utterance.rate = 1;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     }
 
-    function statusCard(label,value){
-      return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;
+    function statusCard(label, value){
+      return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    }
+
+    function showError(error){
+      addMsg("bot", error instanceof Error ? error.message : String(error));
+    }
+
+    function worldToCanvasX(x, mapData){
+      return ((x - mapData.origin.x) / (mapData.width * mapData.resolution)) * mapCanvas.width;
+    }
+
+    function worldToCanvasY(y, mapData){
+      return mapCanvas.height - (((y - mapData.origin.y) / (mapData.height * mapData.resolution)) * mapCanvas.height);
+    }
+
+    function canvasToWorld(x, y, mapData){
+      return {
+        x: mapData.origin.x + (x / mapCanvas.width) * (mapData.width * mapData.resolution),
+        y: mapData.origin.y + ((mapCanvas.height - y) / mapCanvas.height) * (mapData.height * mapData.resolution),
+      };
+    }
+
+    function drawMap(mapData, waypoints){
+      const width = mapCanvas.width;
+      const height = mapCanvas.height;
+      mapCtx.clearRect(0, 0, width, height);
+      const image = mapCtx.createImageData(width, height);
+      const srcWidth = mapData.width;
+      const srcHeight = mapData.height;
+      const cells = mapData.cells || [];
+
+      for(let py = 0; py < height; py += 1){
+        for(let px = 0; px < width; px += 1){
+          const sx = Math.floor((px / width) * srcWidth);
+          const sy = Math.floor(((height - py - 1) / height) * srcHeight);
+          const value = cells[(sy * srcWidth) + sx] ?? 0;
+          let r = 244;
+          let g = 239;
+          let b = 230;
+          if(value === -1){ r = 224; g = 218; b = 204; }
+          else if(value >= 65){ r = 48; g = 54; b = 59; }
+          else if(value > 0){ r = 194; g = 133; b = 74; }
+          const idx = (py * width + px) * 4;
+          image.data[idx] = r;
+          image.data[idx + 1] = g;
+          image.data[idx + 2] = b;
+          image.data[idx + 3] = 255;
+        }
+      }
+      mapCtx.putImageData(image, 0, 0);
+
+      if(mapData.source === "scan_local"){
+        mapCtx.strokeStyle = "rgba(20,104,93,.2)";
+        mapCtx.lineWidth = 1;
+        for(let ring = 1; ring < 4; ring += 1){
+          mapCtx.beginPath();
+          mapCtx.arc(width / 2, height / 2, (width / 8) * ring, 0, Math.PI * 2);
+          mapCtx.stroke();
+        }
+      }
+
+      waypoints.forEach((point, index) => {
+        const px = worldToCanvasX(point.x, mapData);
+        const py = worldToCanvasY(point.y, mapData);
+        mapCtx.fillStyle = index === 0 ? "#a6582c" : "#14685d";
+        mapCtx.beginPath();
+        mapCtx.arc(px, py, 7, 0, Math.PI * 2);
+        mapCtx.fill();
+        mapCtx.fillStyle = "#172126";
+        mapCtx.font = '14px "IBM Plex Sans", sans-serif';
+        mapCtx.fillText(point.name, px + 10, py - 10);
+      });
+
+      if(lastPose){
+        const px = worldToCanvasX(lastPose.x, mapData);
+        const py = worldToCanvasY(lastPose.y, mapData);
+        mapCtx.fillStyle = "#b03e34";
+        mapCtx.beginPath();
+        mapCtx.arc(px, py, 8, 0, Math.PI * 2);
+        mapCtx.fill();
+      }
+
+      if(lastClickedPoint){
+        const px = worldToCanvasX(lastClickedPoint.x, mapData);
+        const py = worldToCanvasY(lastClickedPoint.y, mapData);
+        mapCtx.strokeStyle = "#c58a29";
+        mapCtx.lineWidth = 3;
+        mapCtx.beginPath();
+        mapCtx.arc(px, py, 11, 0, Math.PI * 2);
+        mapCtx.stroke();
+      }
+    }
+
+    function syncRouteSequence(){
+      if(!routeSequence.length){
+        routeSequenceBox.innerHTML = `<span class="note">No checkpoints selected yet. Use Add to Route from the checkpoint list.</span>`;
+        return;
+      }
+      routeSequenceBox.innerHTML = routeSequence.map((name, index) => `<span class="route-token">${index + 1}. ${escapeHtml(name)}<button type="button" onclick="removeRouteStop(${index})">Remove</button></span>`).join("");
+    }
+
+    function removeRouteStop(index){
+      routeSequence.splice(index, 1);
+      syncRouteSequence();
+    }
+
+    function addToRoute(name){
+      routeSequence.push(name);
+      syncRouteSequence();
+      addMsg("bot", `${name} added to the current route.`);
+    }
+
+    function clearRouteSequence(){
+      routeSequence = [];
+      syncRouteSequence();
     }
 
     async function refreshStatus(){
-      const data=await (await fetch("/api/status")).json();
-      assistantEnabled=data.mode==="assistant";
-      lastPose=data.pose||null;
-      lastStatus=data;
-      const pico=data.pico_connected?"connected":"waiting";
-      const picoMode=data.pico_status?`${data.pico_status.mode} ${data.pico_status.battery_voltage}V`:"no status";
-      const manualMode=data.manual_active?"active":"idle";
-      const scanState=data.scan_available?`live (${data.scan_age_sec}s, ${data.scan_frames_received} frames)`:"waiting";
-      document.getElementById("status-box").innerHTML=
-        statusCard("Mode",data.mode)+
-        statusCard("ROS2",data.ros2_connected?"connected":"mock")+
-        statusCard("Pico",pico)+
-        statusCard("Pico status",picoMode)+
-        statusCard("LiDAR /scan",scanState)+
-        statusCard("Navigation",data.navigation_status||"idle")+
-        statusCard("Manual",manualMode)+
-        statusCard("Follow",data.follow_enabled?"on":"off")+
-        statusCard("Map",data.map_available?"ready":"waiting")+
-        statusCard("Camera",data.camera_available?"live":"waiting")+
-        statusCard("Server",data.server_connected?"online":"offline")+
-        statusCard("Last command",data.last_command);
-      document.getElementById("pose-chip").textContent=data.pose?`Pose: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})`:"Pose: none";
-      document.getElementById("camera-chip").textContent=data.camera_available?`Camera: live (${data.camera_age_sec}s ago)`:"Camera: waiting";
-      document.getElementById("camera-summary").textContent=!cameraEnabled?"Camera preview is off. Open it only when needed.":data.camera_available?"Live preview from /camera/image_raw is active.":"No camera frame yet. Check camera_node.";
-      document.getElementById("camera-note").textContent=data.pico_connected?"Pico bridge is healthy enough to report status.":"Pico status is stale. Check the USB serial path.";
-      document.getElementById("mode-chip").textContent=`Mode: ${data.mode}`;
-      document.getElementById("server-chip").textContent=`Server: ${data.server_connected?"online":"offline"}`;
-      document.getElementById("follow-chip").textContent=`Follow: ${data.follow_enabled?"on":"off"}`;
-      document.getElementById("assistant-brief").innerHTML=`<strong>BuddyBot Focus</strong><span class="note">${data.mode==="assistant"?"Remote assistant mode is on. Keep commands short and physical.":"Offline escort mode. Use local commands and physical awareness first."}</span>`;
+      const data = await apiJson("/api/status");
+      const fusion = data.sensor_fusion || {};
+      assistantEnabled = data.mode === "assistant";
+      lastStatus = data;
+      lastPose = data.pose || null;
+      const scanState = data.scan_available ? `live ${data.scan_age_sec}s` : "waiting";
+      const cameraState = data.camera_available ? `live ${data.camera_age_sec}s` : "waiting";
+      const personState = data.person_detected ? `locked ${data.person_age_sec}s` : "none";
+      const picoState = data.pico_connected ? `${data.pico_status?.mode || "ok"} ${data.pico_status?.battery_voltage || ""}`.trim() : "waiting";
+      const safetyState = data.safety_active ? data.safety_status : "clear";
+      document.getElementById("status-box").innerHTML = [
+        statusCard("ROS2", data.ros2_connected ? "connected" : "offline"),
+        statusCard("Pico", picoState),
+        statusCard("LiDAR", scanState),
+        statusCard("Camera", cameraState),
+        statusCard("Pose", data.pose ? `${data.pose.x}, ${data.pose.y}` : "missing"),
+        statusCard("Map", data.map_available ? "ready" : "waiting"),
+        statusCard("Person", personState),
+        statusCard("Follow", fusion.follow_state || (data.follow_enabled ? "armed" : "idle")),
+        statusCard("Navigation", data.navigation_status || "idle"),
+        statusCard("Safety", safetyState),
+        statusCard("Manual", data.manual_active ? "active" : "idle"),
+        statusCard("Last Command", data.last_command || "idle"),
+      ].join("");
+      document.getElementById("mode-chip").textContent = `Mode: ${data.mode}`;
+      document.getElementById("server-chip").textContent = `Server: ${data.server_connected ? "online" : "offline"}`;
+      document.getElementById("fusion-chip").textContent = `Fusion: ${fusion.fusion_ready ? "ready" : "partial"}`;
+      document.getElementById("follow-chip").textContent = `Follow: ${data.follow_enabled ? "on" : "off"}`;
+      document.getElementById("pose-chip").textContent = data.pose ? `Pose: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})` : "Pose: none";
+      document.getElementById("camera-chip").textContent = data.camera_available ? `Camera: live (${data.camera_age_sec}s ago)` : "Camera: waiting";
+      document.getElementById("system-note").textContent = fusion.operator_ready ? "Operator stack is healthy enough for drive, mapping, and route work." : `Operator blockers: ${(fusion.blockers || []).join(", ") || "waiting for topics"}`;
+      document.getElementById("fusion-note").textContent = fusion.fusion_ready ? "Camera, LiDAR, map, and pose are all live. Perception stack is ready for route and follow validation." : `Fusion is partial. Missing or stale pieces: ${(fusion.blockers || []).join(", ") || "unknown"}`;
+      document.getElementById("follow-note").textContent = fusion.follow_ready ? "Follow trial is ready. Turn it on and verify person tracking with LiDAR safety active." : `Follow is blocked by: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"}`;
+      document.getElementById("camera-summary").textContent = !cameraEnabled ? "Camera preview is off until you open it." : data.camera_available ? "Live preview from /camera/image_raw is active." : "No camera frame yet. Check camera_node and USB camera power.";
+      document.getElementById("camera-note").textContent = data.pico_connected ? "Pico status is fresh. Base bridge looks alive." : "Pico status is stale. Check the USB serial bridge.";
     }
 
-    async function refreshWaypoints(){
-      const data=await (await fetch("/api/waypoints")).json();
-      waypointSelect.innerHTML="";
-      waypointList.innerHTML="";
-      (data.items||[]).forEach((item)=>{
-        const option=document.createElement("option");
-        option.value=item.name;
-        option.textContent=`${item.name} (${item.x}, ${item.y})`;
-        waypointSelect.appendChild(option);
-        const box=document.createElement("div");
-        box.className="waypoint-item";
-        box.innerHTML=`<strong>${item.name}</strong><span class="note">x=${item.x}, y=${item.y}, th=${item.theta}</span>`;
-        waypointList.appendChild(box);
-      });
-      if(!waypointSelect.children.length){
-        const option=document.createElement("option");
-        option.value="";
-        option.textContent="No waypoints saved yet";
-        waypointSelect.appendChild(option);
+    async function refreshMissionData(){
+      const [waypointData, destinationData] = await Promise.all([apiJson("/api/waypoints"), apiJson("/api/destinations")]);
+      const waypoints = waypointData.items || [];
+      const destinations = destinationData.items || [];
+      waypointSelect.innerHTML = "";
+      if(!waypoints.length){
+        waypointSelect.innerHTML = `<option value="">No checkpoints saved</option>`;
+      }else{
+        waypoints.forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.name;
+          option.textContent = `${item.name} (${item.x}, ${item.y})`;
+          waypointSelect.appendChild(option);
+        });
       }
-      if(lastMap){drawMap(lastMap,data.items||[])}
+
+      waypointList.innerHTML = waypoints.length ? waypoints.map((item) => {
+        const encodedName = encodeURIComponent(item.name);
+        return `<div class="panel-item"><strong>${escapeHtml(item.name)}</strong><div class="meta">x=${item.x}, y=${item.y}, th=${item.theta}</div><div class="meta">${escapeHtml(item.description || "checkpoint")}</div><div class="actions"><button type="button" class="accent" onclick='goWaypointByName(decodeURIComponent("${encodedName}"))'>Go</button><button type="button" class="secondary" onclick='addToRoute(decodeURIComponent("${encodedName}"))'>Add to Route</button><button type="button" class="danger" onclick='deleteWaypoint(decodeURIComponent("${encodedName}"))'>Delete</button></div></div>`;
+      }).join("") : `<div class="panel-item"><div class="meta">No checkpoints saved yet.</div></div>`;
+
+      destinationList.innerHTML = destinations.length ? destinations.map((item) => {
+        const encodedName = encodeURIComponent(item.name);
+        return `<div class="panel-item route"><strong>${escapeHtml(item.name)}</strong><div class="meta">${escapeHtml((item.sequence || []).join(" -> "))}</div><div class="meta">${escapeHtml(item.description || `${item.stops} stop route`)}</div><div class="actions"><button type="button" class="accent" onclick='goDestination(decodeURIComponent("${encodedName}"))'>Run Route</button><button type="button" class="danger" onclick='deleteDestination(decodeURIComponent("${encodedName}"))'>Delete Route</button></div></div>`;
+      }).join("") : `<div class="panel-item"><div class="meta">No saved routes yet.</div></div>`;
+
+      document.getElementById("waypoint-count-note").textContent = `${waypoints.length} checkpoint(s) available.`;
+      document.getElementById("route-count-note").textContent = `${destinations.length} saved route(s) available.`;
+      if(lastMap){
+        drawMap(lastMap, waypoints);
+      }
     }
 
     async function refreshMap(){
-      const data=await (await fetch("/api/map")).json();
-      const waypoints=await (await fetch("/api/waypoints")).json();
-      lastMap=data;
-      lastPose=data.pose||lastPose;
-      const sourceLabel=data.source==="ros_map"?"Map: live SLAM":data.source==="scan_local"?"Map: LiDAR local":"Map: synthetic";
-      document.getElementById("map-source-chip").textContent=sourceLabel;
-      document.getElementById("map-summary").textContent=
-        data.source==="ros_map"
-          ?"Live occupancy map is available from ROS."
-          :data.source==="scan_local"
-            ?"No global map yet. Showing a local LiDAR minimap centered on the robot."
-            :"No map topic yet. Showing a synthetic planning canvas from saved waypoints.";
-      drawMap(data,waypoints.items||[]);
+      const mapData = await apiJson("/api/map");
+      const waypointData = await apiJson("/api/waypoints");
+      lastMap = mapData;
+      lastPose = mapData.pose || lastPose;
+      const sourceLabel = mapData.source === "ros_map" ? "Map: live SLAM" : mapData.source === "scan_local" ? "Map: LiDAR local" : "Map: synthetic";
+      document.getElementById("map-source-chip").textContent = sourceLabel;
+      document.getElementById("map-summary").textContent = mapData.source === "ros_map" ? "Global SLAM map is available." : mapData.source === "scan_local" ? "Global map is not ready, so the panel is showing a LiDAR local map around the robot." : "No ROS map yet. A synthetic canvas is being rendered from saved checkpoints.";
+      drawMap(mapData, waypointData.items || []);
+    }
+
+    async function manual(direction){
+      try{
+        await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed:0.35})});
+        addMsg("bot", direction === "stop" ? "Manual motion stopped." : `Manual command: ${direction}`);
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function cancelNavigation(){
+      try{
+        const data = await apiJson("/api/navigation/cancel", {method:"POST"});
+        addMsg("bot", data.message);
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function setFollow(enabled){
+      try{
+        await apiJson("/api/follow", {method:"POST", body:JSON.stringify({enabled})});
+        addMsg("bot", enabled ? "Follow mode enabled." : "Follow mode disabled.");
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function startFollowTrial(){
+      const blockers = lastStatus?.sensor_fusion?.follow_blockers || [];
+      addMsg("bot", blockers.length ? `Follow trial armed with blockers: ${blockers.join(", ")}` : "Follow trial armed. Watch LiDAR safety and person lock.");
+      await setFollow(true);
+    }
+
+    async function toggleAssistant(){
+      try{
+        const serverUrl = document.getElementById("server-url").value.trim();
+        const data = await apiJson("/api/assistant", {method:"POST", body:JSON.stringify({enabled:!assistantEnabled, server_url:serverUrl})});
+        addMsg("bot", data.mode === "assistant" ? "Assistant mode enabled." : "Standalone mode enabled.");
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function sendChat(textArg){
+      try{
+        const input = document.getElementById("chat-input");
+        const message = (typeof textArg === "string" ? textArg : input.value).trim();
+        if(!message){ return; }
+        input.value = "";
+        addMsg("user", message);
+        const data = await apiJson("/api/chat", {method:"POST", body:JSON.stringify({message})});
+        addMsg("bot", data.response);
+        speak(data.response);
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function goWaypoint(){
+      const name = waypointSelect.value;
+      if(!name){ addMsg("bot", "Select a checkpoint first."); return; }
+      await goWaypointByName(name);
+    }
+
+    async function goWaypointByName(name){
+      try{
+        const data = await apiJson("/api/go", {method:"POST", body:JSON.stringify({name})});
+        addMsg("bot", data.message);
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function saveWaypoint(event){
+      event.preventDefault();
+      try{
+        const rawX = document.getElementById("wp-x").value;
+        const rawY = document.getElementById("wp-y").value;
+        if(rawX === "" || rawY === ""){ addMsg("bot", "Enter x and y or use current pose / map click."); return; }
+        const payload = {name:document.getElementById("wp-name").value.trim(), x:Number(rawX), y:Number(rawY), theta:Number(document.getElementById("wp-theta").value || 0), description:"saved from mission panel"};
+        await apiJson("/api/waypoints", {method:"POST", body:JSON.stringify(payload)});
+        addMsg("bot", `${payload.name} saved.`);
+        event.target.reset();
+        await refreshMissionData();
+        await refreshMap();
+      }catch(error){ showError(error); }
+    }
+
+    async function saveCurrentPoseWaypoint(){
+      try{
+        const name = document.getElementById("wp-name").value.trim();
+        if(!name){ addMsg("bot", "Type a checkpoint name first."); return; }
+        await apiJson("/api/waypoints/current", {method:"POST", body:JSON.stringify({name, description:"saved from current pose"})});
+        addMsg("bot", `${name} saved from current pose.`);
+        await refreshMissionData();
+        await refreshMap();
+      }catch(error){ showError(error); }
+    }
+
+    async function saveClickedWaypoint(){
+      try{
+        const name = document.getElementById("wp-name").value.trim();
+        if(!name){ addMsg("bot", "Type a checkpoint name first."); return; }
+        if(!lastClickedPoint){ addMsg("bot", "Click the map first."); return; }
+        await apiJson("/api/waypoints", {method:"POST", body:JSON.stringify({name, x:lastClickedPoint.x, y:lastClickedPoint.y, theta:Number(document.getElementById("wp-theta").value || 0), description:"saved from map click"})});
+        addMsg("bot", `${name} saved from clicked point.`);
+        await refreshMissionData();
+        await refreshMap();
+      }catch(error){ showError(error); }
+    }
+
+    function clearClickedPoint(){
+      lastClickedPoint = null;
+      document.getElementById("clicked-point-note").textContent = "Click the map to copy x and y into the form. If SLAM is not ready, the panel falls back to a LiDAR local map.";
+      if(lastMap){ apiJson("/api/waypoints").then((data) => drawMap(lastMap, data.items || [])).catch(() => {}); }
+    }
+
+    function fillCurrentPose(){
+      if(!lastPose){ addMsg("bot", "Current pose is not available yet."); return; }
+      document.getElementById("wp-x").value = lastPose.x;
+      document.getElementById("wp-y").value = lastPose.y;
+      document.getElementById("wp-theta").value = lastPose.theta;
+      addMsg("bot", "Copied current pose into the checkpoint form.");
+    }
+
+    async function deleteSelectedWaypoint(){
+      const name = waypointSelect.value;
+      if(!name){ addMsg("bot", "Select a checkpoint first."); return; }
+      await deleteWaypoint(name);
+    }
+
+    async function deleteWaypoint(name){
+      if(!window.confirm(`Delete checkpoint ${name}?`)){ return; }
+      try{
+        const data = await apiJson(`/api/waypoints/${encodeURIComponent(name)}`, {method:"DELETE"});
+        addMsg("bot", `${data.deleted} deleted.`);
+        routeSequence = routeSequence.filter((item) => item !== name);
+        syncRouteSequence();
+        await refreshMissionData();
+        await refreshMap();
+      }catch(error){ showError(error); }
+    }
+
+    async function clearAllWaypoints(){
+      if(!window.confirm("Clear all checkpoints and saved routes?")){ return; }
+      try{
+        const data = await apiJson("/api/waypoints", {method:"DELETE"});
+        addMsg("bot", `Cleared ${data.cleared_waypoints} checkpoint(s) and ${data.cleared_destinations} route(s).`);
+        routeSequence = [];
+        syncRouteSequence();
+        await refreshMissionData();
+        await refreshMap();
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function saveRoute(){
+      try{
+        const name = document.getElementById("route-name").value.trim();
+        if(!name){ addMsg("bot", "Type a route name first."); return; }
+        if(!routeSequence.length){ addMsg("bot", "Add checkpoints to the route first."); return; }
+        const data = await apiJson("/api/destinations", {method:"POST", body:JSON.stringify({name, sequence:routeSequence, description:"saved from mission panel"})});
+        addMsg("bot", `${name} route saved with ${data.destination.sequence.length} stop(s).`);
+        await refreshMissionData();
+      }catch(error){ showError(error); }
+    }
+
+    async function runRouteNow(){
+      try{
+        if(!routeSequence.length){ addMsg("bot", "Add checkpoints to the route first."); return; }
+        const routeName = document.getElementById("route-name").value.trim() || "route_now";
+        const data = await apiJson("/api/routes/run", {method:"POST", body:JSON.stringify({name:routeName, sequence:routeSequence})});
+        addMsg("bot", data.message);
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function goDestination(name){
+      try{
+        const data = await apiJson("/api/destinations/go", {method:"POST", body:JSON.stringify({name})});
+        addMsg("bot", data.message);
+        await refreshStatus();
+      }catch(error){ showError(error); }
+    }
+
+    async function deleteDestination(name){
+      if(!window.confirm(`Delete route ${name}?`)){ return; }
+      try{
+        await apiJson(`/api/destinations/${encodeURIComponent(name)}`, {method:"DELETE"});
+        addMsg("bot", `${name} route deleted.`);
+        await refreshMissionData();
+      }catch(error){ showError(error); }
     }
 
     function toggleCamera(){
-      cameraEnabled=!cameraEnabled;
-      document.getElementById("camera-frame").style.display=cameraEnabled?"block":"none";
-      document.getElementById("camera-toggle-btn").textContent=cameraEnabled?"Close Camera":"Open Camera";
-      if(cameraEnabled){refreshCamera(true)}
+      cameraEnabled = !cameraEnabled;
+      document.getElementById("camera-frame").style.display = cameraEnabled ? "block" : "none";
+      document.getElementById("camera-toggle-btn").textContent = cameraEnabled ? "Close Camera" : "Open Camera";
+      if(cameraEnabled){ refreshCamera(true); }
       else{
-        document.getElementById("camera-summary").textContent="Camera preview is off. Open it only when needed.";
+        document.getElementById("camera-summary").textContent = "Camera preview is off until you open it.";
         document.getElementById("camera-feed").removeAttribute("src");
       }
     }
 
     async function refreshCamera(force){
-      if(!cameraEnabled)return;
-      if(!force&&(!lastStatus||!lastStatus.camera_available))return;
-      document.getElementById("camera-feed").src=`/api/camera.jpg?ts=${Date.now()}`;
+      if(!cameraEnabled){ return; }
+      if(!force && (!lastStatus || !lastStatus.camera_available)){ return; }
+      document.getElementById("camera-feed").src = `/api/camera.jpg?ts=${Date.now()}`;
     }
 
-    function drawMap(mapData,waypoints){
-      const width=mapCanvas.width,height=mapCanvas.height;
-      mapCtx.clearRect(0,0,width,height);
-      const img=mapCtx.createImageData(width,height);
-      const srcWidth=mapData.width;
-      const srcHeight=mapData.height;
-      const cells=mapData.cells||[];
-      for(let py=0;py<height;py++){
-        for(let px=0;px<width;px++){
-          const sx=Math.floor(px/width*srcWidth);
-          const sy=Math.floor((height-py-1)/height*srcHeight);
-          const value=cells[sy*srcWidth+sx]??0;
-          let r=242,g=236,b=224;
-          if(value===-1){r=225;g=219;b=205}
-          else if(value>=65){r=49;g=56;b=60}
-          else if(value>0){r=196;g=135;b=76}
-          else{r=244;g=239;b=230}
-          const idx=(py*width+px)*4;
-          img.data[idx]=r;img.data[idx+1]=g;img.data[idx+2]=b;img.data[idx+3]=255;
-        }
-      }
-      mapCtx.putImageData(img,0,0);
-
-      if(mapData.source==="scan_local"){
-        mapCtx.strokeStyle="rgba(28,122,110,.22)";
-        mapCtx.lineWidth=1;
-        for(let i=1;i<4;i++){
-          const radius=(width/8)*i;
-          mapCtx.beginPath();
-          mapCtx.arc(width/2,height/2,radius,0,Math.PI*2);
-          mapCtx.stroke();
-        }
-      }
-
-      waypoints.forEach((point,index)=>{
-        const px=worldToCanvasX(point.x,mapData);
-        const py=worldToCanvasY(point.y,mapData);
-        mapCtx.fillStyle=index===0?"#b45b2b":"#1c7a6e";
-        mapCtx.beginPath();
-        mapCtx.arc(px,py,7,0,Math.PI*2);
-        mapCtx.fill();
-        mapCtx.fillStyle="#162025";
-        mapCtx.font='14px "Segoe UI", sans-serif';
-        mapCtx.fillText(point.name,px+10,py-10);
-      });
-
-      if(lastPose){
-        const px=worldToCanvasX(lastPose.x,mapData);
-        const py=worldToCanvasY(lastPose.y,mapData);
-        mapCtx.fillStyle="#be4333";
-        mapCtx.beginPath();
-        mapCtx.arc(px,py,8,0,Math.PI*2);
-        mapCtx.fill();
-      }
-
-      if(lastClickedPoint){
-        const px=worldToCanvasX(lastClickedPoint.x,mapData);
-        const py=worldToCanvasY(lastClickedPoint.y,mapData);
-        mapCtx.strokeStyle="#d97706";
-        mapCtx.lineWidth=3;
-        mapCtx.beginPath();
-        mapCtx.arc(px,py,10,0,Math.PI*2);
-        mapCtx.stroke();
-      }
-    }
-
-    function worldToCanvasX(x,mapData){return((x-mapData.origin.x)/(mapData.width*mapData.resolution))*mapCanvas.width}
-    function worldToCanvasY(y,mapData){return mapCanvas.height-(((y-mapData.origin.y)/(mapData.height*mapData.resolution))*mapCanvas.height)}
-    function canvasToWorld(x,y,mapData){return{x:mapData.origin.x+(x/mapCanvas.width)*(mapData.width*mapData.resolution),y:mapData.origin.y+((mapCanvas.height-y)/mapCanvas.height)*(mapData.height*mapData.resolution)}}
-
-    async function manual(direction){
-      await fetch("/api/manual",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({direction,speed:.35})});
-      addMsg("bot",direction==="stop"?"Manual motion stopped.":`Manual command: ${direction}`);
-      refreshStatus();
-    }
-
-    async function setFollow(enabled){
-      await fetch("/api/follow",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});
-      addMsg("bot",enabled?"Follow mode enabled.":"Follow mode disabled.");
-      refreshStatus();
-    }
-
-    async function toggleAssistant(){
-      const server_url=document.getElementById("server-url").value.trim();
-      const data=await (await fetch("/api/assistant",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!assistantEnabled,server_url})})).json();
-      addMsg("bot",data.mode==="assistant"?"Assistant mode enabled.":"Standalone mode enabled.");
-      refreshStatus();
-    }
-
-    async function sendChat(textArg){
-      const input=document.getElementById("chat-input");
-      const message=(typeof textArg==="string"?textArg:input.value).trim();
-      if(!message)return;
-      input.value="";
-      addMsg("user",message);
-      const data=await (await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})})).json();
-      addMsg("bot",data.response);
-      speak(data.response);
-      await refreshStatus();
-    }
-
-    async function goWaypoint(){
-      const name=waypointSelect.value;
-      if(!name)return;
-      const data=await (await fetch("/api/go",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})})).json();
-      addMsg("bot",data.message);
-      refreshStatus();
-    }
-
-    async function saveWaypoint(event){
-      event.preventDefault();
-      const payload={
-        name:document.getElementById("wp-name").value.trim(),
-        x:Number(document.getElementById("wp-x").value),
-        y:Number(document.getElementById("wp-y").value),
-        theta:Number(document.getElementById("wp-theta").value||0),
-        description:"saved from operator panel"
-      };
-      if(!payload.name)return;
-      await fetch("/api/waypoints",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-      addMsg("bot",`${payload.name} saved.`);
-      event.target.reset();
-      refreshWaypoints();
-      refreshMap();
-    }
-
-    async function saveCurrentPoseWaypoint(){
-      const name=document.getElementById("wp-name").value.trim();
-      if(!name){addMsg("bot","Type a waypoint name first.");return}
-      await fetch("/api/waypoints/current",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,description:"saved from current pose"})});
-      addMsg("bot",`${name} saved from current pose.`);
-      refreshWaypoints();
-      refreshMap();
-    }
-
-    async function saveClickedWaypoint(){
-      const name=document.getElementById("wp-name").value.trim();
-      if(!name){addMsg("bot","Type a waypoint name first.");return}
-      if(!lastClickedPoint){addMsg("bot","Click the map first.");return}
-      const payload={name,x:lastClickedPoint.x,y:lastClickedPoint.y,theta:Number(document.getElementById("wp-theta").value||0),description:"saved from map click"};
-      await fetch("/api/waypoints",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-      addMsg("bot",`${name} saved from clicked point.`);
-      refreshWaypoints();
-      refreshMap();
-    }
-
-    function clearClickedPoint(){
-      lastClickedPoint=null;
-      document.getElementById("clicked-point-note").textContent="Click the map to copy x/y into the form. If no SLAM map exists, the panel shows a local LiDAR minimap around the robot.";
-      if(lastMap){fetch("/api/waypoints").then((r)=>r.json()).then((data)=>drawMap(lastMap,data.items||[]))}
-    }
-
-    function fillCurrentPose(){
-      if(!lastPose){addMsg("bot","Current pose not available yet.");return}
-      document.getElementById("wp-x").value=lastPose.x;
-      document.getElementById("wp-y").value=lastPose.y;
-      document.getElementById("wp-theta").value=lastPose.theta;
-      addMsg("bot","Copied current pose into the waypoint form.");
-    }
-
-    mapCanvas.addEventListener("click",(event)=>{
-      if(!lastMap)return;
-      const rect=mapCanvas.getBoundingClientRect();
-      const point=canvasToWorld(event.clientX-rect.left,event.clientY-rect.top,lastMap);
-      lastClickedPoint={x:Number(point.x.toFixed(2)),y:Number(point.y.toFixed(2))};
-      document.getElementById("wp-x").value=lastClickedPoint.x.toFixed(2);
-      document.getElementById("wp-y").value=lastClickedPoint.y.toFixed(2);
-      document.getElementById("clicked-point-note").textContent=`Selected point: x=${lastClickedPoint.x.toFixed(2)}, y=${lastClickedPoint.y.toFixed(2)}. Type a name and save it.`;
-      fetch("/api/waypoints").then((r)=>r.json()).then((data)=>drawMap(lastMap,data.items||[]));
+    mapCanvas.addEventListener("click", (event) => {
+      if(!lastMap){ return; }
+      const rect = mapCanvas.getBoundingClientRect();
+      const point = canvasToWorld(event.clientX - rect.left, event.clientY - rect.top, lastMap);
+      lastClickedPoint = {x:Number(point.x.toFixed(2)), y:Number(point.y.toFixed(2))};
+      document.getElementById("wp-x").value = lastClickedPoint.x.toFixed(2);
+      document.getElementById("wp-y").value = lastClickedPoint.y.toFixed(2);
+      document.getElementById("clicked-point-note").textContent = `Selected point x=${lastClickedPoint.x}, y=${lastClickedPoint.y}. Save it or clear it.`;
+      apiJson("/api/waypoints").then((data) => drawMap(lastMap, data.items || [])).catch(() => {});
     });
 
-    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-    const voiceBtn=document.getElementById("voice-btn");
-    if(SpeechRecognition){
-      const rec=new SpeechRecognition();
-      rec.lang=navigator.language||"ko-KR";
-      rec.interimResults=false;
-      voiceBtn.onclick=()=>{rec.start();voiceBtn.textContent="듣는 중..."};
-      rec.onresult=(e)=>sendChat(e.results[0][0].transcript);
-      rec.onend=()=>{voiceBtn.textContent="Voice"};
-    }else{
-      voiceBtn.disabled=true;
-      voiceBtn.textContent="Voice unsupported";
-    }
-
-    document.getElementById("chat-input").addEventListener("keydown",(event)=>{
-      if(event.key==="Enter"){
+    document.getElementById("chat-input").addEventListener("keydown", (event) => {
+      if(event.key === "Enter"){
         event.preventDefault();
         sendChat();
       }
     });
 
-    addMsg("bot","BuddyBot operator panel is ready.");
-    refreshStatus();
-    refreshWaypoints();
-    refreshMap();
-    setInterval(refreshStatus,4000);
-    setInterval(refreshMap,6000);
-    setInterval(()=>refreshCamera(false),1200);
+    const voiceBtn = document.getElementById("voice-btn");
+    if("webkitSpeechRecognition" in window || "SpeechRecognition" in window){
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = "ko-KR";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("chat-input").value = transcript;
+        sendChat();
+      };
+      recognition.onend = () => { voiceBtn.textContent = "Voice"; };
+      voiceBtn.onclick = () => {
+        recognition.start();
+        voiceBtn.textContent = "Listening...";
+      };
+    }else{
+      voiceBtn.disabled = true;
+      voiceBtn.textContent = "Voice Unsupported";
+    }
+
+    async function refreshAll(){
+      try{
+        await Promise.all([refreshStatus(), refreshMissionData(), refreshMap()]);
+        if(cameraEnabled){ refreshCamera(false); }
+      }catch(error){
+        console.error(error);
+      }
+    }
+
+    syncRouteSequence();
+    addMsg("bot", "Mission panel ready. Save fresh checkpoints, build a route, and test follow mode from here.");
+    refreshAll();
+    setInterval(refreshStatus, 1500);
+    setInterval(() => refreshCamera(false), 1000);
+    setInterval(refreshMap, 2500);
+    setInterval(refreshMissionData, 3500);
   </script>
 </body>
 </html>

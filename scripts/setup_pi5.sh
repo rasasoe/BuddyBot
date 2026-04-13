@@ -25,6 +25,8 @@ safe_source() {
 
 sudo apt update
 sudo apt install -y \
+  alsa-utils \
+  espeak-ng \
   python3-colcon-common-extensions \
   python3-pyaudio \
   python3-pocketsphinx \

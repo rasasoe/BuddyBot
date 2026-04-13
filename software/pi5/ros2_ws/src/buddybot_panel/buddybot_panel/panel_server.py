@@ -29,7 +29,7 @@ try:
     from rclpy.node import Node
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import Image, LaserScan
-    from std_msgs.msg import Bool, String
+    from std_msgs.msg import Bool, Float32MultiArray, String
 
     ROS2_AVAILABLE = True
 except ImportError:
@@ -52,6 +52,7 @@ except ImportError:
     LaserScan = None
     String = object
     Bool = object
+    Float32MultiArray = object
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -87,6 +88,25 @@ class WaypointGoRequest(BaseModel):
     name: str
 
 
+class WaypointDeleteRequest(BaseModel):
+    name: str
+
+
+class DestinationSaveRequest(BaseModel):
+    name: str
+    sequence: List[str]
+    description: str = ""
+
+
+class DestinationGoRequest(BaseModel):
+    name: str
+
+
+class RouteRunRequest(BaseModel):
+    name: str = "route_now"
+    sequence: List[str]
+
+
 class PanelBridge:
     def __init__(self) -> None:
         self.follow_enabled = False
@@ -101,6 +121,11 @@ class PanelBridge:
         self._follow_pub = None
         self._waypoint_goal_pub = None
         self._waypoint_save_pub = None
+        self._waypoint_delete_pub = None
+        self._waypoint_clear_pub = None
+        self._destination_goal_pub = None
+        self._destination_save_pub = None
+        self._destination_delete_pub = None
         self._nav_cancel_pub = None
         self._map_sub = None
         self._scan_sub = None
@@ -119,6 +144,11 @@ class PanelBridge:
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
+        self._latest_person_bbox: Optional[Dict[str, float]] = None
+        self._latest_person_stamp: Optional[float] = None
+        self._person_frames_received = 0
+        self._safety_active = False
+        self._safety_status = "active:False,sources:"
         self._system_status = "idle"
         self._navigation_status = "idle"
         self._manual_active = False
@@ -141,6 +171,11 @@ class PanelBridge:
             self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", 10)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", 10)
             self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
+            self._waypoint_delete_pub = self._node.create_publisher(String, "/nav/waypoint_delete", 10)
+            self._waypoint_clear_pub = self._node.create_publisher(String, "/nav/waypoint_clear", 10)
+            self._destination_goal_pub = self._node.create_publisher(String, "/nav/destination_goal", 10)
+            self._destination_save_pub = self._node.create_publisher(String, "/nav/destination_save", 10)
+            self._destination_delete_pub = self._node.create_publisher(String, "/nav/destination_delete", 10)
             self._nav_cancel_pub = self._node.create_publisher(String, "/nav/cancel", 10)
             self._node.create_timer(0.1, self._manual_publish_timer)
 
@@ -161,6 +196,8 @@ class PanelBridge:
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
             self._node.create_subscription(String, "/nav/navigation_status", self._navigation_status_callback, 10)
+            self._node.create_subscription(String, "/system/safety_status", self._safety_status_callback, 10)
+            self._node.create_subscription(Bool, "/system/safety_active", self._safety_active_callback, 10)
             if LaserScan is not None:
                 scan_qos = 10
                 if QoSProfile is not None:
@@ -186,6 +223,8 @@ class PanelBridge:
                     depth=1,
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
+            if Float32MultiArray is not None:
+                self._node.create_subscription(Float32MultiArray, "/vision/person_bbox", self._person_bbox_callback, 10)
 
             if SingleThreadedExecutor is not None:
                 self._executor = SingleThreadedExecutor()
@@ -213,6 +252,12 @@ class PanelBridge:
 
     def _navigation_status_callback(self, msg: String) -> None:
         self._navigation_status = msg.data
+
+    def _safety_status_callback(self, msg: String) -> None:
+        self._safety_status = msg.data
+
+    def _safety_active_callback(self, msg: Bool) -> None:
+        self._safety_active = bool(msg.data)
 
     def _pico_status_callback(self, msg: Status) -> None:
         with self._lock:
@@ -256,6 +301,24 @@ class PanelBridge:
             with self._lock:
                 self._latest_camera_jpeg = encoded.tobytes()
                 self._latest_camera_stamp = time.time()
+        except Exception:
+            return
+
+    def _person_bbox_callback(self, msg: Float32MultiArray) -> None:
+        try:
+            if len(msg.data) < 5:
+                return
+            x, y, width, height, confidence = msg.data[:5]
+            with self._lock:
+                self._latest_person_bbox = {
+                    "x": round(float(x), 2),
+                    "y": round(float(y), 2),
+                    "width": round(float(width), 2),
+                    "height": round(float(height), 2),
+                    "confidence": round(float(confidence), 3),
+                }
+                self._latest_person_stamp = time.time()
+                self._person_frames_received += 1
         except Exception:
             return
 
@@ -499,6 +562,13 @@ class PanelBridge:
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
+            "safety_active": self.safety_active(),
+            "safety_status": self.safety_status(),
+            "person_detected": self.person_detected(),
+            "person_age_sec": self.person_age_sec(),
+            "person_bbox": self.person_bbox(),
+            "person_frames_received": self.person_frames_received(),
+            "sensor_fusion": self.sensor_fusion_summary(),
         }
 
     def current_pose(self) -> Optional[Dict[str, float]]:
@@ -555,6 +625,93 @@ class PanelBridge:
     def manual_active(self) -> bool:
         with self._lock:
             return self._manual_active
+
+    def safety_active(self) -> bool:
+        return bool(self._safety_active)
+
+    def safety_status(self) -> str:
+        return self._safety_status
+
+    def person_detected(self, stale_after_sec: float = 1.2) -> bool:
+        with self._lock:
+            if self._latest_person_stamp is None:
+                return False
+            return (time.time() - self._latest_person_stamp) <= stale_after_sec
+
+    def person_age_sec(self) -> Optional[float]:
+        with self._lock:
+            if self._latest_person_stamp is None:
+                return None
+            return round(max(0.0, time.time() - self._latest_person_stamp), 2)
+
+    def person_bbox(self) -> Optional[Dict[str, float]]:
+        with self._lock:
+            if self._latest_person_bbox is None:
+                return None
+            return dict(self._latest_person_bbox)
+
+    def person_frames_received(self) -> int:
+        with self._lock:
+            return int(self._person_frames_received)
+
+    def sensor_fusion_summary(self) -> Dict[str, Any]:
+        pose_ready = self.current_pose() is not None
+        lidar_live = self.scan_available()
+        camera_live = self.camera_available()
+        map_live = self.map_available()
+        person_live = self.person_detected()
+        pico_live = self.pico_connected()
+        safety_clear = not self.safety_active()
+
+        blockers: List[str] = []
+        if not lidar_live:
+            blockers.append("lidar_missing")
+        if not camera_live:
+            blockers.append("camera_missing")
+        if not pose_ready:
+            blockers.append("pose_missing")
+        if not map_live:
+            blockers.append("map_missing")
+        if not pico_live:
+            blockers.append("pico_missing")
+        if not safety_clear:
+            blockers.append("safety_latched")
+
+        follow_blockers: List[str] = []
+        if not camera_live:
+            follow_blockers.append("camera_missing")
+        if not person_live:
+            follow_blockers.append("person_not_detected")
+        if not lidar_live:
+            follow_blockers.append("lidar_missing")
+        if not safety_clear:
+            follow_blockers.append("safety_latched")
+
+        nav_blockers: List[str] = []
+        if not pose_ready:
+            nav_blockers.append("pose_missing")
+        if not map_live:
+            nav_blockers.append("map_missing")
+        if not lidar_live:
+            nav_blockers.append("lidar_missing")
+        if not safety_clear:
+            nav_blockers.append("safety_latched")
+
+        return {
+            "camera_lidar_ready": camera_live and lidar_live,
+            "fusion_ready": camera_live and lidar_live and pose_ready and map_live,
+            "follow_ready": not follow_blockers,
+            "follow_state": (
+                "tracking" if self.follow_enabled and person_live else
+                "armed" if self.follow_enabled else
+                "idle"
+            ),
+            "nav_ready": not nav_blockers,
+            "operator_ready": not blockers,
+            "blockers": blockers,
+            "follow_blockers": follow_blockers,
+            "nav_blockers": nav_blockers,
+        }
 
     def _publish_follow_state(self, enabled: bool) -> None:
         if not self.ros2_connected or self._follow_pub is None:
@@ -751,6 +908,41 @@ class PanelBridge:
             msg.data = name
             self._waypoint_goal_pub.publish(msg)
 
+    def run_destination(self, name: str) -> None:
+        self.last_command = f"destination:{name}"
+        self.set_follow_enabled(False, update_last_command=False)
+        self._clear_manual_motion()
+        if self.ros2_connected and self._destination_goal_pub is not None:
+            msg = String()
+            msg.data = name
+            self._destination_goal_pub.publish(msg)
+
+    def run_route(self, name: str, sequence: List[str]) -> Dict[str, Any]:
+        cleaned_sequence = self._normalize_sequence(sequence)
+        if not cleaned_sequence:
+            raise ValueError("Route sequence is empty.")
+        data = self._load_waypoints()
+        available = set(data.get("waypoints", {}).keys())
+        missing = [item for item in cleaned_sequence if item not in available]
+        if missing:
+            raise ValueError(f"Unknown checkpoints in route: {', '.join(missing)}")
+
+        self.last_command = f"route:{name}"
+        self.set_follow_enabled(False, update_last_command=False)
+        self._clear_manual_motion()
+
+        if self.ros2_connected and self._destination_goal_pub is not None:
+            msg = String()
+            msg.data = json.dumps(
+                {"name": name or "route_now", "sequence": cleaned_sequence},
+                ensure_ascii=True,
+            )
+            self._destination_goal_pub.publish(msg)
+        return {
+            "name": name or "route_now",
+            "sequence": cleaned_sequence,
+        }
+
     def save_waypoint(
         self,
         name: str,
@@ -759,6 +951,9 @@ class PanelBridge:
         theta: float,
         description: str,
     ) -> Dict[str, Any]:
+        name = name.strip()
+        if not name:
+            raise ValueError("Checkpoint name is required.")
         if x is None or y is None:
             pose = self.current_pose()
             if pose is None:
@@ -766,6 +961,9 @@ class PanelBridge:
             x = pose["x"]
             y = pose["y"]
             theta = pose["theta"]
+
+        if not math.isfinite(float(x)) or not math.isfinite(float(y)) or not math.isfinite(float(theta)):
+            raise ValueError("Checkpoint pose must be finite numbers.")
 
         self.last_command = f"save_waypoint:{name}"
         data = self._load_waypoints()
@@ -793,9 +991,73 @@ class PanelBridge:
 
         return data["waypoints"][name]
 
+    def delete_waypoint(self, name: str) -> Dict[str, Any]:
+        cleaned_name = name.strip()
+        data = self._load_waypoints()
+        waypoints = data.setdefault("waypoints", {})
+        if cleaned_name not in waypoints:
+            raise ValueError(f"Checkpoint '{cleaned_name}' does not exist.")
+
+        del waypoints[cleaned_name]
+
+        destinations = data.setdefault("destinations", {})
+        updated_destinations: Dict[str, Any] = {}
+        removed_destinations: List[str] = []
+        for destination_name, destination in destinations.items():
+            sequence = [
+                item
+                for item in destination.get("sequence", [])
+                if item != cleaned_name
+            ]
+            if not sequence:
+                removed_destinations.append(destination_name)
+                continue
+            updated_destinations[destination_name] = {
+                **destination,
+                "sequence": sequence,
+            }
+        data["destinations"] = updated_destinations
+
+        self.last_command = f"delete_waypoint:{cleaned_name}"
+        self._save_waypoints(data)
+
+        if self.ros2_connected and self._waypoint_delete_pub is not None:
+            msg = String()
+            msg.data = cleaned_name
+            self._waypoint_delete_pub.publish(msg)
+        if self.ros2_connected and self._destination_delete_pub is not None:
+            for destination_name in removed_destinations:
+                msg = String()
+                msg.data = destination_name
+                self._destination_delete_pub.publish(msg)
+
+        return {
+            "deleted": cleaned_name,
+            "removed_destinations": removed_destinations,
+        }
+
+    def clear_waypoints(self) -> Dict[str, Any]:
+        data = self._load_waypoints()
+        cleared_waypoints = len(data.get("waypoints", {}))
+        cleared_destinations = len(data.get("destinations", {}))
+        data["waypoints"] = {}
+        data["destinations"] = {}
+        self.last_command = "clear_waypoints"
+        self._save_waypoints(data)
+
+        if self.ros2_connected and self._waypoint_clear_pub is not None:
+            msg = String()
+            msg.data = "clear"
+            self._waypoint_clear_pub.publish(msg)
+
+        return {
+            "cleared_waypoints": cleared_waypoints,
+            "cleared_destinations": cleared_destinations,
+        }
+
     def list_waypoints(self) -> List[Dict[str, Any]]:
         waypoints = self._load_waypoints().get("waypoints", {})
-        return [
+        items = [
             {
                 "name": name,
                 "x": float(item.get("pose", {}).get("x", 0.0)),
@@ -805,6 +1067,78 @@ class PanelBridge:
             }
             for name, item in waypoints.items()
         ]
+        return sorted(items, key=lambda item: item["name"])
+
+    def save_destination(self, name: str, sequence: List[str], description: str) -> Dict[str, Any]:
+        name = name.strip()
+        if not name:
+            raise ValueError("Route name is required.")
+        cleaned_sequence = self._normalize_sequence(sequence)
+        if not cleaned_sequence:
+            raise ValueError("Select at least one checkpoint for the route.")
+
+        data = self._load_waypoints()
+        available = set(data.get("waypoints", {}).keys())
+        missing = [item for item in cleaned_sequence if item not in available]
+        if missing:
+            raise ValueError(f"Unknown checkpoints in route: {', '.join(missing)}")
+
+        data.setdefault("destinations", {})
+        data["destinations"][name] = {
+            "sequence": cleaned_sequence,
+            "description": description or f"{name} route",
+        }
+        self.last_command = f"save_destination:{name}"
+        self._save_waypoints(data)
+
+        if self.ros2_connected and self._destination_save_pub is not None:
+            msg = String()
+            msg.data = json.dumps(
+                {
+                    "name": name,
+                    "sequence": cleaned_sequence,
+                    "description": description or f"{name} route",
+                },
+                ensure_ascii=True,
+            )
+            self._destination_save_pub.publish(msg)
+
+        return data["destinations"][name]
+
+    def delete_destination(self, name: str) -> None:
+        cleaned_name = name.strip()
+        data = self._load_waypoints()
+        destinations = data.setdefault("destinations", {})
+        if cleaned_name not in destinations:
+            raise ValueError(f"Route '{cleaned_name}' does not exist.")
+
+        del destinations[cleaned_name]
+        self.last_command = f"delete_destination:{cleaned_name}"
+        self._save_waypoints(data)
+
+        if self.ros2_connected and self._destination_delete_pub is not None:
+            msg = String()
+            msg.data = cleaned_name
+            self._destination_delete_pub.publish(msg)
+
+    def list_destinations(self) -> List[Dict[str, Any]]:
+        data = self._load_waypoints()
+        destinations = data.get("destinations", {})
+        items = []
+        for name, item in destinations.items():
+            sequence = self._normalize_sequence(item.get("sequence", []))
+            items.append(
+                {
+                    "name": name,
+                    "sequence": sequence,
+                    "description": item.get("description", ""),
+                    "stops": len(sequence),
+                }
+            )
+        return sorted(items, key=lambda item: item["name"])
+
+    def _normalize_sequence(self, sequence: List[str]) -> List[str]:
+        return [item.strip() for item in sequence if str(item).strip()]
 
     def _load_waypoints(self) -> Dict[str, Any]:
         if not WAYPOINT_FILE.exists():
@@ -877,26 +1211,91 @@ def api_waypoints():
 
 @app.post("/api/waypoints")
 def api_save_waypoint(request: WaypointSaveRequest):
-    waypoint = bridge.save_waypoint(
-        request.name,
-        request.x,
-        request.y,
-        request.theta,
-        request.description,
-    )
+    try:
+        waypoint = bridge.save_waypoint(
+            request.name,
+            request.x,
+            request.y,
+            request.theta,
+            request.description,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"saved": True, "waypoint": waypoint, "items": bridge.list_waypoints()}
 
 
 @app.post("/api/waypoints/current")
 def api_save_current_waypoint(request: CurrentPoseWaypointRequest):
-    waypoint = bridge.save_waypoint(request.name, None, None, 0.0, request.description)
+    try:
+        waypoint = bridge.save_waypoint(request.name, None, None, 0.0, request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"saved": True, "waypoint": waypoint, "items": bridge.list_waypoints()}
+
+
+@app.delete("/api/waypoints/{name}")
+def api_delete_waypoint(name: str):
+    try:
+        result = bridge.delete_waypoint(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"deleted": True, **result, "items": bridge.list_waypoints(), "destinations": bridge.list_destinations()}
+
+
+@app.delete("/api/waypoints")
+def api_clear_waypoints():
+    result = bridge.clear_waypoints()
+    return {"cleared": True, **result, "items": bridge.list_waypoints(), "destinations": bridge.list_destinations()}
 
 
 @app.post("/api/go")
 def api_go(request: WaypointGoRequest):
     bridge.go_waypoint(request.name)
     return {"success": True, "message": f"Sent navigation request to {request.name}."}
+
+
+@app.post("/api/navigation/cancel")
+def api_cancel_navigation():
+    bridge.cancel_navigation()
+    return {"success": True, "message": "Navigation cancelled."}
+
+
+@app.get("/api/destinations")
+def api_destinations():
+    return {"items": bridge.list_destinations()}
+
+
+@app.post("/api/destinations")
+def api_save_destination(request: DestinationSaveRequest):
+    try:
+        destination = bridge.save_destination(request.name, request.sequence, request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"saved": True, "destination": destination, "items": bridge.list_destinations()}
+
+
+@app.delete("/api/destinations/{name}")
+def api_delete_destination(name: str):
+    try:
+        bridge.delete_destination(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"deleted": True, "items": bridge.list_destinations()}
+
+
+@app.post("/api/destinations/go")
+def api_go_destination(request: DestinationGoRequest):
+    bridge.run_destination(request.name)
+    return {"success": True, "message": f"Sent route {request.name}."}
+
+
+@app.post("/api/routes/run")
+def api_run_route(request: RouteRunRequest):
+    try:
+        route = bridge.run_route(request.name, request.sequence)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "route": route, "message": f"Sent ad-hoc route {route['name']}."}
 
 
 def main() -> None:

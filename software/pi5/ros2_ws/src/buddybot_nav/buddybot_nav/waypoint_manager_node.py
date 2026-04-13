@@ -50,7 +50,7 @@ import yaml
 import os
 import math
 import json
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class WaypointManagerNode(Node):
@@ -92,6 +92,7 @@ class WaypointManagerNode(Node):
         # Load waypoint database
         self.config_data = self._load_waypoints(waypoint_config)
         self.waypoints = self.config_data.get('waypoints', {})
+        self.destinations = self.config_data.get('destinations', {})
 
         # Navigation state
         self.current_waypoint = None
@@ -105,6 +106,8 @@ class WaypointManagerNode(Node):
         self.goal_future = None
         self.result_future = None
         self.navigation_started_at = 0.0
+        self.active_destination_name: Optional[str] = None
+        self.active_destination_sequence: List[str] = []
 
         # Action client for Nav2
         self.nav_action_client = ActionClient(
@@ -140,6 +143,16 @@ class WaypointManagerNode(Node):
         self.create_subscription(
             String, '/nav/waypoint_save', self.waypoint_save_callback, qos_profile)
         self.create_subscription(
+            String, '/nav/waypoint_delete', self.waypoint_delete_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/waypoint_clear', self.waypoint_clear_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/destination_goal', self.destination_goal_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/destination_save', self.destination_save_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/destination_delete', self.destination_delete_callback, qos_profile)
+        self.create_subscription(
             String, '/nav/cancel', self.cancel_topic_callback, qos_profile)
 
         # Services
@@ -161,6 +174,7 @@ class WaypointManagerNode(Node):
 
         self.get_logger().info("Waypoint manager node initialized")
         self._log_available_waypoints()
+        self._log_available_destinations()
 
     def _load_waypoints(self, config_file: str) -> Dict[str, Dict]:
         """Load waypoint database from YAML configuration."""
@@ -197,6 +211,16 @@ class WaypointManagerNode(Node):
             x, y = pose.get('x', 0.0), pose.get('y', 0.0)
             self.get_logger().info(f"  {name}: ({x:.2f}, {y:.2f})")
 
+    def _log_available_destinations(self):
+        if not self.destinations:
+            self.get_logger().info("No saved routes loaded")
+            return
+
+        self.get_logger().info("Available routes:")
+        for name, data in self.destinations.items():
+            sequence = data.get("sequence", [])
+            self.get_logger().info(f"  {name}: {sequence}")
+
     def waypoint_goal_callback(self, msg: String):
         waypoint_name = msg.data.strip()
         if not waypoint_name:
@@ -205,12 +229,15 @@ class WaypointManagerNode(Node):
             self.get_logger().warn(f"Unknown waypoint from topic request: {waypoint_name}")
             self._publish_navigation_status(f"unknown_waypoint:{waypoint_name}")
             return
+        self._clear_destination_state()
         self._start_navigation(waypoint_name)
 
     def waypoint_save_callback(self, msg: String):
         try:
             payload = json.loads(msg.data)
-            name = payload["name"]
+            name = str(payload["name"]).strip()
+            if not name:
+                raise ValueError("Waypoint name is required")
             self.config_data.setdefault("waypoints", {})
             self.config_data["waypoints"][name] = {
                 "pose": {
@@ -229,17 +256,189 @@ class WaypointManagerNode(Node):
             self.get_logger().error(f"Failed to save waypoint from topic: {exc}")
             self._publish_navigation_status("waypoint_save_failed")
 
+    def waypoint_delete_callback(self, msg: String):
+        name = msg.data.strip()
+        if not name:
+            return
+        try:
+            self._delete_waypoint(name)
+            self._publish_navigation_status(f"waypoint_deleted:{name}")
+        except Exception as exc:
+            self.get_logger().error(f"Failed to delete waypoint '{name}': {exc}")
+            self._publish_navigation_status(f"waypoint_delete_failed:{name}")
+
+    def waypoint_clear_callback(self, msg: String):
+        if msg.data.strip() not in {"", "clear"}:
+            return
+        self._clear_all_waypoints()
+
+    def destination_goal_callback(self, msg: String):
+        raw = msg.data.strip()
+        if not raw:
+            return
+
+        try:
+            if raw.startswith("{"):
+                payload = json.loads(raw)
+                name = str(payload.get("name") or "route_now").strip() or "route_now"
+                sequence = self._normalize_sequence(payload.get("sequence", []))
+            else:
+                name = raw
+                destination = self.destinations.get(name)
+                if destination is None:
+                    self.get_logger().warn(f"Unknown route from topic request: {name}")
+                    self._publish_navigation_status(f"unknown_destination:{name}")
+                    return
+                sequence = self._normalize_sequence(destination.get("sequence", []))
+
+            self._start_destination_sequence(name, sequence)
+        except Exception as exc:
+            self.get_logger().error(f"Failed to process destination goal: {exc}")
+            self._publish_navigation_status("destination_goal_failed")
+
+    def destination_save_callback(self, msg: String):
+        try:
+            payload = json.loads(msg.data)
+            name = str(payload["name"]).strip()
+            sequence = self._normalize_sequence(payload.get("sequence", []))
+            if not name:
+                raise ValueError("Destination name is required")
+            if not sequence:
+                raise ValueError("Destination sequence is empty")
+            missing = [item for item in sequence if item not in self.waypoints]
+            if missing:
+                raise ValueError(f"Unknown waypoint(s): {', '.join(missing)}")
+
+            self.config_data.setdefault("destinations", {})
+            self.config_data["destinations"][name] = {
+                "sequence": sequence,
+                "description": payload.get("description", f"{name} route"),
+            }
+            self.destinations = self.config_data["destinations"]
+            self._save_waypoints()
+            self._publish_navigation_status(f"destination_saved:{name}")
+        except Exception as exc:
+            self.get_logger().error(f"Failed to save destination from topic: {exc}")
+            self._publish_navigation_status("destination_save_failed")
+
+    def destination_delete_callback(self, msg: String):
+        name = msg.data.strip()
+        if not name:
+            return
+        destinations = self.config_data.setdefault("destinations", {})
+        if name not in destinations:
+            self._publish_navigation_status(f"destination_delete_missing:{name}")
+            return
+        del destinations[name]
+        self.destinations = destinations
+        if self.active_destination_name == name:
+            self._cancel_navigation("destination_deleted")
+        self._save_waypoints()
+        self._publish_navigation_status(f"destination_deleted:{name}")
+
     def cancel_topic_callback(self, msg: String):
         if msg.data.strip() or not msg.data:
             self._cancel_navigation("cancelled")
 
-    def _save_waypoints(self):
+    def _config_path(self) -> str:
         config_path = self.waypoint_config
         if not os.path.isabs(config_path):
             config_path = os.path.join(
                 os.path.dirname(__file__), '..', 'config', 'waypoints.yaml')
+        return config_path
+
+    def _save_waypoints(self):
+        config_path = self._config_path()
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.safe_dump(self.config_data, f, allow_unicode=True, sort_keys=False)
+
+    def _normalize_sequence(self, sequence) -> List[str]:
+        return [str(item).strip() for item in sequence if str(item).strip()]
+
+    def _clear_destination_state(self):
+        self.active_destination_name = None
+        self.active_destination_sequence = []
+
+    def _abort_destination(self, status: str):
+        if not self.active_destination_name:
+            return
+        destination_name = self.active_destination_name
+        self._clear_destination_state()
+        self._publish_navigation_status(f"destination_failed:{destination_name}:{status}")
+
+    def _delete_waypoint(self, name: str):
+        waypoints = self.config_data.setdefault("waypoints", {})
+        if name not in waypoints:
+            raise ValueError(f"Waypoint '{name}' not found")
+
+        if self.current_waypoint == name and (self.navigation_active or self.goal_handle is not None):
+            self._cancel_navigation("waypoint_deleted")
+
+        del waypoints[name]
+        self.waypoints = waypoints
+
+        destinations = self.config_data.setdefault("destinations", {})
+        updated_destinations = {}
+        for destination_name, destination in destinations.items():
+            sequence = [item for item in destination.get("sequence", []) if item != name]
+            if sequence:
+                updated_destinations[destination_name] = {
+                    **destination,
+                    "sequence": sequence,
+                }
+            elif self.active_destination_name == destination_name:
+                self._clear_destination_state()
+
+        if self.active_destination_sequence:
+            self.active_destination_sequence = [item for item in self.active_destination_sequence if item != name]
+
+        self.config_data["destinations"] = updated_destinations
+        self.destinations = updated_destinations
+        self._save_waypoints()
+
+    def _clear_all_waypoints(self):
+        if self.navigation_active or self.goal_handle is not None:
+            self._cancel_navigation("waypoints_cleared")
+
+        self.config_data["waypoints"] = {}
+        self.config_data["destinations"] = {}
+        self.waypoints = {}
+        self.destinations = {}
+        self._clear_destination_state()
+        self._save_waypoints()
+        self._publish_navigation_status("waypoints_cleared")
+
+    def _start_destination_sequence(self, name: str, sequence: List[str]):
+        cleaned_sequence = self._normalize_sequence(sequence)
+        if not cleaned_sequence:
+            self._publish_navigation_status(f"destination_empty:{name}")
+            return
+
+        missing = [item for item in cleaned_sequence if item not in self.waypoints]
+        if missing:
+            self._publish_navigation_status(f"destination_missing_waypoint:{name}:{','.join(missing)}")
+            return
+
+        if self.navigation_active or self.goal_handle is not None:
+            self._cancel_navigation("preempted")
+
+        self.active_destination_name = name
+        self.active_destination_sequence = list(cleaned_sequence)
+        self._publish_navigation_status(f"destination_started:{name}")
+        self._start_next_destination_leg()
+
+    def _start_next_destination_leg(self):
+        if not self.active_destination_name:
+            return
+        if not self.active_destination_sequence:
+            completed_name = self.active_destination_name
+            self._clear_destination_state()
+            self._publish_navigation_status(f"destination_arrived:{completed_name}")
+            return
+
+        next_waypoint = self.active_destination_sequence.pop(0)
+        self._publish_navigation_status(f"destination_leg:{self.active_destination_name}:{next_waypoint}")
+        self._start_navigation(next_waypoint)
 
     def waypoint_request_callback(self, request, response):
         """Handle waypoint navigation requests."""
@@ -333,6 +532,7 @@ class WaypointManagerNode(Node):
             self.current_waypoint = None
             self.target_pose = None
             self._publish_current_waypoint("")
+            self._abort_destination("pose_unavailable")
             return
 
         self.navigation_active = True
@@ -425,6 +625,7 @@ class WaypointManagerNode(Node):
             self.navigation_active = False
             self.control_mode = "idle"
             self._publish_navigation_status("nav2_send_failed")
+            self._abort_destination("nav2_send_failed")
             return
 
         if not goal_handle.accepted:
@@ -436,6 +637,7 @@ class WaypointManagerNode(Node):
             self._publish_current_waypoint("")
             self.current_waypoint = None
             self.target_pose = None
+            self._abort_destination("nav2_goal_rejected")
             return
 
         self.goal_handle = goal_handle
@@ -470,6 +672,10 @@ class WaypointManagerNode(Node):
         self._finish_navigation(status)
 
     def _finish_navigation(self, status: str):
+        completed_waypoint = self.current_waypoint
+        active_destination = self.active_destination_name
+        remaining_destination_legs = list(self.active_destination_sequence)
+
         self.navigation_active = False
         self.control_mode = "idle"
         self.goal_handle = None
@@ -480,6 +686,21 @@ class WaypointManagerNode(Node):
         self._publish_current_waypoint("")
         self.current_waypoint = None
         self.target_pose = None
+
+        if active_destination:
+            if status.startswith("arrived:"):
+                if remaining_destination_legs:
+                    self._publish_navigation_status(
+                        f"destination_progress:{active_destination}:{completed_waypoint}"
+                    )
+                    self._start_next_destination_leg()
+                    return
+                self._clear_destination_state()
+                self._publish_navigation_status(f"destination_arrived:{active_destination}")
+                return
+
+            self._clear_destination_state()
+            self._publish_navigation_status(f"destination_failed:{active_destination}:{status}")
 
     def _publish_nav_velocity(self, linear_x: float, linear_y: float, angular_z: float):
         twist = Twist()

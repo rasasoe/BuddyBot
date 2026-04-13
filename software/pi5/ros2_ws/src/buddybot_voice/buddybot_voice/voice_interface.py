@@ -16,6 +16,9 @@ BuddyBot AI server as a secondary path.
 
 from __future__ import annotations
 
+import queue
+import shutil
+import subprocess
 import threading
 import time
 from typing import List, Optional
@@ -49,6 +52,11 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_speed", 0.35)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
+        self.declare_parameter("enable_speaker_output", True)
+        self.declare_parameter("speaker_backend", "auto")
+        self.declare_parameter("speaker_voice_ko", "ko")
+        self.declare_parameter("speaker_voice_en", "en-us")
+        self.declare_parameter("speaker_rate_wpm", 160)
         self.declare_parameter("buddybot_ai_url", "http://127.0.0.1:8000")
 
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
@@ -66,6 +74,11 @@ class VoiceInterface(Node):
         self.manual_speed = float(self.get_parameter("manual_speed").value)
         self.strafe_speed = float(self.get_parameter("strafe_speed").value)
         self.rotate_speed = float(self.get_parameter("rotate_speed").value)
+        self.enable_speaker_output = bool(self.get_parameter("enable_speaker_output").value)
+        self.speaker_backend = str(self.get_parameter("speaker_backend").value).strip().lower()
+        self.speaker_voice_ko = str(self.get_parameter("speaker_voice_ko").value).strip() or "ko"
+        self.speaker_voice_en = str(self.get_parameter("speaker_voice_en").value).strip() or "en-us"
+        self.speaker_rate_wpm = int(self.get_parameter("speaker_rate_wpm").value)
         self.buddybot_ai_url = str(self.get_parameter("buddybot_ai_url").value).rstrip("/")
 
         self.response_pub = self.create_publisher(String, "/voice/response", 10)
@@ -75,6 +88,7 @@ class VoiceInterface(Node):
         self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", 10)
         self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", 10)
         self.create_subscription(String, "/voice/text", self.text_callback, 10)
+        self.create_subscription(String, "/voice/response", self.voice_response_callback, 10)
         self.create_subscription(String, "/system/command_status", self.system_status_callback, 10)
         self.create_subscription(String, "/nav/navigation_status", self.navigation_status_callback, 10)
         self.manual_timer = self.create_timer(0.1, self.manual_publish_timer)
@@ -91,14 +105,21 @@ class VoiceInterface(Node):
         self._recognizer = sr.Recognizer() if sr is not None else None
         self._audio_thread: Optional[threading.Thread] = None
         self._audio_stop = threading.Event()
+        self._speaker_thread: Optional[threading.Thread] = None
+        self._speaker_queue: "queue.Queue[str]" = queue.Queue()
+        self._speaker_backend_command = ""
+        self._speaker_warned_missing_backend = False
 
         mode = "offline-local" if self.offline_mode else "ai-bridge"
         self.get_logger().info(f"Voice interface ready in {mode} mode")
         self.get_logger().info(f"Wake words: {', '.join(self.wake_words)}")
         self.get_logger().info(f"Microphone listener: {'enabled' if self.enable_microphone else 'disabled'}")
+        self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
 
         if self.enable_microphone:
             self.start_microphone_listener()
+        if self.enable_speaker_output:
+            self.start_speaker_output()
 
     def text_callback(self, msg: String) -> None:
         user_text = msg.data.strip()
@@ -106,6 +127,12 @@ class VoiceInterface(Node):
             return
 
         self.handle_text(user_text, source="topic")
+
+    def voice_response_callback(self, msg: String) -> None:
+        text = msg.data.strip()
+        if not text:
+            return
+        self.enqueue_speech(text)
 
     def system_status_callback(self, msg: String) -> None:
         self._system_status = msg.data
@@ -371,6 +398,82 @@ class VoiceInterface(Node):
         self.response_pub.publish(msg)
         self._publish_status("response_published")
 
+    def start_speaker_output(self) -> None:
+        if self._speaker_thread is not None:
+            return
+
+        backend = self._detect_speaker_backend()
+        if not backend:
+            self.enable_speaker_output = False
+            if not self._speaker_warned_missing_backend:
+                self._speaker_warned_missing_backend = True
+                self.get_logger().warn("No local TTS backend found; USB speaker output disabled")
+                self._publish_status("speaker_backend_missing")
+            return
+
+        self._speaker_backend_command = backend
+        self._speaker_thread = threading.Thread(target=self._speaker_loop, daemon=True)
+        self._speaker_thread.start()
+        self.get_logger().info(f"Speaker output ready via {backend}")
+        self._publish_status(f"speaker_ready:{backend}")
+
+    def _detect_speaker_backend(self) -> str:
+        if self.speaker_backend and self.speaker_backend != "auto":
+            return self.speaker_backend if shutil.which(self.speaker_backend) else ""
+        for candidate in ("espeak-ng", "espeak"):
+            if shutil.which(candidate):
+                return candidate
+        return ""
+
+    def enqueue_speech(self, text: str) -> None:
+        if not self.enable_speaker_output:
+            return
+        cleaned = text.strip()
+        if not cleaned:
+            return
+        while self._speaker_queue.qsize() > 2:
+            try:
+                self._speaker_queue.get_nowait()
+            except queue.Empty:
+                break
+        self._speaker_queue.put(cleaned)
+
+    def _speaker_loop(self) -> None:
+        while not self._audio_stop.is_set():
+            try:
+                text = self._speaker_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if not text:
+                continue
+            try:
+                self._speak_text(text)
+            except Exception as exc:
+                self.get_logger().warn(f"Speaker playback failed: {exc}")
+                self._publish_status(f"speaker_failed:{exc}")
+
+    def _speak_text(self, text: str) -> None:
+        backend = self._speaker_backend_command
+        if not backend:
+            return
+
+        voice = self.speaker_voice_ko if any("\uac00" <= ch <= "\ud7a3" for ch in text) else self.speaker_voice_en
+        command = [backend, "-s", str(self.speaker_rate_wpm)]
+        if voice:
+            command.extend(["-v", voice])
+        command.append(text)
+
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = (completed.stderr or completed.stdout or "").strip()
+            raise RuntimeError(stderr or f"{backend} exited with {completed.returncode}")
+
     def _publish_status(self, text: str) -> None:
         msg = String()
         msg.data = text
@@ -378,6 +481,8 @@ class VoiceInterface(Node):
 
     def destroy_node(self):
         self._audio_stop.set()
+        if self._speaker_thread is not None:
+            self._speaker_queue.put("")
         self._clear_manual_motion()
         super().destroy_node()
 
