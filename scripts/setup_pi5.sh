@@ -43,6 +43,8 @@ sudo apt install -y \
   ros-"$ROS_DISTRO_NAME"-nav2-bringup \
   ros-"$ROS_DISTRO_NAME"-slam-toolbox
 
+pip3 install --quiet --break-system-packages mpremote 2>/dev/null || pip3 install --quiet mpremote
+
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 
 bash "$ROOT_DIR/scripts/doctor_pi5.sh" --fix
