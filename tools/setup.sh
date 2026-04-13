@@ -23,7 +23,8 @@ sudo rosdep init
 rosdep update
 
 # Install additional packages
-sudo apt install -y python3-cv-bridge python3-speechrecognition python3-pyaudio
+sudo apt install -y python3-cv-bridge python3-pyaudio
+pip3 install --quiet --break-system-packages SpeechRecognition 2>/dev/null || pip3 install --quiet SpeechRecognition
 
 # For Pico
 # Assume Thonny or mpremote for flashing

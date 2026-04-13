@@ -30,7 +30,6 @@ sudo apt install -y \
   python3-colcon-common-extensions \
   python3-pyaudio \
   python3-pocketsphinx \
-  python3-speechrecognition \
   python3-serial \
   python3-requests \
   python3-yaml \
@@ -44,6 +43,7 @@ sudo apt install -y \
   ros-"$ROS_DISTRO_NAME"-slam-toolbox
 
 pip3 install --quiet --break-system-packages mpremote 2>/dev/null || pip3 install --quiet mpremote
+pip3 install --quiet --break-system-packages SpeechRecognition 2>/dev/null || pip3 install --quiet SpeechRecognition
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 
