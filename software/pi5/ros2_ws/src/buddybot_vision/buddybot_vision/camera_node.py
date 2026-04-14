@@ -13,13 +13,16 @@ Architecture:
 - Low-latency operation for real-time vision processing
 """
 
+import os
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 import cv2
 import cv_bridge
 import glob
-import os
+import subprocess
 from sensor_msgs.msg import Image
 import time
 
@@ -182,9 +185,88 @@ class CameraNode(Node):
         if preferred and preferred.lower() != 'auto':
             candidates.append(preferred)
             return candidates
+        candidates.extend(self._v4l_camera_devices())
         candidates.extend(sorted(glob.glob('/dev/v4l/by-id/*')))
         candidates.extend(sorted(glob.glob('/dev/v4l/by-path/*usb*')))
-        candidates.extend(sorted(glob.glob('/dev/video*')))
+        candidates.extend(self._direct_video_candidates())
+
+        unique = []
+        seen = set()
+        for candidate in candidates:
+            if not candidate or candidate in seen:
+                continue
+            unique.append(candidate)
+            seen.add(candidate)
+        return unique
+
+    def _run_text_command(self, command):
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            return (result.stdout or '').strip()
+        except Exception:
+            return ''
+
+    def _v4l2_groups(self):
+        output = self._run_text_command(['v4l2-ctl', '--list-devices'])
+        if not output:
+            return []
+
+        groups = []
+        current = None
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip()
+            if not line.strip():
+                continue
+            if not raw_line.startswith((' ', '\t')):
+                if current is not None:
+                    groups.append(current)
+                current = {'label': line.rstrip(':'), 'devices': []}
+                continue
+            if current is None:
+                continue
+            device = line.strip()
+            if device.startswith('/dev/video'):
+                current['devices'].append(device)
+
+        if current is not None:
+            groups.append(current)
+        return groups
+
+    def _camera_group_priority(self, label):
+        lowered = str(label).lower()
+        if any(token in lowered for token in ('pispbe', 'rpivid', 'bcm2835', 'codec', 'loopback')):
+            return (9, lowered)
+        if any(token in lowered for token in ('logitech', 'webcam', 'c920', 'usb', 'uvc', 'camera')):
+            return (0, lowered)
+        return (4, lowered)
+
+    def _video_index(self, path):
+        try:
+            return int(os.path.basename(path).removeprefix('video'))
+        except ValueError:
+            return 999
+
+    def _v4l_camera_devices(self):
+        devices = []
+        for group in sorted(self._v4l2_groups(), key=lambda item: self._camera_group_priority(item.get('label', ''))):
+            for device in sorted(group.get('devices', []), key=self._video_index):
+                if self._video_index(device) > 9:
+                    continue
+                devices.append(device)
+        return devices
+
+    def _direct_video_candidates(self):
+        candidates = []
+        for candidate in sorted(glob.glob('/dev/video*'), key=self._video_index):
+            if self._video_index(candidate) > 9:
+                continue
+            candidates.append(candidate)
         return candidates
 
     def _open_capture_with_retry(self, candidate):

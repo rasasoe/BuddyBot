@@ -152,6 +152,35 @@ read_throttled_state() {
   fi
 }
 
+report_camera_diagnostics() {
+  local usb_camera=""
+  local v4l_devices=""
+
+  if command -v lsusb >/dev/null 2>&1; then
+    usb_camera="$(lsusb | grep -Ei '046d|camera|webcam' || true)"
+    if [[ -n "$usb_camera" ]]; then
+      echo "[demo] usb camera entries:"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "[demo]   $line"
+      done <<< "$usb_camera"
+    else
+      echo "[demo] usb camera entries: none"
+    fi
+  fi
+
+  if command -v v4l2-ctl >/dev/null 2>&1; then
+    v4l_devices="$(v4l2-ctl --list-devices 2>/dev/null || true)"
+    if [[ -n "$v4l_devices" ]]; then
+      echo "[demo] v4l2 devices:"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "[demo]   ${line//$'\t'/  }"
+      done <<< "$(printf '%s\n' "$v4l_devices" | tail -n 16)"
+    else
+      echo "[demo] v4l2 devices: none"
+    fi
+  fi
+}
+
 report_power_diagnostics() {
   local throttled_line="unavailable"
   local throttled_hex=""
@@ -164,14 +193,18 @@ report_power_diagnostics() {
 
   echo "[demo] power/throttle: ${throttled_line:-unavailable}"
 
-  case "${throttled_hex,,}" in
-    ""|"0")
-      echo "[demo] power status: normal"
-      ;;
-    *)
-      echo "[demo] warning: Pi reported throttle/undervoltage flags (0x${throttled_hex})"
-      ;;
-  esac
+  if [[ "${throttled_line,,}" == *"can't open device file"* ]] || [[ "${throttled_line,,}" == *"unavailable"* ]]; then
+    echo "[demo] power status: vcgencmd unavailable on this image"
+  else
+    case "${throttled_hex,,}" in
+      ""|"0")
+        echo "[demo] power status: normal"
+        ;;
+      *)
+        echo "[demo] warning: Pi reported throttle/undervoltage flags (0x${throttled_hex})"
+        ;;
+    esac
+  fi
 
   if command -v journalctl >/dev/null 2>&1; then
     kernel_notes="$(journalctl -k -b 2>/dev/null | grep -Ei 'under-voltage|voltage|usb|disconnect|reset high-speed|descriptor read|over-current|enumerate|not enough power' | tail -n 5 || true)"
@@ -295,6 +328,7 @@ echo "[demo] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[demo] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[demo] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
 report_power_diagnostics
+report_camera_diagnostics
 
 start_lidar_if_available
 if [[ "$LIDAR_STARTED" -eq 1 ]]; then
@@ -324,10 +358,19 @@ else
   if [[ -n "${CAMERA_DEVICE:-}" ]]; then
     start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
   else
+    echo "[demo] warning: probe did not find a preferred camera device; trying auto detection"
     start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
   fi
-  start_node detector ros2 run buddybot_vision detector_node
-  start_node follow_controller ros2 run buddybot_vision follow_controller_node --ros-args -p image_width:="${CAMERA_WIDTH}" -p image_height:="${CAMERA_HEIGHT}"
+  if camera_streaming 8; then
+    echo "[demo] camera stream is live"
+    start_node detector ros2 run buddybot_vision detector_node
+    start_node follow_controller ros2 run buddybot_vision follow_controller_node --ros-args -p image_width:="${CAMERA_WIDTH}" -p image_height:="${CAMERA_HEIGHT}"
+  else
+    echo "[demo] warning: /camera/image_raw is not being published yet"
+    echo "[demo] detector/follow startup skipped until camera is fixed"
+    echo "[demo] check: tail -n 120 $LOG_DIR/camera.log"
+    echo "[demo] tip: if C920 is missing from lsusb/v4l2 above, this is likely USB/power rather than ROS"
+  fi
   ensure_lidar_stream "camera startup" || true
 fi
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
@@ -373,10 +416,6 @@ then
 fi
 
 sleep 2
-if ! is_truthy "$DISABLE_CAMERA" && ! camera_streaming 8; then
-  echo "[demo] warning: /camera/image_raw is not being published yet"
-  echo "[demo] check: tail -n 120 $LOG_DIR/camera.log"
-fi
 
 if ! scan_streaming 8; then
   echo "[demo] warning: lidar driver started but /scan is still missing"

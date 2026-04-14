@@ -9,6 +9,8 @@ import time
 import urllib.error
 import urllib.request
 
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+
 try:
     import cv2
 except Exception:
@@ -141,9 +143,94 @@ def camera_candidates(preferred: str = "") -> list[str]:
     candidates: list[str] = []
     if preferred:
         candidates.append(preferred)
+    candidates.extend(_v4l_camera_devices())
     candidates.extend(sorted(glob.glob("/dev/v4l/by-id/*")))
     candidates.extend(sorted(glob.glob("/dev/v4l/by-path/*usb*")))
-    candidates.extend(sorted(glob.glob("/dev/video*")))
+    candidates.extend(_direct_video_candidates())
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        unique.append(candidate)
+        seen.add(candidate)
+    return unique
+
+
+def _run_text_command(command: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return (result.stdout or "").strip()
+    except Exception:
+        return ""
+
+
+def _v4l2_groups() -> list[dict[str, list[str] | str]]:
+    output = _run_text_command(["v4l2-ctl", "--list-devices"])
+    if not output:
+        return []
+
+    groups: list[dict[str, list[str] | str]] = []
+    current: dict[str, list[str] | str] | None = None
+    for raw_line in output.splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            continue
+        if not raw_line.startswith((" ", "\t")):
+            if current is not None:
+                groups.append(current)
+            current = {"label": line.rstrip(":"), "devices": []}
+            continue
+        if current is None:
+            continue
+        device = line.strip()
+        if device.startswith("/dev/video"):
+            current["devices"].append(device)
+
+    if current is not None:
+        groups.append(current)
+    return groups
+
+
+def _camera_group_priority(label: str) -> tuple[int, str]:
+    lowered = label.lower()
+    if any(token in lowered for token in ("pispbe", "rpivid", "bcm2835", "codec", "loopback")):
+        return (9, lowered)
+    if any(token in lowered for token in ("logitech", "webcam", "c920", "usb", "uvc", "camera")):
+        return (0, lowered)
+    return (4, lowered)
+
+
+def _video_index(path: str) -> int:
+    try:
+        return int(os.path.basename(path).removeprefix("video"))
+    except ValueError:
+        return 999
+
+
+def _v4l_camera_devices() -> list[str]:
+    devices: list[str] = []
+    for group in sorted(_v4l2_groups(), key=lambda item: _camera_group_priority(str(item.get("label", "")))):
+        for device in sorted(group.get("devices", []), key=_video_index):
+            if _video_index(device) > 9:
+                continue
+            devices.append(device)
+    return devices
+
+
+def _direct_video_candidates() -> list[str]:
+    candidates: list[str] = []
+    for candidate in sorted(glob.glob("/dev/video*"), key=_video_index):
+        if _video_index(candidate) > 9:
+            continue
+        candidates.append(candidate)
     return candidates
 
 
