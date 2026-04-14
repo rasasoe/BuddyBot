@@ -52,19 +52,24 @@ class LidarAvoidanceNode(Node):
         self.reverse_speed = float(self.get_parameter("reverse_speed").value)
         self.check_rate = float(self.get_parameter("check_rate").value)
 
-        qos = QoSProfile(
+        control_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
             depth=10,
         )
+        scan_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10,
+        )
 
-        self.override_pub = self.create_publisher(Twist, "/cmd_vel_safety_override", qos)
-        self.status_pub = self.create_publisher(String, "/system/lidar_avoidance_status", qos)
+        self.override_pub = self.create_publisher(Twist, "/cmd_vel_safety_override", control_qos)
+        self.status_pub = self.create_publisher(String, "/system/lidar_avoidance_status", control_qos)
 
-        self.create_subscription(LaserScan, self.scan_topic, self.scan_callback, qos)
-        self.create_subscription(Twist, "/cmd_vel_follow", self.follow_callback, qos)
-        self.create_subscription(Twist, "/cmd_vel_nav", self.nav_callback, qos)
-        self.create_subscription(Twist, "/cmd_vel_manual", self.manual_callback, qos)
+        self.create_subscription(LaserScan, self.scan_topic, self.scan_callback, scan_qos)
+        self.create_subscription(Twist, "/cmd_vel_follow", self.follow_callback, control_qos)
+        self.create_subscription(Twist, "/cmd_vel_nav", self.nav_callback, control_qos)
+        self.create_subscription(Twist, "/cmd_vel_manual", self.manual_callback, control_qos)
 
         self.latest_scan: Optional[LaserScan] = None
         self.latest_command = Twist()

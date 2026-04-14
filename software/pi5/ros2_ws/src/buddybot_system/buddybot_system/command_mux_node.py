@@ -48,6 +48,7 @@ class CommandMuxNode(Node):
         self.create_subscription(Twist, "/cmd_vel_manual", self.manual_callback, qos)
         self.create_subscription(Twist, "/cmd_vel_safety_override", self.safety_override_callback, qos)
         self.create_subscription(Bool, "/system/safety_active", self.safety_callback, qos)
+        self.create_subscription(Bool, "/system/estop", self.estop_callback, qos)
 
         self.timer = self.create_timer(1.0 / self.safety_check_rate, self.timer_callback)
 
@@ -66,6 +67,9 @@ class CommandMuxNode(Node):
     def safety_callback(self, msg):
         self.safety_active = msg.data
 
+    def estop_callback(self, msg):
+        self.estop_latched = msg.data
+
     def _is_zero(self, cmd):
         return cmd.linear.x == 0.0 and cmd.linear.y == 0.0 and cmd.angular.z == 0.0
 
@@ -75,11 +79,6 @@ class CommandMuxNode(Node):
         self.commands[source]["cmd"] = cmd
         self.commands[source]["timestamp"] = time.time()
         self.commands[source]["active"] = not self._is_zero(cmd)
-
-        if source == "manual" and self._is_zero(cmd):
-            self.estop_latched = True
-        elif source == "manual" and not self._is_zero(cmd):
-            self.estop_latched = False
 
     def _evaluate_commands(self):
         zero = Twist()

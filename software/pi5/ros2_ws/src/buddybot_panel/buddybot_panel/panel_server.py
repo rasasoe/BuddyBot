@@ -302,10 +302,10 @@ class PanelBridge:
                 scan_qos = 10
                 if QoSProfile is not None:
                     try:
-                        # Prefer a reliable scan subscription because the Pi LiDAR driver
-                        # in this stack publishes reliably.
+                        # LaserScan is typically published with sensor-data QoS on Pi,
+                        # so prefer best-effort here to avoid silent QoS mismatches.
                         scan_qos = QoSProfile(
-                            reliability=ReliabilityPolicy.RELIABLE,
+                            reliability=ReliabilityPolicy.BEST_EFFORT,
                             durability=DurabilityPolicy.VOLATILE,
                             history=HistoryPolicy.KEEP_LAST,
                             depth=10,
@@ -747,24 +747,28 @@ class PanelBridge:
             return self._latest_scan_map is not None
         self._last_cli_scan_attempt = now
         try:
-            result = subprocess.run(
-                [
-                    "timeout",
-                    "3s",
-                    "ros2",
-                    "topic",
-                    "echo",
-                    "--qos-reliability",
-                    "reliable",
-                    "--once",
-                    "/scan",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-                env=os.environ.copy(),
-            )
-            if result.returncode != 0 or not result.stdout.strip():
+            result = None
+            for reliability in ("best_effort", "reliable"):
+                result = subprocess.run(
+                    [
+                        "timeout",
+                        "3s",
+                        "ros2",
+                        "topic",
+                        "echo",
+                        "--qos-reliability",
+                        reliability,
+                        "--once",
+                        "/scan",
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=os.environ.copy(),
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    break
+            if result is None or result.returncode != 0 or not result.stdout.strip():
                 return False
             data = yaml.safe_load(result.stdout)
             if not isinstance(data, dict):

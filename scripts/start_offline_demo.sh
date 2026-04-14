@@ -136,14 +136,27 @@ wait_for_message() {
   timeout "${timeout}s" ros2 topic echo --once "$topic" >/dev/null 2>&1
 }
 
+wait_for_scan_message() {
+  local timeout="${1:-8}"
+  timeout "${timeout}s" ros2 topic echo --qos-reliability best_effort --once /scan >/dev/null 2>&1 \
+    || timeout "${timeout}s" ros2 topic echo --qos-reliability reliable --once /scan >/dev/null 2>&1
+}
+
 scan_streaming() {
   local timeout="${1:-8}"
-  wait_for_message "/scan" "$timeout" || scan_available
+  wait_for_scan_message "$timeout" || scan_available
 }
 
 camera_streaming() {
   local timeout="${1:-8}"
   wait_for_message "/camera/image_raw" "$timeout" || camera_available
+}
+
+pico_streaming() {
+  local timeout="${1:-6}"
+  wait_for_message "/buddybot/pico_status" "$timeout" \
+    || ros2 topic list 2>/dev/null | grep -q '^/buddybot/pico_status$' \
+    || ros2 node info /pico_bridge_node 2>/dev/null | grep -Eq '(^|[[:space:]])/?buddybot/pico_status([[:space:]]|$)'
 }
 
 read_throttled_state() {
@@ -342,6 +355,13 @@ else
     start_node pico_bridge ros2 run buddybot_base pico_bridge_node --ros-args -p serial_port:="${PICO_PORT}"
   else
     start_node pico_bridge ros2 run buddybot_base pico_bridge_node
+  fi
+  if pico_streaming 6; then
+    echo "[demo] pico status is live"
+  else
+    echo "[demo] warning: /buddybot/pico_status is not being published yet"
+    echo "[demo] check: tail -n 120 $LOG_DIR/pico_bridge.log"
+    echo "[demo] tip: if the port shows MicroPython but no status arrives, reflash Pico with bash scripts/flash_pico.sh"
   fi
 fi
 start_node command_mux ros2 run buddybot_system command_mux_node

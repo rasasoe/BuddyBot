@@ -99,6 +99,12 @@ wait_for_message() {
   timeout "${timeout}s" ros2 topic echo --once "$topic" >/dev/null 2>&1
 }
 
+wait_for_scan_message() {
+  local timeout="${1:-8}"
+  timeout "${timeout}s" ros2 topic echo --qos-reliability best_effort --once /scan >/dev/null 2>&1 \
+    || timeout "${timeout}s" ros2 topic echo --qos-reliability reliable --once /scan >/dev/null 2>&1
+}
+
 publisher_visible() {
   local node_name="$1"
   local topic_fragment="$2"
@@ -107,7 +113,7 @@ publisher_visible() {
 
 scan_streaming() {
   local timeout="${1:-8}"
-  wait_for_message "/scan" "$timeout" || publisher_visible "/sllidar_node" "scan"
+  wait_for_scan_message "$timeout" || publisher_visible "/sllidar_node" "scan"
 }
 
 echo "[check] pico test"
@@ -127,7 +133,7 @@ echo "[check] lidar test"
 if [[ -n "${LIDAR_PORT:-}" ]]; then
   start_bg lidar ros2 launch sllidar_ros2 sllidar_a1_launch.py serial_port:="${LIDAR_PORT}" serial_baudrate:=115200
   pause_before_step "$LIDAR_SETTLE_DELAY" "checking LiDAR scan output"
-  if wait_for_message "/scan" 10 || wait_for_topic "/scan" 10 || wait_for_topic "scan" 10 || publisher_visible "/sllidar_node" "scan"; then
+  if wait_for_scan_message 10 || wait_for_topic "/scan" 10 || wait_for_topic "scan" 10 || publisher_visible "/sllidar_node" "scan"; then
     echo "  result: PASS (/scan present)"
   else
     echo "  result: FAIL (/scan missing)"
