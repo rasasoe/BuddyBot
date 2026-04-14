@@ -57,6 +57,17 @@ echo "  camera profile : ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps pub
 echo "  ROS_DOMAIN_ID : ${ROS_DOMAIN_ID}"
 echo "  ROS_LOCALHOST_ONLY : ${ROS_LOCALHOST_ONLY}"
 echo "  ROS_DISCOVERY_SERVER : ${ROS_DISCOVERY_SERVER:-unset}"
+if [[ -z "${PICO_PORT:-}" ]]; then
+  echo "  serial candidates : ${SERIAL_CANDIDATES:-none}"
+  echo "  serial by-id      : ${SERIAL_BY_ID:-none}"
+  if command -v lsusb >/dev/null 2>&1; then
+    PICO_USB_HINTS="$(lsusb | grep -Ei '2e8a|raspberry pi pico|micropython|rp2' || true)"
+    echo "  pico usb hints    : ${PICO_USB_HINTS:-none}"
+  fi
+fi
+if [[ -z "${CAMERA_DEVICE:-}" ]]; then
+  echo "  v4l by-id         : ${V4L_BY_ID:-none}"
+fi
 echo
 
 start_bg() {

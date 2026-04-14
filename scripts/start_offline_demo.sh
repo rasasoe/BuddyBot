@@ -340,6 +340,14 @@ echo "[demo] panel build: ${BUDDYBOT_PANEL_BUILD}"
 echo "[demo] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[demo] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
 echo "[demo] ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER:-unset}"
+if [[ -z "${PICO_PORT:-}" ]]; then
+  echo "[demo] serial candidates: ${SERIAL_CANDIDATES:-none}"
+  echo "[demo] serial by-id: ${SERIAL_BY_ID:-none}"
+  if command -v lsusb >/dev/null 2>&1; then
+    PICO_USB_HINTS="$(lsusb | grep -Ei '2e8a|raspberry pi pico|micropython|rp2' || true)"
+    echo "[demo] pico usb hints: ${PICO_USB_HINTS:-none}"
+  fi
+fi
 report_power_diagnostics
 report_camera_diagnostics
 
