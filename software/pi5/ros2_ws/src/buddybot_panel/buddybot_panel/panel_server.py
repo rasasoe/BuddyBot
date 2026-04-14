@@ -200,6 +200,10 @@ class PanelBridge:
         self._map_sub = None
         self._scan_sub = None
         self._executor = None
+        self._ros_init_thread = None
+        self._ros_init_lock = threading.Lock()
+        self._ros_init_started = False
+        self._ros_init_error: Optional[str] = None
         self._spin_error: Optional[str] = None
         self._last_scan_error: Optional[str] = None
         self._last_map_error: Optional[str] = None
@@ -256,7 +260,17 @@ class PanelBridge:
         self._server_connected = False
         self._server_check_at = 0.0
 
-        self._init_ros()
+        self._start_ros_init()
+
+    def _start_ros_init(self) -> None:
+        if not ROS2_AVAILABLE:
+            return
+        with self._ros_init_lock:
+            if self._ros_init_started:
+                return
+            self._ros_init_started = True
+            self._ros_init_thread = threading.Thread(target=self._init_ros, daemon=True)
+            self._ros_init_thread.start()
 
     def _init_ros(self) -> None:
         if not ROS2_AVAILABLE:
@@ -333,8 +347,10 @@ class PanelBridge:
             self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
             self._spin_thread.start()
             self.ros2_connected = True
-        except Exception:
+            self._ros_init_error = None
+        except Exception as exc:
             self.ros2_connected = False
+            self._ros_init_error = repr(exc)
 
     def _spin_loop(self) -> None:
         if self._node is None:
@@ -826,6 +842,7 @@ class PanelBridge:
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
+            "ros_init_error": self._ros_init_error,
             "spin_error": self._spin_error,
             "spin_thread_alive": bool(self._spin_thread and self._spin_thread.is_alive()),
             "last_scan_error": self._last_scan_error,
