@@ -83,9 +83,31 @@ fi
 info "Pico port: $PICO_PORT"
 info "Firmware : $FIRMWARE_DIR"
 
-info "Stopping running firmware (soft reset)..."
-mpremote connect "$PICO_PORT" exec "import machine; machine.reset()" 2>/dev/null || true
-sleep 1.5
+probe_micropython() {
+    mpremote connect "$PICO_PORT" exec "print('buddybot-pico-ready')" >/dev/null 2>&1
+}
+
+upload_file() {
+    local src="$1"
+    local dest="$2"
+    local attempt=1
+    local output=""
+    while (( attempt <= 3 )); do
+        output="$(mpremote connect "$PICO_PORT" fs cp "$src" "$dest" 2>&1)" && return 0
+        sleep 1
+        ((attempt++)) || true
+    done
+    echo "$output"
+    return 1
+}
+
+info "Checking MicroPython connection..."
+if ! probe_micropython; then
+    error "MicroPython shell did not respond on $PICO_PORT"
+    error "Make sure the Pico is running MicroPython, not RP2 Boot/BOOTSEL mode."
+    error "Quick check: mpremote connect $PICO_PORT exec \"print('ok')\""
+    exit 1
+fi
 
 UPLOADED=0
 FAILED=0
@@ -97,17 +119,18 @@ for fname in "${PICO_FILES[@]}"; do
         continue
     fi
     echo -n "  upload $fname ... "
-    if mpremote connect "$PICO_PORT" cp "$src" ":$fname" 2>/dev/null; then
+    if upload_file "$src" ":$fname" >/tmp/buddybot_pico_upload.log 2>&1; then
         echo -e "${GREEN}OK${NC}"
         ((UPLOADED++)) || true
     else
         echo -e "${RED}FAIL${NC}"
+        sed 's/^/    /' /tmp/buddybot_pico_upload.log >&2 || true
         ((FAILED++)) || true
     fi
 done
 
 info "Rebooting Pico..."
-mpremote connect "$PICO_PORT" exec "import machine; machine.reset()" 2>/dev/null || true
+mpremote connect "$PICO_PORT" exec "import machine; machine.reset()" >/dev/null 2>&1 || true
 
 echo ""
 if [[ "$FAILED" -eq 0 ]]; then
