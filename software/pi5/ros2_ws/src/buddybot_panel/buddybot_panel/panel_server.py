@@ -1273,8 +1273,12 @@ class PanelBridge:
 
     def stop_mini_map(self, *, update_last_command: bool = True) -> Dict[str, Any]:
         with self._lock:
+            was_active = bool(self._mini_map_active)
             self._mini_map_active = False
-        self._clear_manual_motion()
+        # Avoid injecting a zero manual command when callers use this as a
+        # generic "make sure minimap is off" guard before sending manual drive.
+        if was_active:
+            self._clear_manual_motion()
         self._explore_phase = "forward"
         if update_last_command:
             self.last_command = "minimap:stop"
