@@ -119,6 +119,10 @@ class PicoBridgeNode(Node):
         self.current_mode = 'NORMAL'
         self.emergency_stop_active = False
         self.legacy_protocol_detected = False
+        self._last_sent_vx = 0.0
+        self._last_sent_vy = 0.0
+        self._last_sent_wz = 0.0
+        self._last_cmd_send_time = 0.0
 
         # Connect to Pico
         selected_port = self._connect_serial_with_fallback()
@@ -160,12 +164,26 @@ class PicoBridgeNode(Node):
             vy = max(-1.0, min(1.0, msg.linear.y))
             wz = max(-1.0, min(1.0, msg.angular.z))
 
+            now = time.time()
+            velocity_changed = (
+                abs(vx - self._last_sent_vx) > 0.001 or
+                abs(vy - self._last_sent_vy) > 0.001 or
+                abs(wz - self._last_sent_wz) > 0.001
+            )
+            # Send if velocity changed, or at most 5 Hz for keepalive
+            if not velocity_changed and (now - self._last_cmd_send_time) < 0.2:
+                return
+
             # Send command via UART
             command = self.protocol.format_command(vx, vy, wz)
             if self.legacy_protocol_detected:
                 command = f"{vx:.3f},{vy:.3f},{wz * 57.2958:.2f}"
             if self.serial_manager.send_message(command):
-                self.last_cmd_vel_time = time.time()
+                self.last_cmd_vel_time = now
+                self._last_sent_vx = vx
+                self._last_sent_vy = vy
+                self._last_sent_wz = wz
+                self._last_cmd_send_time = now
                 self.get_logger().debug(f"Sent velocity command: vx={vx:.3f}, vy={vy:.3f}, wz={wz:.3f}")
             else:
                 self.get_logger().warn("Failed to send velocity command - serial disconnected")

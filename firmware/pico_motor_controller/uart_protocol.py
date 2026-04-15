@@ -55,31 +55,38 @@ class UARTProtocol:
         return None, None
 
     def parse_command(self):
-        events = self.poller.poll(0)
-        if not events:
-            return None, None
+        # Drain the entire available buffer in one call to prevent overflow.
+        # command_mux publishes at 10 Hz (240 bytes/s) but the control loop
+        # only ran at 50 Hz × 1 byte = 50 bytes/s, causing USB CDC buffer
+        # overflow and Pi-side Write timeout errors.
+        last_cmd = None
+        last_params = None
 
-        try:
-            chunk = sys.stdin.read(1)
-        except Exception:
-            self.buffer = ""
-            return None, None
-
-        if not chunk:
-            return None, None
-
-        if chunk == '\n':
-            cmd, params = self._parse_command(self.buffer)
-            self.buffer = ""
-            if cmd:
-                self.last_command_time = utime.ticks_ms()
-                return cmd, params
-            return None, None
-
-        if chunk != '\r':
-            self.buffer += chunk
-            if len(self.buffer) > 96:
+        while True:
+            events = self.poller.poll(0)
+            if not events:
+                break
+            try:
+                chunk = sys.stdin.read(1)
+            except Exception:
                 self.buffer = ""
+                break
+            if not chunk:
+                break
+            if chunk == '\n':
+                cmd, params = self._parse_command(self.buffer)
+                self.buffer = ""
+                if cmd:
+                    self.last_command_time = utime.ticks_ms()
+                    last_cmd = cmd
+                    last_params = params
+            elif chunk != '\r':
+                self.buffer += chunk
+                if len(self.buffer) > 96:
+                    self.buffer = ""
+
+        if last_cmd is not None:
+            return last_cmd, last_params
         return None, None
 
 
