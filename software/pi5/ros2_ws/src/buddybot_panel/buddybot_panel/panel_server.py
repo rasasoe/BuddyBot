@@ -384,6 +384,9 @@ class PanelBridge:
         with self._lock:
             self._latest_pico_status = {
                 "battery_voltage": round(float(msg.battery_voltage), 2),
+                "left_encoder": int(msg.left_encoder),
+                "right_encoder": int(msg.right_encoder),
+                "back_encoder": int(msg.back_encoder),
                 "emergency_stop": bool(msg.emergency_stop),
                 "mode": msg.mode,
                 "stamp": time.time(),

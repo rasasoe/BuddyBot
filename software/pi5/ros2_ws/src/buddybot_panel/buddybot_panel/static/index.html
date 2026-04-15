@@ -22,7 +22,7 @@
     h3{font-size:.92rem}
     .eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.18em;color:var(--muted)}
     .lead{margin-top:12px;color:var(--muted);line-height:1.55;max-width:780px}
-    .section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+    .section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
     .note{color:var(--muted);font-size:.9rem;line-height:1.5}
     .status-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
     .metric{border:1px solid var(--line);border-radius:18px;padding:12px 13px;background:linear-gradient(180deg,#fffdf9 0%,#f6f0e4 100%)}
@@ -32,8 +32,10 @@
     .chip{display:flex;align-items:center;justify-content:center;padding:10px 12px;border-radius:999px;border:1px solid var(--line);background:#f3eee2;font-size:.88rem;font-weight:600;text-align:center}
     .hero-actions,.chat-form{grid-template-columns:1fr auto}
     .mission-actions{grid-template-columns:1fr}
+    .control-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .camera-toolbar{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;align-self:flex-start}
     input,select{width:100%;padding:12px 14px;border-radius:15px;border:1px solid var(--line);background:#fffdf8;font:inherit;color:var(--ink)}
-    button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent)}
+    button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent);line-height:1.25;text-align:center}
     button:hover{background:var(--accent-strong)}
     button.secondary{background:#e6ded0;color:var(--ink)}
     button.secondary:hover{background:#d8cdbb}
@@ -71,7 +73,8 @@
     .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
     .callout strong{display:block;margin-bottom:6px}
     @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}.main > :nth-child(1),.main > :nth-child(2),.main > :nth-child(3){grid-column:auto;grid-row:auto}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media (max-width:860px){.status-grid,.chip-row,.button-grid,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions{grid-template-columns:1fr}.manual-stop{grid-column:auto}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}}
+    @media (max-width:1024px){.camera-toolbar,.control-pair{grid-template-columns:1fr}}
+    @media (max-width:860px){.status-grid,.chip-row,.button-grid,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.camera-toolbar,.control-pair{grid-template-columns:1fr}.manual-stop{grid-column:auto}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}}
   </style>
 </head>
 <body>
@@ -155,11 +158,11 @@
         <div class="callout">
           <strong>미니맵 생성기</strong>
           <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 만들고, 완성되면 그 맵에 바로 체크포인트를 저장할 수 있습니다.</div>
-          <div class="dual">
+          <div class="control-pair">
             <button class="accent" onclick="startMiniMap()">미니맵 생성</button>
             <button class="secondary" onclick="stopMiniMap()">미니맵 중지</button>
           </div>
-          <div class="dual">
+          <div class="control-pair">
             <button class="secondary" onclick="refreshMiniMapStatus()">미니맵 새로고침</button>
             <button class="danger" onclick="resetMiniMap()">미니맵 초기화</button>
           </div>
@@ -200,7 +203,7 @@
             <h2>카메라 추종과 명령</h2>
             <p class="note" id="camera-summary">카메라를 열기 전까지 미리보기는 꺼져 있습니다.</p>
           </div>
-          <div class="dual" style="min-width:220px"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 열기</button><button class="secondary" onclick="refreshCamera(true)">새로고침</button></div>
+          <div class="camera-toolbar"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 열기</button><button class="secondary" onclick="refreshCamera(true)">새로고침</button></div>
         </div>
         <div class="camera-frame" id="camera-frame" style="display:none"><img id="camera-feed" alt="버디봇 카메라 화면"><div class="overlay"><div class="chip" id="camera-chip">카메라: 대기 중</div></div></div>
         <p class="note" id="camera-note">/camera/image_raw 가 퍼블리시되면 미리보기가 표시됩니다.</p>
@@ -291,6 +294,27 @@
 
     function statusCard(label, value){
       return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    }
+
+    function formatPicoState(status, connected){
+      if(!connected || !status){
+        return "waiting";
+      }
+      const parts = [];
+      if(status.mode){
+        parts.push(String(status.mode).toLowerCase());
+      }
+      if(Number.isFinite(Number(status.battery_voltage))){
+        parts.push(`${Number(status.battery_voltage).toFixed(2)}V`);
+      }
+      if(
+        Number.isFinite(Number(status.left_encoder)) &&
+        Number.isFinite(Number(status.right_encoder)) &&
+        Number.isFinite(Number(status.back_encoder))
+      ){
+        parts.push(`enc ${status.left_encoder}/${status.right_encoder}/${status.back_encoder}`);
+      }
+      return parts.join(" ") || "ok";
     }
 
     function showError(error){
@@ -420,7 +444,7 @@
       lastMiniMapStatus = minimap;
       lastPose = data.pose || null;
       const detectorLabel = detector.ready ? `${String(detector.backend || "unknown").toUpperCase()} 준비` : `${detector.backend || "waiting"} 대기`;
-      const picoState = data.pico_connected ? `${data.pico_status?.mode || "ok"} ${data.pico_status?.battery_voltage || ""}`.trim() : "waiting";
+      const picoState = formatPicoState(data.pico_status, data.pico_connected);
       const safetyState = data.safety_active ? data.safety_status : "clear";
       document.getElementById("status-box").innerHTML = [
         statusCard("ROS2", data.ros2_connected ? "연결됨" : "오프라인"),
