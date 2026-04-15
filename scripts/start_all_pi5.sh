@@ -24,6 +24,48 @@ configure_offline_ros() {
   unset ROS_SUPER_CLIENT
 }
 
+check_required_ros_packages() {
+  local missing=()
+  local required=(
+    buddybot_msgs
+    buddybot_base
+    buddybot_system
+    buddybot_nav
+    buddybot_panel
+    buddybot_voice
+  )
+
+  if [[ "${BUDDYBOT_DISABLE_CAMERA:-0}" != "1" ]]; then
+    required+=(buddybot_vision)
+  fi
+
+  if [[ "${MODE:-mapping}" == "mapping" ]]; then
+    required+=(slam_toolbox)
+  fi
+
+  for pkg in "${required[@]}"; do
+    if ! ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
+      missing+=("$pkg")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    echo "[all] error: required ROS packages are missing from the current environment:"
+    printf '  - %s\n' "${missing[@]}"
+    echo "[all] rebuild the Pi5 workspace with:"
+    echo "[all]   cd $WS_DIR"
+    echo "[all]   source /opt/ros/$ROS_DISTRO_NAME/setup.bash"
+    echo "[all]   rm -rf build install log"
+    echo "[all]   colcon build --symlink-install --packages-select buddybot_msgs buddybot_base buddybot_system buddybot_nav buddybot_panel buddybot_voice buddybot_vision"
+    echo "[all]   source install/setup.bash"
+    if printf '%s\n' "${missing[@]}" | grep -qx "slam_toolbox"; then
+      echo "[all] install slam_toolbox first if needed:"
+      echo "[all]   sudo apt install -y ros-$ROS_DISTRO_NAME-slam-toolbox"
+    fi
+    exit 1
+  fi
+}
+
 usage() {
   echo "Usage: bash scripts/start_all_pi5.sh [demo|mapping]"
 }
@@ -55,6 +97,7 @@ esac
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
 configure_offline_ros
+check_required_ros_packages
 
 echo "[all] resetting ROS discovery"
 ros2 daemon stop >/dev/null 2>&1 || true
