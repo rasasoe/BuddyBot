@@ -43,6 +43,7 @@
     button.warn:hover{background:#a96d13}
     button.danger{background:var(--danger)}
     button.danger:hover{background:#903228}
+    button.active-toggle{background:var(--rust);color:#fff;box-shadow:0 0 0 3px var(--rust)}
     .button-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
     .button-grid button,.manual-stop{min-height:64px}
     .manual-stop{grid-column:2}
@@ -118,14 +119,14 @@
           <span id="speed-label" style="font-size:.88rem;font-weight:700;min-width:42px;text-align:right">100%</span>
         </div>
         <div class="button-grid">
-          <button class="secondary" data-hold-direction="forward">전진</button>
-          <button class="danger manual-stop" onclick="manual('stop')">정지</button>
-          <button class="secondary" data-hold-direction="backward">후진</button>
-          <button class="secondary" data-hold-direction="strafe_left">왼쪽 이동</button>
+          <button class="secondary" id="btn-forward" data-toggle-direction="forward">전진</button>
+          <button class="danger manual-stop" onclick="stopManualToggle()">정지</button>
+          <button class="secondary" id="btn-backward" data-toggle-direction="backward">후진</button>
+          <button class="secondary" id="btn-strafe_left" data-toggle-direction="strafe_left">왼쪽 이동</button>
           <button class="warn" onclick="cancelNavigation()">경로 취소</button>
-          <button class="secondary" data-hold-direction="strafe_right">오른쪽 이동</button>
-          <button data-hold-direction="rotate_left">좌회전</button>
-          <button data-hold-direction="rotate_right">우회전</button>
+          <button class="secondary" id="btn-strafe_right" data-toggle-direction="strafe_right">오른쪽 이동</button>
+          <button id="btn-rotate_left" data-toggle-direction="rotate_left">좌회전</button>
+          <button id="btn-rotate_right" data-toggle-direction="rotate_right">우회전</button>
           <button class="accent" onclick="sendChat('status')">상태 말해줘</button>
         </div>
         <div class="dual">
@@ -219,9 +220,8 @@
     let lastMiniMapStatus = null;
     let lastClickedPoint = null;
     let routeSequence = [];
-    let manualHoldDirection = null;
-    let manualHoldTimer = null;
-    let manualHoldAnnounced = false;
+    let manualToggleDirection = null;
+    let manualToggleTimer = null;
 
     const chatLog = document.getElementById("chat-log");
     const waypointSelect = document.getElementById("waypoint-select");
@@ -272,18 +272,21 @@
     }
 
     function bindManualHoldButtons(){
-      document.querySelectorAll("[data-hold-direction]").forEach((button) => {
-        const direction = button.dataset.holdDirection;
-        button.addEventListener("pointerdown", (event) => {
-          event.preventDefault();
-          startManualHold(direction);
-        });
-        button.addEventListener("pointerup", () => stopManualHold(true));
-        button.addEventListener("pointerleave", () => stopManualHold(true));
-        button.addEventListener("pointercancel", () => stopManualHold(true));
+      document.querySelectorAll("[data-toggle-direction]").forEach((button) => {
+        const direction = button.dataset.toggleDirection;
+        button.addEventListener("click", () => toggleManual(direction));
       });
-      window.addEventListener("pointerup", () => stopManualHold(true));
-      window.addEventListener("blur", () => stopManualHold(true));
+    }
+
+    function updateToggleButtonStyles(){
+      document.querySelectorAll("[data-toggle-direction]").forEach((button) => {
+        const direction = button.dataset.toggleDirection;
+        if(direction === manualToggleDirection){
+          button.classList.add("active-toggle");
+        }else{
+          button.classList.remove("active-toggle");
+        }
+      });
     }
 
     function statusCard(label, value){
@@ -596,48 +599,41 @@
       return apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: speed * mult})});
     }
 
-    async function startManualHold(direction){
-      if(manualHoldDirection === direction && manualHoldTimer){
+    async function toggleManual(direction){
+      // 같은 방향 다시 누르면 정지
+      if(manualToggleDirection === direction){
+        stopManualToggle();
         return;
       }
-      stopManualHold(false);
-      manualHoldDirection = direction;
-      if(!manualHoldAnnounced){
-        const labels = {
-          forward: "전진",
-          backward: "후진",
-          strafe_left: "왼쪽 이동",
-          strafe_right: "오른쪽 이동",
-          rotate_left: "좌회전",
-          rotate_right: "우회전",
-        };
-        addMsg("bot", `수동 명령 유지: ${labels[direction] || direction}`);
-        manualHoldAnnounced = true;
-      }
+      // 다른 방향 or 새로 시작
+      stopManualToggle(false);
+      manualToggleDirection = direction;
+      updateToggleButtonStyles();
       try{
         await manualSilent(direction);
       }catch(error){
-        stopManualHold(false);
+        manualToggleDirection = null;
+        updateToggleButtonStyles();
         showError(error);
         return;
       }
-      manualHoldTimer = window.setInterval(() => {
+      manualToggleTimer = window.setInterval(() => {
         manualSilent(direction).catch((error) => {
-          stopManualHold(false);
+          stopManualToggle(false);
           showError(error);
         });
       }, 150);
     }
 
-    function stopManualHold(sendStop = true){
-      if(manualHoldTimer){
-        window.clearInterval(manualHoldTimer);
-        manualHoldTimer = null;
+    function stopManualToggle(sendStop = true){
+      if(manualToggleTimer){
+        window.clearInterval(manualToggleTimer);
+        manualToggleTimer = null;
       }
-      const activeDirection = manualHoldDirection;
-      manualHoldDirection = null;
-      manualHoldAnnounced = false;
-      if(sendStop && activeDirection){
+      const wasActive = manualToggleDirection;
+      manualToggleDirection = null;
+      updateToggleButtonStyles();
+      if(sendStop && wasActive){
         manualSilent("stop").catch(showError);
       }
     }
