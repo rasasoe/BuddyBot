@@ -98,6 +98,8 @@ class WaypointManagerNode(Node):
         # Navigation state
         self.current_waypoint = None
         self.navigation_active = False
+        self.route_queue: List[str] = []
+        self.route_name: str = ""
         self.last_odom_time = self.get_clock().now()
         self.current_pose: Optional[Dict[str, float]] = None
         self.current_pose_source = "none"
@@ -141,6 +143,8 @@ class WaypointManagerNode(Node):
             String, '/system/mode', self.mode_callback, qos_profile)
         self.create_subscription(
             String, '/nav/waypoint_goal', self.waypoint_goal_callback, qos_profile)
+        self.create_subscription(
+            String, '/nav/route_goal', self.route_goal_callback, qos_profile)
         self.create_subscription(
             String, '/nav/waypoint_save', self.waypoint_save_callback, qos_profile)
         self.create_subscription(
@@ -232,6 +236,60 @@ class WaypointManagerNode(Node):
             return
         self._clear_destination_state()
         self._start_navigation(waypoint_name)
+
+    def route_goal_callback(self, msg: String):
+        """
+        Compatibility route entrypoint.
+
+        Accept JSON payload:
+            {"name": "route_name", "sequence": ["wp1", "wp2"]}
+        Or a plain comma-separated string:
+            "wp1,wp2,wp3"
+        """
+        raw = msg.data.strip()
+        if not raw:
+            self.get_logger().warn("Empty route sequence received")
+            return
+
+        try:
+            payload = json.loads(raw)
+            sequence = self._normalize_sequence(payload.get("sequence", []))
+            route_name = str(payload.get("name") or "ad_hoc").strip() or "ad_hoc"
+        except (json.JSONDecodeError, TypeError, ValueError):
+            sequence = self._normalize_sequence(raw.split(","))
+            route_name = "ad_hoc"
+
+        unknown = [item for item in sequence if item not in self.waypoints]
+        if unknown:
+            self.get_logger().warn(f"Unknown waypoints in route: {unknown}")
+            self._publish_navigation_status(f"route_unknown_waypoints:{','.join(unknown)}")
+            return
+
+        if not sequence:
+            self.get_logger().warn("Empty route sequence received")
+            return
+
+        self.get_logger().info(f"Starting route '{route_name}': {sequence}")
+        self.route_name = route_name
+        self.route_queue = list(sequence)
+        self._publish_navigation_status(f"route_started:{route_name}")
+        self._advance_route()
+
+    def _advance_route(self):
+        """Pop the next route waypoint and start navigation."""
+        if not self.route_queue:
+            if self.route_name:
+                self._publish_navigation_status(f"route_complete:{self.route_name}")
+            self.route_name = ""
+            return
+
+        next_waypoint = self.route_queue.pop(0)
+        remaining = len(self.route_queue)
+        if self.route_name:
+            self._publish_navigation_status(
+                f"route_step:{self.route_name}:{next_waypoint}:remaining={remaining}"
+            )
+        self._start_navigation(next_waypoint)
 
     def waypoint_save_callback(self, msg: String):
         try:
@@ -359,6 +417,8 @@ class WaypointManagerNode(Node):
     def _clear_destination_state(self):
         self.active_destination_name = None
         self.active_destination_sequence = []
+        self.route_queue = []
+        self.route_name = ""
 
     def _abort_destination(self, status: str):
         if not self.active_destination_name:
@@ -425,6 +485,8 @@ class WaypointManagerNode(Node):
 
         self.active_destination_name = name
         self.active_destination_sequence = list(cleaned_sequence)
+        self.route_name = name
+        self.route_queue = list(cleaned_sequence)
         self._publish_navigation_status(f"destination_started:{name}")
         self._start_next_destination_leg()
 
@@ -438,6 +500,8 @@ class WaypointManagerNode(Node):
             return
 
         next_waypoint = self.active_destination_sequence.pop(0)
+        if self.route_queue and self.route_queue[0] == next_waypoint:
+            self.route_queue.pop(0)
         self._publish_navigation_status(f"destination_leg:{self.active_destination_name}:{next_waypoint}")
         self._start_navigation(next_waypoint)
 
@@ -702,6 +766,10 @@ class WaypointManagerNode(Node):
 
             self._clear_destination_state()
             self._publish_navigation_status(f"destination_failed:{active_destination}:{status}")
+
+        # Compatibility auto-advance for /nav/route_goal callers.
+        if status.startswith("arrived:") and self.route_queue and not active_destination:
+            self._advance_route()
 
     def _publish_nav_velocity(self, linear_x: float, linear_y: float, angular_z: float):
         twist = Twist()

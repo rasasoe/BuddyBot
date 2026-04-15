@@ -1,5 +1,12 @@
 """Kinematics helpers for the real BuddyBot 3-wheel base."""
 
+# Wheel layout (viewed from above):
+#   left  : front-left side of the tuned field layout
+#   right : front-right side of the tuned field layout
+#   back  : rear wheel
+# Positive wz = counter-clockwise (ROS convention)
+# Adjust ROTATION_MIX_GAIN in config.py if rotation is still weak on hardware.
+
 from config import ROTATION_MIX_GAIN, WHEEL_BASE_LENGTH, WHEEL_BASE_WIDTH
 
 class Kinematics:

@@ -189,6 +189,8 @@ class PanelBridge:
         self._spin_thread = None
         self._manual_pub = None
         self._follow_pub = None
+        self._estop_pub = None
+        self._route_pub = None
         self._waypoint_goal_pub = None
         self._waypoint_save_pub = None
         self._waypoint_delete_pub = None
@@ -282,6 +284,8 @@ class PanelBridge:
             self._node = Node("buddybot_local_panel")
             self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", 10)
             self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", 10)
+            self._estop_pub = self._node.create_publisher(Bool, "/system/estop", 10)
+            self._route_pub = self._node.create_publisher(String, "/nav/route_goal", 10)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", 10)
             self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
             self._waypoint_delete_pub = self._node.create_publisher(String, "/nav/waypoint_delete", 10)
@@ -1317,6 +1321,18 @@ class PanelBridge:
         msg.data = "cancel"
         self._nav_cancel_pub.publish(msg)
 
+    def trigger_estop(self) -> None:
+        self.last_command = "estop"
+        self.stop_mini_map(update_last_command=False)
+        self._clear_manual_motion()
+        self.follow_enabled = False
+        self._publish_follow_state(False)
+        self.cancel_navigation()
+        if self.ros2_connected and self._estop_pub is not None:
+            msg = Bool()
+            msg.data = True
+            self._estop_pub.publish(msg)
+
     def set_follow_enabled(self, enabled: bool, *, update_last_command: bool = True) -> None:
         if enabled:
             self.stop_mini_map(update_last_command=False)
@@ -1534,12 +1550,14 @@ class PanelBridge:
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
 
-        if self.ros2_connected and self._destination_goal_pub is not None:
+        payload = {"name": name or "route_now", "sequence": cleaned_sequence}
+        if self.ros2_connected and self._route_pub is not None:
             msg = String()
-            msg.data = json.dumps(
-                {"name": name or "route_now", "sequence": cleaned_sequence},
-                ensure_ascii=True,
-            )
+            msg.data = json.dumps(payload, ensure_ascii=True)
+            self._route_pub.publish(msg)
+        elif self.ros2_connected and self._destination_goal_pub is not None:
+            msg = String()
+            msg.data = json.dumps(payload, ensure_ascii=True)
             self._destination_goal_pub.publish(msg)
         return {
             "name": name or "route_now",
@@ -1892,6 +1910,12 @@ def api_clear_waypoints():
     return {"cleared": True, **result, "items": bridge.list_waypoints(), "destinations": bridge.list_destinations()}
 
 
+@app.post("/api/waypoints/clear")
+def api_clear_waypoints_post():
+    result = bridge.clear_waypoints()
+    return {"cleared": True, **result, "items": bridge.list_waypoints(), "destinations": bridge.list_destinations()}
+
+
 @app.post("/api/go")
 def api_go(request: WaypointGoRequest):
     bridge.go_waypoint(request.name)
@@ -1902,6 +1926,19 @@ def api_go(request: WaypointGoRequest):
 def api_cancel_navigation():
     bridge.cancel_navigation()
     return {"success": True, "message": "Navigation cancelled."}
+
+
+@app.post("/api/nav/cancel")
+def api_cancel_navigation_alias():
+    bridge.cancel_navigation()
+    return {"cancelled": True}
+
+
+@app.post("/api/estop")
+def api_estop():
+    bridge.trigger_estop()
+    bridge.manual_command("stop", 0.0)
+    return {"estop": True, "status": bridge.status()}
 
 
 @app.get("/api/destinations")
