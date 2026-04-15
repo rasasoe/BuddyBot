@@ -83,6 +83,8 @@ CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
 CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
 CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-15.0}")"
 CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}")"
+CAMERA_PIXEL_FORMAT="${BUDDYBOT_CAMERA_PIXEL_FORMAT:-MJPG}"
+CAMERA_BUFFER_SIZE="${BUDDYBOT_CAMERA_BUFFER_SIZE:-1}"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
@@ -339,6 +341,7 @@ echo "[demo] AI server: ${AI_SERVER_STATE:-unknown}"
 echo "[demo] lidar settle delay: ${LIDAR_SETTLE_DELAY}s"
 echo "[demo] camera start delay: ${CAMERA_START_DELAY}s"
 echo "[demo] camera profile: ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
+echo "[demo] camera pixel format: ${CAMERA_PIXEL_FORMAT} buffer ${CAMERA_BUFFER_SIZE}"
 echo "[demo] camera disabled: ${DISABLE_CAMERA}"
 echo "[demo] pico disabled: ${DISABLE_PICO}"
 echo "[demo] force lidar start: ${FORCE_LIDAR_START}"
@@ -393,10 +396,10 @@ if is_truthy "$DISABLE_CAMERA"; then
 else
   pause_before_node "$CAMERA_START_DELAY" "starting camera"
   if [[ -n "${CAMERA_DEVICE:-}" ]]; then
-    start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+    start_node camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}" -p pixel_format:="${CAMERA_PIXEL_FORMAT}" -p buffer_size:="${CAMERA_BUFFER_SIZE}"
   else
     echo "[demo] warning: probe did not find a preferred camera device; trying auto detection"
-    start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+    start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}" -p pixel_format:="${CAMERA_PIXEL_FORMAT}" -p buffer_size:="${CAMERA_BUFFER_SIZE}"
   fi
   if camera_streaming 8; then
     echo "[demo] camera stream is live"

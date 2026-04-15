@@ -47,6 +47,8 @@ class CameraNode(Node):
         self.declare_parameter('frame_id', 'camera_link')
         self.declare_parameter('publish_rate', 30.0)  # Hz
         self.declare_parameter('backend', 'v4l2')
+        self.declare_parameter('pixel_format', 'MJPG')
+        self.declare_parameter('buffer_size', 1)
         self.declare_parameter('open_retries', 4)
         self.declare_parameter('open_retry_delay', 0.6)
 
@@ -58,6 +60,8 @@ class CameraNode(Node):
         self.frame_id = self.get_parameter('frame_id').value
         self.publish_rate = self.get_parameter('publish_rate').value
         self.backend = str(self.get_parameter('backend').value).lower()
+        self.pixel_format = str(self.get_parameter('pixel_format').value).upper()
+        self.buffer_size = int(self.get_parameter('buffer_size').value)
         self.open_retries = int(self.get_parameter('open_retries').value)
         self.open_retry_delay = float(self.get_parameter('open_retry_delay').value)
 
@@ -93,6 +97,8 @@ class CameraNode(Node):
         self.get_logger().info(f"  Resolution: {self.width}x{self.height}")
         self.get_logger().info(f"  FPS: {self.fps}")
         self.get_logger().info(f"  Publish rate: {self.publish_rate} Hz")
+        self.get_logger().info(f"  Pixel format: {self.pixel_format}")
+        self.get_logger().info(f"  Buffer size: {self.buffer_size}")
         self.get_logger().info(f"  Frame ID: {self.frame_id}")
 
     def _initialize_camera(self):
@@ -124,11 +130,9 @@ class CameraNode(Node):
                 self.get_logger().error(f"Failed to open camera device: {self.device}")
                 return False
 
-            # Set camera properties
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+            self._configure_capture(self.cap)
 
+            # Set camera properties
             # Verify settings
             actual_width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
             actual_height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -143,6 +147,27 @@ class CameraNode(Node):
         except Exception as e:
             self.get_logger().error(f"Camera initialization error: {e}")
             return False
+
+    def _configure_capture(self, cap):
+        if cap is None or not cap.isOpened():
+            return
+
+        # Prefer MJPG on C920-style UVC webcams to reduce USB bandwidth.
+        if self.pixel_format and len(self.pixel_format) == 4:
+            try:
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*self.pixel_format))
+            except Exception:
+                pass
+
+        if self.buffer_size > 0:
+            try:
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, self.buffer_size)
+            except Exception:
+                pass
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        cap.set(cv2.CAP_PROP_FPS, self.fps)
 
     def _detect_camera_device(self):
         requested = str(self.device).strip()
@@ -383,7 +408,8 @@ def main(args=None):
     except Exception as e:
         print(f"Fatal error in camera node: {e}")
     finally:
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

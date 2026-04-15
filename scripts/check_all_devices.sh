@@ -54,6 +54,8 @@ CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
 CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
 CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-15.0}")"
 CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}")"
+CAMERA_PIXEL_FORMAT="${BUDDYBOT_CAMERA_PIXEL_FORMAT:-MJPG}"
+CAMERA_BUFFER_SIZE="${BUDDYBOT_CAMERA_BUFFER_SIZE:-1}"
 
 echo "[check] detected devices"
 echo "  pico   : ${PICO_PORT:-none}"
@@ -63,6 +65,7 @@ echo "  mic    : ${MIC_AVAILABLE:-0}"
 echo "  lidar settle delay : ${LIDAR_SETTLE_DELAY}s"
 echo "  camera start delay : ${CAMERA_START_DELAY}s"
 echo "  camera profile : ${CAMERA_WIDTH}x${CAMERA_HEIGHT} @ ${CAMERA_FPS}fps publish ${CAMERA_PUBLISH_RATE}Hz"
+echo "  camera pixel format : ${CAMERA_PIXEL_FORMAT} buffer ${CAMERA_BUFFER_SIZE}"
 echo "  ROS_DOMAIN_ID : ${ROS_DOMAIN_ID}"
 echo "  ROS_LOCALHOST_ONLY : ${ROS_LOCALHOST_ONLY}"
 echo "  ROS_DISCOVERY_SERVER : ${ROS_DISCOVERY_SERVER:-unset}"
@@ -166,7 +169,7 @@ echo
 echo "[check] camera test"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
   pause_before_step "$CAMERA_START_DELAY" "starting camera after USB devices settle"
-  start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}"
+  start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}" -p pixel_format:="${CAMERA_PIXEL_FORMAT}" -p buffer_size:="${CAMERA_BUFFER_SIZE}"
   if wait_for_message "/camera/image_raw" 10 || wait_for_topic "/camera/image_raw" 10 || publisher_visible "/camera_node" "camera/image_raw"; then
     echo "  result: PASS (/camera/image_raw present)"
   else
