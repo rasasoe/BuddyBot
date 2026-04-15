@@ -118,14 +118,14 @@
           <span id="speed-label" style="font-size:.88rem;font-weight:700;min-width:42px;text-align:right">100%</span>
         </div>
         <div class="button-grid">
-          <button class="secondary" onclick="manual('forward')">전진</button>
+          <button class="secondary" data-hold-direction="forward">전진</button>
           <button class="danger manual-stop" onclick="manual('stop')">정지</button>
-          <button class="secondary" onclick="manual('backward')">후진</button>
-          <button class="secondary" onclick="manual('strafe_left')">왼쪽 이동</button>
+          <button class="secondary" data-hold-direction="backward">후진</button>
+          <button class="secondary" data-hold-direction="strafe_left">왼쪽 이동</button>
           <button class="warn" onclick="cancelNavigation()">경로 취소</button>
-          <button class="secondary" onclick="manual('strafe_right')">오른쪽 이동</button>
-          <button onclick="manual('rotate_left')">좌회전</button>
-          <button onclick="manual('rotate_right')">우회전</button>
+          <button class="secondary" data-hold-direction="strafe_right">오른쪽 이동</button>
+          <button data-hold-direction="rotate_left">좌회전</button>
+          <button data-hold-direction="rotate_right">우회전</button>
           <button class="accent" onclick="sendChat('status')">상태 말해줘</button>
         </div>
         <div class="dual">
@@ -219,6 +219,9 @@
     let lastMiniMapStatus = null;
     let lastClickedPoint = null;
     let routeSequence = [];
+    let manualHoldDirection = null;
+    let manualHoldTimer = null;
+    let manualHoldAnnounced = false;
 
     const chatLog = document.getElementById("chat-log");
     const waypointSelect = document.getElementById("waypoint-select");
@@ -266,6 +269,21 @@
       utterance.rate = 1;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
+    }
+
+    function bindManualHoldButtons(){
+      document.querySelectorAll("[data-hold-direction]").forEach((button) => {
+        const direction = button.dataset.holdDirection;
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          startManualHold(direction);
+        });
+        button.addEventListener("pointerup", () => stopManualHold(true));
+        button.addEventListener("pointerleave", () => stopManualHold(true));
+        button.addEventListener("pointercancel", () => stopManualHold(true));
+      });
+      window.addEventListener("pointerup", () => stopManualHold(true));
+      window.addEventListener("blur", () => stopManualHold(true));
     }
 
     function statusCard(label, value){
@@ -564,6 +582,66 @@
       }catch(error){ showError(error); }
     }
 
+    async function manualSilent(direction){
+      const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 100) / 100);
+      const speed = ({
+        forward: 0.35,
+        backward: 0.3,
+        strafe_left: 0.35,
+        strafe_right: 0.35,
+        rotate_left: 0.55,
+        rotate_right: 0.55,
+        stop: 0.0,
+      })[direction] ?? 0.35;
+      return apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: speed * mult})});
+    }
+
+    async function startManualHold(direction){
+      if(manualHoldDirection === direction && manualHoldTimer){
+        return;
+      }
+      stopManualHold(false);
+      manualHoldDirection = direction;
+      if(!manualHoldAnnounced){
+        const labels = {
+          forward: "전진",
+          backward: "후진",
+          strafe_left: "왼쪽 이동",
+          strafe_right: "오른쪽 이동",
+          rotate_left: "좌회전",
+          rotate_right: "우회전",
+        };
+        addMsg("bot", `수동 명령 유지: ${labels[direction] || direction}`);
+        manualHoldAnnounced = true;
+      }
+      try{
+        await manualSilent(direction);
+      }catch(error){
+        stopManualHold(false);
+        showError(error);
+        return;
+      }
+      manualHoldTimer = window.setInterval(() => {
+        manualSilent(direction).catch((error) => {
+          stopManualHold(false);
+          showError(error);
+        });
+      }, 150);
+    }
+
+    function stopManualHold(sendStop = true){
+      if(manualHoldTimer){
+        window.clearInterval(manualHoldTimer);
+        manualHoldTimer = null;
+      }
+      const activeDirection = manualHoldDirection;
+      manualHoldDirection = null;
+      manualHoldAnnounced = false;
+      if(sendStop && activeDirection){
+        manualSilent("stop").catch(showError);
+      }
+    }
+
     async function cancelNavigation(){
       try{
         const data = await apiJson("/api/navigation/cancel", {method:"POST"});
@@ -814,6 +892,7 @@
     syncRouteSequence();
     addMsg("bot", "패널 준비가 끝났습니다. 미니맵을 만들고, 체크포인트를 찍고, 사용자 추종을 시험해 보세요.");
     refreshAll();
+    bindManualHoldButtons();
     setInterval(refreshStatus, 1500);
     setInterval(() => refreshCamera(false), 1000);
     setInterval(refreshMap, 2500);
