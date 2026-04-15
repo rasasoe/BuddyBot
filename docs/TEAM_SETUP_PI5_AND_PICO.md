@@ -29,6 +29,49 @@ source install/setup.bash
 
 ## Pi 5 run order
 
+가장 권장하는 최신 실행 방식은 개별 노드 수동 실행보다 레포의 런처 스크립트를 사용하는 것입니다.
+
+### Recommended rebuild after pull
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+rm -rf build install log
+colcon build --symlink-install --packages-select \
+  buddybot_msgs \
+  buddybot_base \
+  buddybot_system \
+  buddybot_nav \
+  buddybot_panel \
+  buddybot_voice \
+  buddybot_vision
+source install/setup.bash
+```
+
+### Recommended demo launch
+
+일반 모드:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_all_pi5.sh mapping
+```
+
+USB 전원/카메라 안정성이 나쁠 때 발표용 모드:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+프레젠테이션 모드 기본값:
+- preflight 재개방 반복 비활성화
+- 마이크 상시 리스너 비활성화
+- Pi speaker 출력 비활성화
+- 카메라 저대역폭 설정 유지
+- detector 주기 완화
+- 자동 디버그 번들 수집 유지
+
 ### 1. Pico bridge
 
 ```bash

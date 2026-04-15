@@ -126,6 +126,61 @@ cd ~/BuddyBot
 BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_all_pi5.sh
 ```
 
+## 발표/시연 안정화 모드
+
+실기에서 카메라, LiDAR, Pico를 동시에 붙였을 때 USB 전력/재연결 이슈가 남아 있으면 아래 모드를 우선 사용합니다.
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+rm -rf build install log
+colcon build --symlink-install --packages-select \
+  buddybot_msgs \
+  buddybot_base \
+  buddybot_system \
+  buddybot_nav \
+  buddybot_panel \
+  buddybot_voice \
+  buddybot_vision
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+이 모드는 아래를 기본으로 적용합니다.
+- preflight 재시작 churn 최소화
+- microphone listener 비활성화
+- Pi speaker 출력 비활성화
+- 카메라 저해상도, 저FPS, MJPG, 작은 버퍼 유지
+- detector 주기를 낮춰 CPU/USB 부담 완화
+- 종료 시 자동으로 `/tmp/buddybot-debug-*` 번들을 남겨서 바로 디버깅 가능
+
+더 줄여야 하면 아래 값을 같이 줍니다.
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_CAMERA_WIDTH=320 \
+BUDDYBOT_CAMERA_HEIGHT=240 \
+BUDDYBOT_CAMERA_FPS=10 \
+BUDDYBOT_CAMERA_PUBLISH_RATE=5 \
+BUDDYBOT_CAMERA_PIXEL_FORMAT=MJPG \
+BUDDYBOT_CAMERA_BUFFER_SIZE=1 \
+BUDDYBOT_DETECT_INTERVAL=8 \
+BUDDYBOT_DETECT_HOG_RESIZE_WIDTH=320 \
+bash scripts/start_presentation_mode.sh mapping
+```
+
+최신 로그 번들은 이렇게 확인합니다.
+
+```bash
+BUNDLE_DIR="$(ls -dt /tmp/buddybot-debug-* | grep -v '\.tar\.gz$' | head -n 1)"
+echo "$BUNDLE_DIR"
+tail -n 120 "$BUNDLE_DIR/command_mux.tail.log"
+tail -n 120 "$BUNDLE_DIR/pico_bridge.tail.log"
+tail -n 120 "$BUNDLE_DIR/camera.tail.log"
+grep -n "Undervoltage\\|USB disconnect\\|error -71" "$BUNDLE_DIR/system_snapshot.log" | tail -n 40
+```
+
 ## Pi5 startup guide
 
 Recommended clean rebuild after pulling new changes:

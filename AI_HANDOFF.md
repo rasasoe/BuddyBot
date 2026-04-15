@@ -2,110 +2,205 @@
 
 ## Current State
 
-BuddyBot is now closer to the offline-first product target.
+BuddyBot is in a usable Pi5-only demo state, but the latest field work confirmed that the remaining instability is mostly around USB/power behavior on the real robot rather than a single ROS logic bug.
 
-Working in code:
-- Manual drive via `/cmd_vel_manual`
-- Follow on/off routing via `/follow/enabled`
-- Waypoint save, delete, clear, and go
-- Route dispatch support via `/nav/route_goal` compatibility and panel `/api/routes/run`
-- Local panel status, map, minimap, camera, and chat APIs
-- USB speaker output through `espeak-ng` path in `buddybot_voice`
-- New automated verification script: `scripts/verify_system.sh`
+What is now fixed in code:
+- Manual control in the panel is toggle-based and no longer drops out just because minimap stop logic ran while minimap was already idle.
+- `scripts/start_all_pi5.sh` now refuses to start with a half-built workspace and prints the exact `colcon build --packages-select ...` command needed to recover.
+- Camera FPS and publish-rate environment variables are normalized to ROS `double` parameters, so `BUDDYBOT_CAMERA_FPS=10` no longer crashes the camera node with a type mismatch.
+- `scripts/run_demo_debug_bundle.sh` now reliably produces a post-run log bundle on shutdown instead of skipping cleanup.
+- Camera launch scripts now support lower-bandwidth USB settings:
+  - `BUDDYBOT_CAMERA_PIXEL_FORMAT`
+  - `BUDDYBOT_CAMERA_BUFFER_SIZE`
+- Presentation-mode launcher exists:
+  - `scripts/start_presentation_mode.sh`
+- Presentation-mode launcher now also lowers detector load:
+  - `BUDDYBOT_DETECT_INTERVAL`
+  - `BUDDYBOT_DETECT_CONFIDENCE`
+  - `BUDDYBOT_DETECT_HOG_RESIZE_WIDTH`
+  - `BUDDYBOT_DETECT_ALLOW_HOG_FALLBACK`
+- Panel UI was cleaned up for field use:
+  - Pico status shows more useful live values
+  - minimap buttons and camera button layout were adjusted for mobile/demo use
 
-Still needs hardware verification:
-- Rotation strength and sign on real base
-- Follow behavior under real camera detection and bbox timeout
-- Route sequence execution on the robot
-- E-STOP behavior end-to-end
-- USB speaker audio output on the Pi
-- Mobile UX thumb reach and operator flow on actual phone
+What is still not fully solved in software:
+- Real Pi5 field logs still show undervoltage warnings and USB reconnect events.
+- Pico sometimes disappears briefly from USB and `pico_bridge` logs `device reports readiness to read but returned no data`.
+- C920 can still disappear during long runs even when preflight passes.
 
-## Build After Pull
+## Confirmed Root Causes
+
+### 1. Manual drive dropout
+
+This one was a real code bug and is fixed.
+
+Root cause:
+- panel manual commands called minimap stop as a guard
+- minimap stop unconditionally cleared manual motion
+- the frontend was posting repeated `/api/manual`
+- `command_mux` kept flipping between `manual` and `idle`
+
+Relevant fix:
+- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py)
+
+Expected behavior now:
+- panel manual buttons are toggle-style
+- manual motion keeps publishing while active
+- minimap idle state no longer injects a zero manual command
+
+### 2. Camera param type mismatch
+
+This one was also a code/script bug and is fixed.
+
+Root cause:
+- camera node declares `fps` and `publish_rate` as ROS doubles
+- shell launchers sometimes passed plain integers like `10`
+- ROS rejected the parameter type
+
+Relevant fixes:
+- [scripts/check_all_devices.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/check_all_devices.sh)
+- [scripts/start_mapping_panel.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_mapping_panel.sh)
+- [scripts/start_offline_demo.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_offline_demo.sh)
+
+### 3. Camera + LiDAR + Pico instability
+
+This is only partially mitigated in software.
+
+What logs proved:
+- preflight can pass all three together
+- later in the run, kernel logs can still show:
+  - `Undervoltage detected!`
+  - `USB disconnect`
+  - `can't set config #1, error -71`
+- `pico_bridge` can continue heartbeating and then suddenly report serial read failures
+- camera can re-enter repeated reopen loops after initially coming up fine
+
+Conclusion:
+- this is not just a ROS graph issue
+- this is not just a topic/QoS issue
+- this is a field hardware stability issue with software mitigations layered on top
+
+## Recommended Build After Pull
+
+Use this on Pi5 after any meaningful pull:
 
 ```bash
 cd ~/BuddyBot/software/pi5/ros2_ws
 source /opt/ros/jazzy/setup.bash
+rm -rf build install log
 colcon build --symlink-install --packages-select \
-  buddybot_nav buddybot_panel buddybot_voice
+  buddybot_msgs \
+  buddybot_base \
+  buddybot_system \
+  buddybot_nav \
+  buddybot_panel \
+  buddybot_voice \
+  buddybot_vision
 source install/setup.bash
 ```
 
-## Immediate Verification
+## Recommended Demo Start
+
+### Normal full-stack start
 
 ```bash
 cd ~/BuddyBot
-bash scripts/verify_system.sh
+bash scripts/start_all_pi5.sh mapping
 ```
 
-Then open:
+### Presentation / unstable USB mode
 
-```text
-http://<pi-ip>:8090
-```
-
-## Known Hardware Items
-
-- Rotation `wz`: verify whether `ROTATION_MIX_GAIN = 1.5` is strong enough on real hardware
-- USB speaker: verify `espeak-ng` actually plays through Pi USB audio
-- Camera USB stability: keep Logitech C920 on a Pi 5 direct port, not the hub, if possible
-
-## Feature Status
-
-| Feature | Code | Hardware Verified |
-|---------|------|-------------------|
-| Manual drive (fwd/back/strafe) | ✅ | ✅ |
-| Rotation (wz) | ✅ patched/tunable | ❓ needs test |
-| Follow mode | ✅ | ❓ needs test |
-| Checkpoint save/go | ✅ | ✅ |
-| Checkpoint delete | ✅ | ❓ |
-| Route sequence | ✅ patched | ❓ |
-| USB TTS (espeak) | ✅ | ❓ |
-| E-STOP button/API | ✅ | ❓ |
-| Mobile panel flow | ✅ partially | ❓ |
-| `verify_system.sh` | ✅ new | ❓ |
-
-## Next AI Instructions
-
-Priority 1:
-- Run `bash scripts/verify_system.sh` on Pi and fix any FAIL items
-
-Priority 2:
-- Test rotation
+Use this when the robot must demo now and hardware changes are not possible:
 
 ```bash
-ros2 topic pub --once /cmd_vel_manual geometry_msgs/msg/Twist "{angular: {z: 0.5}}"
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
 ```
 
-Priority 3:
-- Test TTS
+What presentation mode changes by default:
+- skips preflight re-open churn
+- disables always-on microphone listener
+- disables Pi speaker output path
+- keeps camera at low bandwidth
+- keeps MJPG + small buffer
+- reduces detector frequency and fallback workload
+- still runs through `run_demo_debug_bundle.sh` so shutdown produces logs automatically
+
+## Recommended Runtime Knobs
+
+If camera and LiDAR barely coexist, keep these defaults or lower further:
 
 ```bash
-ros2 topic pub --once /voice/response std_msgs/msg/String "{data: '버디봇 준비 완료'}"
+BUDDYBOT_CAMERA_WIDTH=320
+BUDDYBOT_CAMERA_HEIGHT=240
+BUDDYBOT_CAMERA_FPS=10
+BUDDYBOT_CAMERA_PUBLISH_RATE=5
+BUDDYBOT_CAMERA_PIXEL_FORMAT=MJPG
+BUDDYBOT_CAMERA_BUFFER_SIZE=1
+BUDDYBOT_DETECT_INTERVAL=8
+BUDDYBOT_DETECT_HOG_RESIZE_WIDTH=320
 ```
 
-Priority 4:
-- Test route execution from panel
-  - save 2 checkpoints
-  - add them to a route
-  - run route
+If the camera is not required for the current demo slice:
 
-## File Change Log
+```bash
+BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_all_pi5.sh mapping
+```
 
-- `software/pi5/ros2_ws/src/buddybot_nav/buddybot_nav/waypoint_manager_node.py`
-- `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py`
-- `software/pi5/ros2_ws/src/buddybot_voice/buddybot_voice/voice_interface.py`
-- `scripts/setup_pi5.sh`
-- `software/pi5/ros2_ws/src/buddybot_nav/config/waypoints.yaml`
-- `firmware/pico_motor_controller/config.py`
-- `firmware/pico_motor_controller/kinematics.py`
-- `firmware/pico_motor_controller/test_kinematics.py`
-- `scripts/verify_system.sh`
-- `AI_HANDOFF.md`
+## Debug Bundle Workflow
 
-## Notes
+Preferred reproduction command on Pi5:
 
-- The panel already had richer functionality than the original PRD draft in several areas.
-- Route support existed under destination semantics; this patch set adds `route_goal` compatibility so tools and docs can target one shape.
-- Week 7 LiDAR work is effectively present in code.
-- Week 8 full camera-LiDAR fusion is still not fully complete as a dedicated shared representation node. Health/status integration exists, but full fusion still needs a real implementation if the checklist must be marked 100% complete.
+```bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+After reproducing, press `Ctrl+C` once and inspect the newest bundle:
+
+```bash
+BUNDLE_DIR="$(ls -dt /tmp/buddybot-debug-* | grep -v '\.tar\.gz$' | head -n 1)"
+echo "$BUNDLE_DIR"
+tail -n 80 "$BUNDLE_DIR/cmd_vel_manual.log"
+tail -n 80 "$BUNDLE_DIR/cmd_vel_final.log"
+tail -n 80 "$BUNDLE_DIR/pico_status.log"
+tail -n 120 "$BUNDLE_DIR/command_mux.tail.log"
+tail -n 120 "$BUNDLE_DIR/pico_bridge.tail.log"
+tail -n 120 "$BUNDLE_DIR/camera.tail.log"
+grep -n "Undervoltage\\|USB disconnect\\|error -71" "$BUNDLE_DIR/system_snapshot.log" | tail -n 40
+```
+
+How to read it quickly:
+- `cmd_vel_manual.log`: panel/manual command publication
+- `cmd_vel_final.log`: mux output that should actually reach the base
+- `pico_status.log`: whether Pico status stayed alive
+- `command_mux.tail.log`: manual vs idle flapping, source priority changes
+- `pico_bridge.tail.log`: serial disconnect/read failure evidence
+- `camera.tail.log`: camera reopen loop or parameter/open errors
+- `system_snapshot.log`: kernel undervoltage / USB disconnect evidence
+
+## High-Signal Files
+
+- [scripts/start_presentation_mode.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_presentation_mode.sh)
+- [scripts/run_demo_debug_bundle.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/run_demo_debug_bundle.sh)
+- [scripts/start_all_pi5.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_all_pi5.sh)
+- [scripts/start_mapping_panel.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_mapping_panel.sh)
+- [scripts/start_offline_demo.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_offline_demo.sh)
+- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py)
+- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html)
+- [software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py)
+- [docs/field_log.md](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/docs/field_log.md)
+
+## Known Residual Risks
+
+- If kernel logs show undervoltage and USB reconnects, no ROS patch can guarantee a clean long demo.
+- If Pico disappears from USB, `pico_bridge` cannot recover movement by itself.
+- If C920 vanishes from `lsusb` or `v4l2-ctl --list-devices`, treat it as hardware/runtime instability first, not a detector-node bug.
+- `command_mux` and `camera_node` still print shutdown-time ROS context errors during forced stop; these are noisy but secondary compared to the real USB instability.
+
+## Next AI Priority
+
+1. Preserve the current presentation path; do not regress manual toggle control.
+2. Keep documentation and launch commands aligned with the current package set.
+3. If new logs still show USB drops, bias toward reducing runtime load rather than adding more background nodes.
+4. Treat kernel undervoltage and USB disconnect evidence as first-class signals in any future diagnosis.

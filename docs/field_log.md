@@ -345,3 +345,223 @@ v4l2-ctl --list-devices
 미해결:
 - 실기에서 회전 정상화 여부 아직 미확인
 - 카메라 전원 문제 해결 안 됨 (하드웨어 이슈)
+
+## 2026-04-15 ~ 2026-04-16
+
+환경:
+- 장비: Raspberry Pi 5 (`pi@pi-desktop`)
+- 메인 레포: `BuddyBot`
+- 현장 기준 커밋 흐름:
+  - `be7e152` Guard Pi5 launcher against missing demo packages
+  - `dc64fe3` Prevent manual drive dropouts when minimap is idle
+  - `42b0b64` Improve panel diagnostics and debug bundle capture
+  - `66231ab` Fix camera rate params and debug bundle cleanup
+  - `6c45591` Add presentation mode for unstable USB power
+
+이번 라운드 핵심 목표:
+- 수동제어가 토글 방식으로 끊기지 않게 만들기
+- Pi5에서 카메라 / LiDAR / Pico를 가능한 한 동시에 살려서 시연 가능 상태 만들기
+- 디버그 로그를 한 번에 수집해서 원인을 다음 세션에서도 바로 이어받게 만들기
+- 발표 직전용 저부하 런처와 문서를 정리하기
+
+### 1. 수동제어 dropout 원인 확인 및 수정
+
+증상:
+- 패널에서 수동조작 버튼을 누르면 API는 `200 OK`
+- 하지만 실제 주행은 짧게 들어갔다가 바로 끊기거나 `command_mux`가 `manual -> idle`로 빠르게 오갔음
+
+원인:
+- `panel_server.manual_command()`가 수동 명령 전에 minimap 종료 경로를 호출
+- minimap이 실제로 돌고 있지 않아도 `stop_mini_map()`이 zero manual command를 inject
+- 결과적으로 panel이 반복 `/api/manual`을 보내는 동안 manual motion이 계속 지워짐
+
+수정:
+- `buddybot_panel/panel_server.py`에서 minimap이 실제 active일 때만 `_clear_manual_motion()` 하도록 수정
+
+확인 방법:
+- `command_mux.log` 또는 디버그 번들의 `command_mux.tail.log`에서 `manual` 상태가 수 초 이상 유지되는지 확인
+
+### 2. 누락 빌드 패키지 때문에 런처가 반쯤만 뜨는 문제 수정
+
+증상:
+- `start_all_pi5.sh` 실행 시 일부 노드가 뜨지 않거나
+- preflight에서 토픽이 없고
+- 사실상 `buddybot_msgs`, `buddybot_system`, `buddybot_vision` 등이 빌드되지 않은 상태였음
+
+수정:
+- `scripts/start_all_pi5.sh`에 필수 ROS 패키지 검사 추가
+- 누락 시 런처가 즉시 중단되고 필요한 `colcon build --packages-select ...` 명령을 그대로 출력하게 변경
+
+현장 기준 권장 빌드:
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+rm -rf build install log
+colcon build --symlink-install --packages-select \
+  buddybot_msgs \
+  buddybot_base \
+  buddybot_system \
+  buddybot_nav \
+  buddybot_panel \
+  buddybot_voice \
+  buddybot_vision
+source install/setup.bash
+```
+
+### 3. 카메라 정수 파라미터 타입 mismatch 수정
+
+증상:
+- `BUDDYBOT_CAMERA_FPS=10`
+- `BUDDYBOT_CAMERA_PUBLISH_RATE=5`
+- 같은 식으로 줬을 때 preflight camera test가 실패
+- camera log에는 `Trying to set parameter 'fps' ... expecting type 'DOUBLE'`가 남음
+
+수정:
+- `scripts/check_all_devices.sh`
+- `scripts/start_mapping_panel.sh`
+- `scripts/start_offline_demo.sh`
+
+위 세 스크립트에 `float_param_value()`를 넣어서 정수 문자열도 `10.0`, `5.0`처럼 넘기도록 수정
+
+결과:
+- 같은 값으로 다시 실행했을 때 preflight camera test가 PASS로 바뀜
+
+### 4. 카메라 / LiDAR / Pico 동시 preflight PASS 확인
+
+확인된 성공 케이스:
+- `320x240`
+- `10 fps`
+- `5 Hz publish`
+- 카메라 시작 지연 8초
+- LiDAR settle 지연 8초
+
+성공 시점 로그 기준:
+- `/buddybot/pico_status` PASS
+- `/scan` PASS
+- `/camera/image_raw` PASS
+- `lidar stability after camera start` PASS
+
+즉:
+- "세 개를 절대 동시에 못 돌린다"는 결론은 아님
+- 적어도 bring-up / preflight 단계에서는 동시에 붙는 조합이 확인됨
+
+### 5. 그런데 장시간 실기에서는 여전히 하드웨어성 실패가 남음
+
+디버그 번들과 커널 로그에서 반복 확인된 것:
+- `Undervoltage detected!`
+- `USB disconnect`
+- `can't set config #1, error -71`
+- Pico 재연결 흔적
+- `Serial receive error: device reports readiness to read but returned no data`
+
+의미:
+- ROS 노드가 아무리 살아 있어도 USB 레벨에서 장치가 잠깐 사라지면 완전한 소프트웨어 복구는 불가능
+- 특히 Pico와 C920은 초기에 살아 있어도 나중에 다시 죽을 수 있음
+
+현장 판단:
+- 이 문제는 ROS QoS나 panel API 단독 문제로 보면 안 됨
+- 저전압/순간 전압 강하/USB 재열거가 실제 원인 후보
+
+### 6. 디버그 번들 수집 자동화
+
+추가된 스크립트:
+- `scripts/run_demo_debug_bundle.sh`
+
+수집 항목:
+- `/cmd_vel_manual`
+- `/cmd_vel_final`
+- `/buddybot/pico_status`
+- `/scan`
+- `/camera/image_raw`
+- detector/navigation/command/safety status
+- repo head / repo status / lsusb / v4l2 / vcgencmd / journalctl
+- 각 노드 tail log
+
+수정 포인트:
+- 초기에 `exec` 때문에 cleanup이 건너뛰어졌는데 이를 제거해서 종료 후 번들이 항상 남도록 수정
+
+현장 사용법:
+
+```bash
+cd ~/BuddyBot
+bash scripts/run_demo_debug_bundle.sh mapping
+```
+
+최신 번들 확인:
+
+```bash
+BUNDLE_DIR="$(ls -dt /tmp/buddybot-debug-* | grep -v '\.tar\.gz$' | head -n 1)"
+echo "$BUNDLE_DIR"
+tail -n 120 "$BUNDLE_DIR/command_mux.tail.log"
+tail -n 120 "$BUNDLE_DIR/pico_bridge.tail.log"
+tail -n 120 "$BUNDLE_DIR/camera.tail.log"
+grep -n "Undervoltage\\|USB disconnect\\|error -71" "$BUNDLE_DIR/system_snapshot.log" | tail -n 40
+```
+
+### 7. 발표 직전 대응: presentation mode 추가
+
+추가된 스크립트:
+- `scripts/start_presentation_mode.sh`
+
+목적:
+- 하드웨어를 당장 바꾸지 못하는 상황에서 시연 성공 확률을 높이기 위한 저부하 기본값 제공
+
+기본 동작:
+- preflight 재기동 비활성화
+- microphone listener 비활성화
+- Pi speaker 출력 비활성화
+- 카메라 해상도/FPS/publish rate 낮춤
+- MJPG + buffer size 1 유지
+- `run_demo_debug_bundle.sh`를 통해 종료 후 자동 로그 수집
+
+이번 라운드 추가 보강:
+- detector 런타임 파라미터도 프레젠테이션 모드에서 낮게 넘기도록 정리
+  - `BUDDYBOT_DETECT_INTERVAL`
+  - `BUDDYBOT_DETECT_CONFIDENCE`
+  - `BUDDYBOT_DETECT_HOG_RESIZE_WIDTH`
+  - `BUDDYBOT_DETECT_ALLOW_HOG_FALLBACK`
+
+권장 실행:
+
+```bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+더 보수적인 값:
+
+```bash
+cd ~/BuddyBot
+BUDDYBOT_CAMERA_WIDTH=320 \
+BUDDYBOT_CAMERA_HEIGHT=240 \
+BUDDYBOT_CAMERA_FPS=10 \
+BUDDYBOT_CAMERA_PUBLISH_RATE=5 \
+BUDDYBOT_CAMERA_PIXEL_FORMAT=MJPG \
+BUDDYBOT_CAMERA_BUFFER_SIZE=1 \
+BUDDYBOT_DETECT_INTERVAL=8 \
+BUDDYBOT_DETECT_HOG_RESIZE_WIDTH=320 \
+bash scripts/start_presentation_mode.sh mapping
+```
+
+### 8. 패널 UI/상태 표시 보강
+
+정리된 내용:
+- Pico 상태 카드가 단순 connected/not-connected 수준이 아니라 더 유의미한 상태 문자열과 encoder 값까지 보여주도록 보강
+- minimap start/stop/refresh 버튼 겹침 완화
+- camera toolbar 배치 조정
+
+의미:
+- 발표 중 "지금 연결됐는지", "바퀴가 실제로 응답하는지"를 패널만 보고 판단하기 쉬워짐
+
+### 9. 미해결 / 다음 라운드 우선순위
+
+미해결:
+- 장시간 런에서 C920가 다시 사라지는 경우가 있음
+- Pico USB가 짧게 끊기면 실시간 복구는 어려움
+- `command_mux`/`camera_node` 종료 시점 ROS context 예외가 로그에 남음
+
+다음 우선순위:
+1. 발표 전에는 `start_presentation_mode.sh` 경로를 기준으로만 재검증
+2. 새 로그를 받을 때는 반드시 번들 디렉토리 기준으로 해석
+3. 커널 로그에 undervoltage / USB disconnect가 보이면 소프트웨어 원인보다 먼저 취급
