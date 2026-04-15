@@ -116,4 +116,4 @@ echo "[debug] run the demo, reproduce the issue, then press Ctrl+C once"
 echo "[debug] after shutdown a log bundle will be collected automatically"
 
 cd "$ROOT_DIR"
-exec bash "$ROOT_DIR/scripts/start_all_pi5.sh" "$MODE"
+bash "$ROOT_DIR/scripts/start_all_pi5.sh" "$MODE"

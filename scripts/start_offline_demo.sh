@@ -49,6 +49,15 @@ bool_param_value() {
   fi
 }
 
+float_param_value() {
+  local raw="${1:-0}"
+  if [[ "$raw" =~ ^-?[0-9]+$ ]]; then
+    echo "${raw}.0"
+  else
+    echo "$raw"
+  fi
+}
+
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 safe_source "$WS_DIR/install/setup.bash"
 configure_offline_ros
@@ -72,8 +81,8 @@ CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-4}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-6}"
 CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
 CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
-CAMERA_FPS="${BUDDYBOT_CAMERA_FPS:-15.0}"
-CAMERA_PUBLISH_RATE="${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}"
+CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-15.0}")"
+CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-10.0}")"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
