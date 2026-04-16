@@ -62,10 +62,12 @@ class PicoBridgeNode(Node):
         # Declare parameters with defaults
         self.declare_parameter('serial_port', '/dev/ttyACM0')
         self.declare_parameter('serial_baudrate', 115200)
-        self.declare_parameter('heartbeat_interval', 1.0)
+        self.declare_parameter('heartbeat_interval', 0.5)
         self.declare_parameter('status_timeout', 5.0)
         self.declare_parameter('max_reconnect_attempts', 10)
         self.declare_parameter('cmd_vel_timeout', 0.5)
+        self.declare_parameter('auto_clear_estop', True)
+        self.declare_parameter('estop_clear_interval', 1.0)
 
         # Get parameters
         self.serial_port = self.get_parameter('serial_port').value
@@ -74,6 +76,8 @@ class PicoBridgeNode(Node):
         self.status_timeout = self.get_parameter('status_timeout').value
         self.max_reconnect_attempts = self.get_parameter('max_reconnect_attempts').value
         self.cmd_vel_timeout = self.get_parameter('cmd_vel_timeout').value
+        self.auto_clear_estop = bool(self.get_parameter('auto_clear_estop').value)
+        self.estop_clear_interval = float(self.get_parameter('estop_clear_interval').value)
 
         # Initialize components
         self.protocol = UARTProtocol()
@@ -124,6 +128,7 @@ class PicoBridgeNode(Node):
         self._last_sent_wz = 0.0
         self._last_cmd_send_time = 0.0
         self._last_cmd_log_time = 0.0
+        self._last_estop_clear_attempt = 0.0
 
         # Connect to Pico
         selected_port = self._connect_serial_with_fallback()
@@ -132,6 +137,7 @@ class PicoBridgeNode(Node):
             self.serial_manager.port = selected_port
             self.get_logger().info(f"Connected to Pico serial device {selected_port}")
             self.serial_manager.start_receive_thread()
+            self._last_estop_clear_attempt = 0.0
         else:
             self.get_logger().error("Failed to connect to Pico on startup; receive loop will retry using SerialManager backoff")
 
@@ -148,6 +154,42 @@ class PicoBridgeNode(Node):
         self.get_logger().info(f"  Status timeout: {self.status_timeout}s")
         self.get_logger().info(f"  Max reconnect attempts: {self.max_reconnect_attempts}")
         self.get_logger().info(f"  Command timeout: {self.cmd_vel_timeout}s")
+        self.get_logger().info(f"  Auto clear estop: {self.auto_clear_estop}")
+        self.get_logger().info(f"  E-stop clear interval: {self.estop_clear_interval}s")
+
+    def _send_control_message(self, message: str, *, success_log: str | None = None, failure_log: str | None = None) -> bool:
+        if self.serial_manager.send_message(message):
+            if success_log:
+                self.get_logger().info(success_log)
+            return True
+        if failure_log:
+            self.get_logger().warn(failure_log)
+        return False
+
+    def _attempt_estop_clear(self, reason: str) -> bool:
+        if not self.auto_clear_estop:
+            return False
+
+        now = time.time()
+        if (now - self._last_estop_clear_attempt) < self.estop_clear_interval:
+            return False
+
+        self._last_estop_clear_attempt = now
+        self.get_logger().warn(f"Pico estop is active, attempting CLEAR ({reason})")
+        if not self._send_control_message(
+            self.protocol.MSG_CLEAR,
+            success_log="Sent CLEAR to Pico",
+            failure_log="Failed to send CLEAR to Pico",
+        ):
+            return False
+
+        # Follow CLEAR with a heartbeat so the watchdog is immediately refreshed.
+        self._send_control_message(
+            self.protocol.format_heartbeat(),
+            success_log="Sent heartbeat after CLEAR",
+            failure_log="Failed to send heartbeat after CLEAR",
+        )
+        return True
 
     def _cmd_vel_callback(self, msg: Twist) -> None:
         """
@@ -210,11 +252,14 @@ class PicoBridgeNode(Node):
         3. Provides timing reference for Pico
         """
         try:
+            if self.emergency_stop_active:
+                self._attempt_estop_clear("heartbeat")
             heartbeat_msg = self.protocol.format_heartbeat()
-            if self.serial_manager.send_message(heartbeat_msg):
-                self.get_logger().info("Heartbeat active")
-            else:
-                self.get_logger().warn("Failed to send heartbeat - serial disconnected")
+            self._send_control_message(
+                heartbeat_msg,
+                success_log="Heartbeat active",
+                failure_log="Failed to send heartbeat - serial disconnected",
+            )
 
         except Exception as e:
             self.get_logger().error(f"Error sending heartbeat: {e}")
@@ -302,6 +347,8 @@ class PicoBridgeNode(Node):
 
             self.status_publisher.publish(status_msg)
             self.get_logger().debug("Published Pico status")
+            if status_msg.emergency_stop:
+                self._attempt_estop_clear("status_update")
 
         except Exception as e:
             self.get_logger().error(f"Error publishing status: {e}")
