@@ -32,11 +32,26 @@ start_topic_capture() {
   local name="$1"
   local topic="$2"
   local type_name="$3"
-  nohup ros2 topic echo "$topic" "$type_name" > "$BUNDLE_DIR/$name.log" 2>&1 &
+  local log_path="$BUNDLE_DIR/$name.log"
+  {
+    echo "### ros2 topic echo $topic $type_name"
+    echo "### started_at $(date '+%Y-%m-%d %H:%M:%S %z')"
+    echo
+  } > "$log_path"
+  if command -v stdbuf >/dev/null 2>&1; then
+    nohup env PYTHONUNBUFFERED=1 stdbuf -oL -eL ros2 topic echo "$topic" "$type_name" >> "$log_path" 2>&1 &
+  else
+    nohup env PYTHONUNBUFFERED=1 ros2 topic echo "$topic" "$type_name" >> "$log_path" 2>&1 &
+  fi
   TOPIC_PIDS+=("$!")
 }
 
 cleanup() {
+  if command -v curl >/dev/null 2>&1; then
+    capture_cmd panel_status curl -s http://127.0.0.1:8090/api/status
+    capture_cmd panel_minimap curl -s http://127.0.0.1:8090/api/minimap
+  fi
+
   for pid in "${TOPIC_PIDS[@]:-}"; do
     kill "$pid" 2>/dev/null || true
   done
@@ -100,16 +115,24 @@ fi
 if command -v vcgencmd >/dev/null 2>&1; then
   capture_cmd vcgencmd vcgencmd get_throttled
 fi
+if command -v ros2 >/dev/null 2>&1; then
+  capture_cmd topic_info_manual ros2 topic info -v /cmd_vel_manual
+  capture_cmd topic_info_final ros2 topic info -v /cmd_vel_final
+  capture_cmd topic_info_safety ros2 topic info -v /system/safety_status
+  capture_cmd topic_info_lidar ros2 topic info -v /system/lidar_avoidance_status
+fi
 
 start_topic_capture cmd_vel_manual /cmd_vel_manual geometry_msgs/msg/Twist
 start_topic_capture cmd_vel_final /cmd_vel_final geometry_msgs/msg/Twist
 start_topic_capture pico_status /buddybot/pico_status buddybot_msgs/msg/Status
+start_topic_capture pico_safety /buddybot/pico_safety_event std_msgs/msg/String
 start_topic_capture scan /scan sensor_msgs/msg/LaserScan
 start_topic_capture camera_image /camera/image_raw sensor_msgs/msg/Image
 start_topic_capture detector_status /vision/detector_status std_msgs/msg/String
 start_topic_capture navigation_status /nav/navigation_status std_msgs/msg/String
 start_topic_capture command_status /system/command_status std_msgs/msg/String
 start_topic_capture safety_status /system/safety_status std_msgs/msg/String
+start_topic_capture lidar_avoidance_status /system/lidar_avoidance_status std_msgs/msg/String
 
 echo "[debug] writing logs to $BUNDLE_DIR"
 echo "[debug] run the demo, reproduce the issue, then press Ctrl+C once"

@@ -233,6 +233,10 @@ class PanelBridge:
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._manual_updated_at = 0.0
+        self._manual_request_count = 0
+        self._last_manual_request_signature: Optional[str] = None
+        self._last_manual_request_log_at = 0.0
         self._last_cli_scan_attempt = 0.0
         self._mini_map: Optional[Dict[str, Any]] = None
         self._mini_map_active = False
@@ -857,6 +861,7 @@ class PanelBridge:
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
+            "manual_command": self.manual_command_state(),
             "safety_active": self.safety_active(),
             "safety_status": self.safety_status(),
             "person_detected": self.person_detected(),
@@ -954,6 +959,18 @@ class PanelBridge:
     def manual_active(self) -> bool:
         with self._lock:
             return self._manual_active
+
+    def manual_command_state(self) -> Dict[str, Any]:
+        with self._lock:
+            updated_at = float(self._manual_updated_at)
+            return {
+                "active": bool(self._manual_active),
+                "linear_x": round(float(self._manual_linear_x), 3),
+                "linear_y": round(float(self._manual_linear_y), 3),
+                "angular_z": round(float(self._manual_angular_z), 3),
+                "age_sec": round(max(0.0, time.time() - updated_at), 2) if updated_at > 0.0 else None,
+                "request_count": int(self._manual_request_count),
+            }
 
     def safety_active(self) -> bool:
         return bool(self._safety_active)
@@ -1136,6 +1153,7 @@ class PanelBridge:
             self._manual_linear_x = float(linear_x)
             self._manual_linear_y = float(linear_y)
             self._manual_angular_z = float(angular_z)
+            self._manual_updated_at = time.time()
 
     def _set_explore_phase(self, phase: str, duration_sec: float, direction: float, now: Optional[float] = None) -> None:
         started_at = time.time() if now is None else float(now)
@@ -1318,8 +1336,33 @@ class PanelBridge:
             self._manual_linear_x = 0.0
             self._manual_linear_y = 0.0
             self._manual_angular_z = 0.0
+            self._manual_updated_at = time.time()
         if publish_zero and self.ros2_connected and self._manual_pub is not None:
             self._manual_pub.publish(Twist())
+
+    def _logger(self):
+        if self._node is not None:
+            return self._node.get_logger()
+        return None
+
+    @staticmethod
+    def _format_manual_values(linear_x: float, linear_y: float, angular_z: float) -> str:
+        return f"vx={linear_x:.3f}, vy={linear_y:.3f}, wz={angular_z:.3f}"
+
+    def _log_manual_request(self, direction: str, speed: float, linear_x: float, linear_y: float, angular_z: float, note: str = "") -> None:
+        logger = self._logger()
+        if logger is None:
+            return
+        signature = f"{direction}:{speed:.3f}:{linear_x:.3f}:{linear_y:.3f}:{angular_z:.3f}:{note}"
+        now = time.time()
+        if signature == self._last_manual_request_signature and (now - self._last_manual_request_log_at) < 1.0:
+            return
+        self._last_manual_request_signature = signature
+        self._last_manual_request_log_at = now
+        suffix = f" ({note})" if note else ""
+        logger.info(
+            f"Manual request {direction} speed={speed:.3f} -> {self._format_manual_values(linear_x, linear_y, angular_z)}{suffix}"
+        )
 
     def cancel_navigation(self) -> None:
         if not self.ros2_connected or self._nav_cancel_pub is None:
@@ -1514,12 +1557,21 @@ class PanelBridge:
             angular_z = -speed
 
         if direction == "stop":
+            with self._lock:
+                self._manual_request_count += 1
+            self._log_manual_request(direction, speed, 0.0, 0.0, 0.0, note="clear_manual_motion")
             self._clear_manual_motion()
             return
 
         if not self.ros2_connected or self._manual_pub is None:
+            with self._lock:
+                self._manual_request_count += 1
+            self._log_manual_request(direction, speed, linear_x, linear_y, angular_z, note="ros2_manual_publisher_unavailable")
             return
 
+        with self._lock:
+            self._manual_request_count += 1
+        self._log_manual_request(direction, speed, linear_x, linear_y, angular_z)
         self._set_manual_motion(linear_x, linear_y, angular_z)
 
     def go_waypoint(self, name: str) -> None:

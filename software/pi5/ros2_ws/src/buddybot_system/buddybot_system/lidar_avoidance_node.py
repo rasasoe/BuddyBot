@@ -98,6 +98,9 @@ class LidarAvoidanceNode(Node):
         self.latest_command_source = source
         self.latest_command_time = time.time()
 
+    def _format_command(self, msg: Twist) -> str:
+        return f"{msg.linear.x:.3f}/{msg.linear.y:.3f}/{msg.angular.z:.3f}"
+
     def timer_callback(self) -> None:
         if self.latest_scan is None:
             self._clear_override("scan_missing")
@@ -129,11 +132,17 @@ class LidarAvoidanceNode(Node):
         if front < self.stop_distance:
             override.linear.x = -self.reverse_speed if self.latest_command.linear.x > 0.0 else 0.0
             override.angular.z = -self.turn_speed if turn_left else self.turn_speed
-            status = f"avoid_stop:front={front:.2f},left={left},right={right}"
+            status = (
+                f"avoid_stop:front={front:.2f},left={left},right={right},source={self.latest_command_source},"
+                f"cmd={self._format_command(self.latest_command)}"
+            )
         else:
             override.linear.x = 0.0
             override.angular.z = -self.turn_speed * 0.75 if turn_left else self.turn_speed * 0.75
-            status = f"avoid_turn:front={front:.2f},left={left},right={right}"
+            status = (
+                f"avoid_turn:front={front:.2f},left={left},right={right},source={self.latest_command_source},"
+                f"cmd={self._format_command(self.latest_command)}"
+            )
 
         self.override_pub.publish(override)
         self.override_active = True

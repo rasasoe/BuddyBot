@@ -123,6 +123,7 @@ class PicoBridgeNode(Node):
         self._last_sent_vy = 0.0
         self._last_sent_wz = 0.0
         self._last_cmd_send_time = 0.0
+        self._last_cmd_log_time = 0.0
 
         # Connect to Pico
         selected_port = self._connect_serial_with_fallback()
@@ -170,6 +171,12 @@ class PicoBridgeNode(Node):
                 abs(vy - self._last_sent_vy) > 0.001 or
                 abs(wz - self._last_sent_wz) > 0.001
             )
+            should_log = velocity_changed or (abs(vx) > 0.001 or abs(vy) > 0.001 or abs(wz) > 0.001)
+            if should_log and (velocity_changed or (now - self._last_cmd_log_time) >= 1.0):
+                self.get_logger().info(
+                    f"cmd_vel_final rx vx={vx:.3f} vy={vy:.3f} wz={wz:.3f} serial_connected={self.serial_manager.is_connected()}"
+                )
+                self._last_cmd_log_time = now
             # Send if velocity changed, or at most 5 Hz for keepalive
             if not velocity_changed and (now - self._last_cmd_send_time) < 0.2:
                 return
@@ -186,7 +193,9 @@ class PicoBridgeNode(Node):
                 self._last_cmd_send_time = now
                 self.get_logger().debug(f"Sent velocity command: vx={vx:.3f}, vy={vy:.3f}, wz={wz:.3f}")
             else:
-                self.get_logger().warn("Failed to send velocity command - serial disconnected")
+                self.get_logger().warn(
+                    f"Failed to send velocity command - serial disconnected vx={vx:.3f} vy={vy:.3f} wz={wz:.3f}"
+                )
 
         except Exception as e:
             self.get_logger().error(f"Error processing velocity command: {e}")

@@ -39,6 +39,8 @@ class SafetySupervisorNode(Node):
 
         self.last_command_time = time.time()
         self.safety_trigger_time = 0
+        self.last_command_status = "unknown"
+        self.last_lidar_status = "unknown"
 
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -76,11 +78,13 @@ class SafetySupervisorNode(Node):
                 self.get_logger().error(f"Invalid TTC message format: {msg.data}")
 
     def lidar_status_callback(self, msg: String):
+        self.last_lidar_status = msg.data or "unknown"
         active = msg.data.startswith("avoid_stop:")
         self._update_safety_source("lidar_blocked", active)
 
     def command_status_callback(self, msg: String):
         current_time = time.time()
+        self.last_command_status = msg.data or "unknown"
         if current_time - self.last_command_time > self.command_timeout:
             self._update_safety_source("command_timeout", True)
         else:
@@ -104,12 +108,16 @@ class SafetySupervisorNode(Node):
             self.safety_active = True
             self.safety_trigger_time = time.time()
             active_sources = [sid for sid, s in self.safety_sources.items() if s["active"]]
-            self.get_logger().warn(f"SYSTEM SAFETY ACTIVATED: {active_sources}")
+            self.get_logger().warn(
+                f"SYSTEM SAFETY ACTIVATED: {active_sources} command={self.last_command_status} lidar={self.last_lidar_status}"
+            )
 
         elif not new_safety_state and self.safety_active:
             if time.time() - self.safety_trigger_time > self.safety_latch_time:
                 self.safety_active = False
-                self.get_logger().info("SYSTEM SAFETY CLEARED")
+                self.get_logger().info(
+                    f"SYSTEM SAFETY CLEARED command={self.last_command_status} lidar={self.last_lidar_status}"
+                )
 
         self._publish_safety_state()
 
@@ -120,7 +128,12 @@ class SafetySupervisorNode(Node):
 
         active_sources = [sid for sid, s in self.safety_sources.items() if s["active"]]
         status_msg = String()
-        status_msg.data = f"active:{self.safety_active},sources:{','.join(active_sources)}"
+        command_status = self.last_command_status.replace(",", "|")
+        lidar_status = self.last_lidar_status.replace(",", "|")
+        status_msg.data = (
+            f"active:{self.safety_active},sources:{','.join(active_sources)},"
+            f"command:{command_status},lidar:{lidar_status}"
+        )
         self.safety_status_publisher.publish(status_msg)
 
     def timer_callback(self):

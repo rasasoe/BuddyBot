@@ -28,6 +28,9 @@ class CommandMuxNode(Node):
         self.safety_active = False
         self.estop_latched = False
         self.current_priority = self.PRIORITY_IDLE
+        self.current_source = "idle"
+        self.current_reason = "startup"
+        self._stale_sources_logged = set()
 
         zero = Twist()
         now = time.time()
@@ -76,42 +79,84 @@ class CommandMuxNode(Node):
     def _update_command(self, source, cmd):
         if source not in self.commands:
             return
+        previous_cmd = self.commands[source]["cmd"]
+        previous_active = self.commands[source]["active"]
         self.commands[source]["cmd"] = cmd
         self.commands[source]["timestamp"] = time.time()
         self.commands[source]["active"] = not self._is_zero(cmd)
+        self._stale_sources_logged.discard(source)
+        if self.commands[source]["active"] != previous_active or self._command_changed(previous_cmd, cmd):
+            self.get_logger().info(
+                f"Command update {source}: active={self.commands[source]['active']} {self._format_cmd(cmd)}"
+            )
+
+    def _command_changed(self, first, second):
+        return (
+            abs(first.linear.x - second.linear.x) > 1e-4
+            or abs(first.linear.y - second.linear.y) > 1e-4
+            or abs(first.angular.z - second.angular.z) > 1e-4
+        )
+
+    def _format_cmd(self, cmd):
+        return f"vx={cmd.linear.x:.3f}, vy={cmd.linear.y:.3f}, wz={cmd.angular.z:.3f}"
+
+    def _format_compact_cmd(self, cmd):
+        return f"{cmd.linear.x:.3f}/{cmd.linear.y:.3f}/{cmd.angular.z:.3f}"
 
     def _evaluate_commands(self):
         zero = Twist()
         if self.estop_latched:
-            return zero, "estop", self.PRIORITY_ESTOP
+            return zero, "estop", self.PRIORITY_ESTOP, "estop_latched"
         if self.safety_active:
-            return zero, "safety_latched", self.PRIORITY_SAFETY_OVERRIDE
+            return zero, "safety_latched", self.PRIORITY_SAFETY_OVERRIDE, "system_safety_active"
 
         now = time.time()
         best_source = "idle"
         best = self.commands["idle"]
+        saw_stale_command = False
 
         for source in ("follow", "nav", "manual", "safety_override"):
             data = self.commands[source]
             if not data["active"]:
                 continue
-            if now - data["timestamp"] > self.command_timeout:
+            age = now - data["timestamp"]
+            if age > self.command_timeout:
+                saw_stale_command = True
+                if source not in self._stale_sources_logged:
+                    self.get_logger().warn(
+                        f"Command stale {source}: age={age:.3f}s timeout={self.command_timeout:.3f}s {self._format_cmd(data['cmd'])}"
+                    )
+                    self._stale_sources_logged.add(source)
                 continue
             if data["priority"] > best["priority"]:
                 best_source = source
                 best = data
 
-        return best["cmd"], best_source, best["priority"]
+        if best_source == "idle":
+            reason = "stale_commands_only" if saw_stale_command else "no_active_commands"
+        else:
+            reason = f"selected_{best_source}"
+        return best["cmd"], best_source, best["priority"], reason
 
     def timer_callback(self):
-        cmd, source, priority = self._evaluate_commands()
-        if priority != self.current_priority:
-            self.get_logger().info(f"Command source -> {source} (priority={priority})")
+        cmd, source, priority, reason = self._evaluate_commands()
+        if priority != self.current_priority or source != self.current_source or reason != self.current_reason:
+            self.get_logger().info(
+                f"Command source -> {source} (priority={priority}, reason={reason}, cmd={self._format_cmd(cmd)})"
+            )
             self.current_priority = priority
+            self.current_source = source
+            self.current_reason = reason
 
         self.cmd_publisher.publish(cmd)
         status = String()
-        status.data = f"source:{source},priority:{priority},safety:{self.safety_active},estop:{self.estop_latched}"
+        manual = self.commands["manual"]
+        manual_age = max(0.0, time.time() - manual["timestamp"]) if manual["timestamp"] > 0.0 else -1.0
+        status.data = (
+            f"source:{source},priority:{priority},safety:{self.safety_active},estop:{self.estop_latched},"
+            f"reason:{reason},manual_active:{manual['active']},manual_age:{manual_age:.2f},"
+            f"manual_cmd:{self._format_compact_cmd(manual['cmd'])},selected_cmd:{self._format_compact_cmd(cmd)}"
+        )
         self.status_publisher.publish(status)
 
 
