@@ -5,7 +5,7 @@ This module handles low-level motor control using PWM and direction pins.
 """
 
 import machine
-from config import MAX_MOTOR_SPEED, MIN_MOTOR_SPEED
+from config import MAX_MOTOR_SPEED, MIN_MOTOR_SPEED, MOTOR_DIRECTION_SIGNS
 from pins import motor_pins
 
 class MotorDriver:
@@ -14,6 +14,7 @@ class MotorDriver:
         self.pwm = motor_pins[motor_name]['pwm']
         self.dir1 = motor_pins[motor_name]['dir1']
         self.dir2 = motor_pins[motor_name]['dir2']
+        self.direction_sign = 1 if MOTOR_DIRECTION_SIGNS.get(motor_name, 1) >= 0 else -1
         self.pwm.freq(1000)  # 1kHz PWM frequency
 
     def set_speed(self, speed):
@@ -23,6 +24,7 @@ class MotorDriver:
         """
         # Clamp speed to valid range
         speed = max(MIN_MOTOR_SPEED, min(MAX_MOTOR_SPEED, speed))
+        speed *= self.direction_sign
 
         if speed > 0:
             # Forward direction

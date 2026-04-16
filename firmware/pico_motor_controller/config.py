@@ -28,6 +28,17 @@ PID_KD = 0.05
 MAX_MOTOR_SPEED = 1.0
 MIN_MOTOR_SPEED = -1.0
 
+# Per-wheel motor polarity correction for the real BuddyBot wiring.
+# Keep these as +/-1 so field fixes can be made without rewiring or
+# changing the higher-level kinematics. Current field symptom was that
+# pure forward commands spun in place, which most strongly suggested the
+# front-right motor direction was inverted relative to the software model.
+MOTOR_DIRECTION_SIGNS = {
+    'left': 1,
+    'right': -1,
+    'back': 1,
+}
+
 # Battery ADC settings
 BATTERY_ADC_PIN = 26
 BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0  # Assuming voltage divider

@@ -238,6 +238,39 @@ BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_mapping_one_terminal.sh
 1. `colcon build --symlink-install --packages-select buddybot_panel buddybot_nav buddybot_vision buddybot_voice`
 2. `bash scripts/start_mapping_one_terminal.sh`
 3. 패널 또는 `/voice/text`로 `버디봇`, `버디봇 앞으로`, `버디봇 좌회전`, `버디봇 정지` 확인
+
+## 2026-04-16 추가 작업: Pi5 전원 완화와 모터 방향 보정
+
+환경:
+- 장비: Raspberry Pi 5 (`pi@pi-desktop`)
+- 메인 레포: `BuddyBot`
+- 기준 커밋: `8369eae`
+
+실기 관찰:
+- `PSU_MAX_CURRENT=5000` 적용 전후 비교에서 under-voltage 빈도는 줄었지만, 여전히 Pico USB CDC(`ttyACM0`) 재열거가 간헐적으로 보였음
+- 매우 낮은 카메라 설정(`160x120 @ 5fps publish 2Hz`)에서는 bringup 자체는 더 자주 살아남았음
+- 그런데 manual 전진/후진/회전/측면 이동 명령 모두에서 "제자리 회전"처럼 보이는 현상이 계속 보고됨
+- 상위 ROS 경로는 이미 검증되어 있었으므로, 이번 증상은 Pico 하위 모터 극성/방향과 더 잘 맞았음
+
+해석:
+- `kinematics.py`의 회전 mixer 문제는 이전 커밋에서 이미 보강되어 있었음
+- 이번 증상은 pure forward(`vx>0, vy=0, wz=0`)에서도 spin이 나는 패턴이라, front pair 중 한쪽 모터의 방향이 소프트웨어 모델과 반대일 가능성이 가장 큼
+- 현장 기본 보정값으로 `right` 모터 방향을 반전하는 계층을 추가함
+
+반영 내용:
+- `firmware/pico_motor_controller/config.py`
+  - `MOTOR_DIRECTION_SIGNS` 추가
+  - 기본값: `left=+1`, `right=-1`, `back=+1`
+- `firmware/pico_motor_controller/motor_driver.py`
+  - 모터 출력 직전에 wheel-specific polarity를 적용하도록 변경
+- `firmware/pico_motor_controller/README.md`
+  - 방향 보정 위치와 현장 기본값 문서화
+
+다음 실기 확인:
+1. Pico에 최신 `config.py`, `motor_driver.py`, `main.py` 배포
+2. bringup 후 manual 전진 버튼으로 `cmd_vel_final`이 `vx>0, vy=0, wz=0`인지 재확인
+3. 전진 시 제자리 회전이 사라졌는지 확인
+4. 만약 반대로 뒤로 가면 `left/right/back` 중 필요한 축만 `+1/-1`로 재조정
 4. `tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/voice.log`
 5. 회전이 여전히 약하면 `ROTATION_MIX_GAIN`를 `1.2 ~ 1.5`로 소폭 올려 재검증
 
