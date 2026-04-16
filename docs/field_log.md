@@ -271,6 +271,21 @@ BUDDYBOT_DISABLE_CAMERA=1 bash scripts/start_mapping_one_terminal.sh
 2. bringup 후 manual 전진 버튼으로 `cmd_vel_final`이 `vx>0, vy=0, wz=0`인지 재확인
 3. 전진 시 제자리 회전이 사라졌는지 확인
 4. 만약 반대로 뒤로 가면 `left/right/back` 중 필요한 축만 `+1/-1`로 재조정
+
+추가 관찰:
+- `PSU_MAX_CURRENT=5000`를 EEPROM에 반영한 뒤 초기 bringup은 이전보다 조금 더 오래 살아남는 편이었음
+- 그러나 `dmesg`에는 여전히 간헐적인 `usb 2-2: USB disconnect`와 `cdc_acm` 재열거가 보였음
+- 매우 낮은 카메라 프로파일(`160x120 @ 5fps publish 2Hz`)에서는 `camera_node` 초기화 자체는 성공했음
+- 하지만 `/camera/image_raw`가 실제 publish되지 않는 경우가 있었고, `camera.log`에는 과거 실행의 fatal line이 섞여 있어 단독 node 실행으로 재확인 필요했음
+- `follow_controller_node`는 `/vision/person_bbox`에서 QoS mismatch 경고가 계속 보여서, 추종 path는 전원 문제와 별개로 추가 수정이 필요함
+
+운영 메모:
+- 서로 다른 노트북/세션에서 작업을 이어갈 때 매번 긴 프롬프트를 새로 쓰는 비용이 컸음
+- 이 문제를 줄이기 위해 `docs/CODEX_RESUME_WORKFLOW.md`를 추가했고, 앞으로는
+  1. `AI_HANDOFF.md`
+  2. `docs/field_log.md` 최신 항목
+  3. `docs/CODEX_RESUME_WORKFLOW.md`
+  순서로 읽는 것을 표준 흐름으로 삼음
 4. `tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/voice.log`
 5. 회전이 여전히 약하면 `ROTATION_MIX_GAIN`를 `1.2 ~ 1.5`로 소폭 올려 재검증
 

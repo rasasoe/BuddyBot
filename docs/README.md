@@ -11,13 +11,15 @@ BuddyBot은 라즈베리 파이 5 + 라즈베리 파이 피코 기반 자율 주
 - **[uart_protocol.md](uart_protocol.md)**: Pi 5와 Pico 간 UART 통신 사양
 - **[development_plan.md](development_plan.md)**: 구현 로드맵 및 마일스톤
 - **[field_log.md](field_log.md)**: 날짜별 실기 디버깅 로그 및 다음 작업환경용 Codex 인수인계
+- **[CODEX_RESUME_WORKFLOW.md](CODEX_RESUME_WORKFLOW.md)**: 다른 노트북/다음날/새 Codex 세션에서 바로 이어가기 위한 재개 절차
 - **[TEAM_SETUP_PI5_AND_PICO.md](TEAM_SETUP_PI5_AND_PICO.md)**: Pi5/Pico 설치, 빌드, 시연 순서
 - **[bringup.md](bringup.md)**: 현장 Bring-up 체크리스트
 
 최근 Pi5 실기에서 가장 중요한 문서 흐름:
 1. `../AI_HANDOFF.md`
 2. `field_log.md` 최신 날짜 항목
-3. `TEAM_SETUP_PI5_AND_PICO.md`
+3. `CODEX_RESUME_WORKFLOW.md`
+4. `TEAM_SETUP_PI5_AND_PICO.md`
 
 ## 빠른 시작
 

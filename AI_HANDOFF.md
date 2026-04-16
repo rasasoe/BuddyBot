@@ -99,6 +99,18 @@ colcon build --symlink-install --packages-select \
 source install/setup.bash
 ```
 
+## Cross-Laptop Resume Rule
+
+If work moves to another laptop or another Codex session, do not re-explain everything from scratch.
+
+Use this repo workflow instead:
+- read `AI_HANDOFF.md`
+- read the latest dated section in `docs/field_log.md`
+- read `docs/CODEX_RESUME_WORKFLOW.md`
+- then have the new session summarize current state before doing anything else
+
+This is now the expected handoff path for BuddyBot field debugging.
+
 ## Recommended Demo Start
 
 ### Normal full-stack start

@@ -26,6 +26,7 @@
 
 - 팀원이 다른 AI에게 바로 넘길 때: `AI_HANDOFF.md`
 - `docs/field_log.md`
+- `docs/CODEX_RESUME_WORKFLOW.md`
 - `docs/bringup.md`
 
 특히 새 작업환경에서 mapping panel, LiDAR, camera bring-up을 다시 볼 때는 `docs/field_log.md`의 최신 날짜 항목부터 읽는 것을 권장합니다.
@@ -192,6 +193,14 @@ cd ~/BuddyBot/software/pi5/ros2_ws
 rm -rf build install log
 colcon build --symlink-install
 source install/setup.bash
+```
+
+여러 노트북 / 다음날 / 새 Codex 세션에서 바로 이어갈 때는 아래 문서를 같이 봅니다.
+
+```text
+AI_HANDOFF.md
+docs/field_log.md
+docs/CODEX_RESUME_WORKFLOW.md
 ```
 
 Recommended full offline start on Pi5:
