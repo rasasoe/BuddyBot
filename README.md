@@ -31,6 +31,40 @@
 
 특히 새 작업환경에서 mapping panel, LiDAR, camera bring-up을 다시 볼 때는 `docs/field_log.md`의 최신 날짜 항목부터 읽는 것을 권장합니다.
 
+## Pico 주행 기준선
+
+Pi5 실기에서 Pico 주행 방향을 다시 건드리기 전에 아래 기준을 먼저 읽고 그대로 유지해야 합니다.
+
+- `AI_HANDOFF.md`의 `Latest Motion Fix Direction`
+- `docs/field_log.md`의 최신 날짜 항목
+- `docs/CODEX_RESUME_WORKFLOW.md`
+
+현재 합의된 기준은 이렇습니다.
+
+- 전진/후진의 큰 방향성은 이제 맞춰진 상태다.
+- 남은 증상은 `forward`와 `backward`에서 공통으로 조금씩 왼쪽으로 도는 미세 편향이다.
+- 따라서 다음 작업은 `전체 방향`을 다시 뒤집는 작업이 아니라, 현재 기준을 유지한 채 좌우 편향만 조금씩 바로잡는 작업이어야 한다.
+
+현재 Pico 기준선:
+
+- `pins.py`
+  - `left = m0`
+  - `right = m1`
+  - `back = m2`
+- `kinematics.py`
+  - `left = vx + 0.5 * vy + w`
+  - `right = -vx + 0.5 * vy + w`
+  - `back = -vy + w`
+- `motor_driver.py`
+  - `+speed -> in1=0, in2=1`
+  - `-speed -> in1=1, in2=0`
+
+주의:
+
+- 위 기준은 실기에서 전진/후진의 전체 방향성을 맞춘 기준선이다.
+- 다음 작업환경에서는 이 기준을 바꾸지 말고, 좌우 편향만 미세 조정할 것.
+- 실기 중 `mpremote`는 ROS 실행 전에만 사용할 것.
+
 ## 지금 바로 가능한 운용 모드
 
 ### 1. 오프라인 Standalone Mode

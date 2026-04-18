@@ -24,6 +24,12 @@ Codex에게 작업을 넘길 때는 아래 3개만 먼저 읽게 하면 됩니�
 2. `docs/field_log.md` 최신 날짜 항목
 3. `docs/CODEX_RESUME_WORKFLOW.md`
 
+특히 Pico 주행 문제라면 아래를 추가로 먼저 확인해야 합니다.
+
+- `AI_HANDOFF.md`의 `Latest Motion Fix Direction`
+- 현재 기준은 `전체 방향은 맞고, 남은 것은 좌측 편향 미세조정`이다.
+- 따라서 새 작업환경에서는 바퀴 각도/좌우 이름/기본 직식 자체를 다시 뒤집지 말고 시작한다.
+
 ## 2. Pi5에서 상태 맞추기
 
 Pi5 쪽 최신 코드 반영:
@@ -81,6 +87,7 @@ BuddyBot 디버깅 이어서 해줘.
    - 다음에 볼 우선순위
 2. 필요하면 `AI_HANDOFF.md`
    - 전체 상태 요약이 바뀌었을 때만 갱신
+   - Pico 주행 기준선이 바뀌었거나, "방향은 유지하고 미세조정만 남았다" 같은 작업 원칙이 생기면 반드시 반영
 3. 관련 컴포넌트 README
    - 하드웨어나 실행 절차가 바뀌었을 때만 갱신
 
@@ -150,6 +157,7 @@ ros2 topic echo --qos-reliability best_effort /camera/image_raw
    - `/vision/person_bbox` QoS mismatch 여부
 5. 실제 주행 방향
    - 전진이 회전으로 보이면 Pico 모터 polarity / wheel mapping부터 확인
+   - 다만 현재 기준선에서는 "전체 방향"을 다시 뒤집지 말고, 남아 있는 편향이 공통 좌/우 어느 쪽인지부터 본다
 
 ## 8. 이상적인 운영 습관
 

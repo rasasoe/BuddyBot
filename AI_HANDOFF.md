@@ -226,11 +226,12 @@ How to read it quickly:
 ## Latest Motion Fix Direction
 
 - User-facing symptom:
-  - `forward` still looked like counter-clockwise spin on hardware.
-  - `stop` sometimes felt flaky from the browser panel.
+  - gross `forward/backward` direction is now finally close to the intended heading on hardware.
+  - the remaining issue is smaller: both `forward` and `backward` still drift slightly to the left, so the robot traces a shallow arc.
 - Current conclusion:
-  - This was no longer mainly a `pico_bridge`/REPL issue once `pico_status` recovered.
-  - The stronger remaining problem was the wheel-mix model on the Pico side.
+  - The gross motion direction should now be treated as fixed baseline, not reopened.
+  - The next step is only a small steering-bias correction.
+  - Do not revisit wheel geometry, wheel naming, or the legacy direct-mix structure unless a new single-wheel hardware test proves the baseline itself wrong.
 - Current fix set:
   - `firmware/pico_motor_controller/config.py`
     - keep `MOTOR_DIRECTION_SIGNS` at `1/1/1`
@@ -264,8 +265,12 @@ How to read it quickly:
       - slider default `60%`
       - lower base speeds than the original 100% profile
 - Important operating note:
-  - Treat the above Pico baseline as the current reference configuration.
-  - If motion regresses, first verify `pins.py`, `motor_driver.py`, `encoder.py`, `kinematics.py`, and `config.py` still match this baseline before changing geometry again.
+  - Treat the above Pico baseline as the locked reference configuration for all future workspaces.
+  - If motion regresses, first verify `pins.py`, `motor_driver.py`, `encoder.py`, `kinematics.py`, `main.py`, and `config.py` still match this baseline before changing geometry again.
+  - The remaining symptom to tune is:
+    - `forward` drifts slightly left
+    - `backward` drifts slightly left
+  - This means future changes should bias toward tiny left/right correction only, not another full remap.
 - Pi deployment reminder:
   - after pulling, re-copy at least:
     - `firmware/pico_motor_controller/config.py`
