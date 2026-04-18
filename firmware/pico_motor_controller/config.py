@@ -38,12 +38,13 @@ COMMAND_ZERO_DEADBAND = 0.02
 
 # Per-wheel motor polarity correction for the real BuddyBot wiring.
 # Keep these as +/-1 so field fixes can be made without rewiring or
-# changing the higher-level kinematics. Current field symptom was that
-# pure forward commands spun in place, which most strongly suggested the
-# front-right motor direction was inverted relative to the software model.
+# changing the higher-level kinematics. After comparing against the
+# working AMR reference (same GP2/8/12 motor order), the safer starting
+# point is to keep all wheels aligned and solve motion mix issues in the
+# kinematics layer rather than by flipping one wheel ad hoc.
 MOTOR_DIRECTION_SIGNS = {
     'left': 1,
-    'right': -1,
+    'right': 1,
     'back': 1,
 }
 
@@ -60,6 +61,14 @@ WHEEL_RADIUS = 0.05
 # Robot geometry for kinematics (meters)
 WHEEL_BASE_WIDTH = 0.2  # Distance between left/right wheels
 WHEEL_BASE_LENGTH = 0.15  # Distance from back wheel to front axle
+
+# Wheel tangent angles for the 3-wheel kiwi base, matching the working AMR
+# controller's M1/M2/M3 order on the same GP2/8/12 motor wiring.
+WHEEL_ANGLES_DEG = {
+    'left': 330.0,
+    'right': 90.0,
+    'back': 210.0,
+}
 
 # Manual teleop and ROS cmd_vel values are already normalized to roughly [-1, 1]
 # before they reach the Pico. Keep the rotational term in the same normalized

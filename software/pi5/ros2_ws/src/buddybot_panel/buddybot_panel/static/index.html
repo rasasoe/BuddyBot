@@ -659,6 +659,9 @@
       updateToggleButtonStyles();
       if(sendStop && wasActive){
         manualSilent("stop").catch(showError);
+        window.setTimeout(() => {
+          manualSilent("stop").catch(() => {});
+        }, 120);
       }
     }
 

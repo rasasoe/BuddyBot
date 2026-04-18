@@ -699,3 +699,30 @@ bash scripts/start_presentation_mode.sh mapping
   - 이제는 "0 명령이면 PID 수렴을 기다리지 않고 모터 출력을 바로 차단"하는 쪽으로 바뀜
   - 엔코더 품질이 충분히 검증되기 전까지는 I/D를 빼고 P-only로 시연 우선 안정화
   - 이 변경은 Pico에 `config.py`, `main.py` 재배포가 필요함
+
+추가 현장 수정:
+- 증상:
+  - panel에서 `forward`를 눌러도 실제로는 반시계 회전으로 보이는 경우가 계속 남음
+  - `stop`은 가끔만 먹는 느낌이 있었고, toggle/manual 상태가 브라우저 쪽에서 남는 듯한 인상도 있었음
+  - 한동안 `right motor polarity = -1`로 현장 보정을 시도했지만, 이 방식은 pure rotation/strafe/forward를 동시에 일관되게 맞추기 어려웠음
+- 원인 해석:
+  - 문제를 단일 wheel polarity로 때우기보다, 3-wheel kiwi base의 휠 방향 혼합 자체를 잘못 가정한 쪽이 더 유력했음
+  - 같은 GP2/8/12 순서를 쓰는 `AMR` 레퍼런스는 ad-hoc sign flip이 아니라 kiwi wheel angle 기반으로 `kp`만 사용하는 단순 제어를 사용하고 있었음
+- 후속 수정:
+  - `firmware/pico_motor_controller/config.py`
+    - `MOTOR_DIRECTION_SIGNS`를 다시 `left/right/back = 1/1/1`로 정렬
+    - `WHEEL_ANGLES_DEG = {left: 330, right: 90, back: 210}` 추가
+  - `firmware/pico_motor_controller/kinematics.py`
+    - ad-hoc `left=vx-vy-rot`, `right=vx+vy+rot`, `back=vy-rot` 믹서를 제거
+    - AMR kiwi-drive 공식을 BuddyBot ROS 좌표계(`x=forward`, `y=left`)로 변환해 사용
+    - pure forward / pure rotate / strafe-left 케이스가 일관되게 나오도록 재구성
+  - `firmware/pico_motor_controller/test_kinematics.py`
+    - 새 kiwi 믹싱에 맞춰 테스트 expectation을 갱신
+    - 로컬 실행 시 `pure_forward`, `pure_rotate`, `strafe_left`, `zero_command` 모두 PASS 확인
+  - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
+    - `stop` 전송을 한 번 더 120ms 뒤에 재발사하도록 보강
+    - 목적은 browser/toggle 타이밍이 꼬여도 zero command가 한 번 더 들어가도록 하려는 것
+- 의미:
+  - "직진인데 계속 CCW 회전"을 wheel polarity 땜질이 아니라 kiwi kinematics 정렬로 바로잡는 방향
+  - `stop`은 Pico zero-deadband 강제정지 + panel 재전송 두 겹으로 안정화
+  - 이 변경은 Pico에 `config.py`, `kinematics.py`, `main.py` 재배포가 필요함

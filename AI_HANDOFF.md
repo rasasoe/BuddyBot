@@ -222,3 +222,30 @@ How to read it quickly:
 2. Keep documentation and launch commands aligned with the current package set.
 3. If new logs still show USB drops, bias toward reducing runtime load rather than adding more background nodes.
 4. Treat kernel undervoltage and USB disconnect evidence as first-class signals in any future diagnosis.
+
+## Latest Motion Fix Direction
+
+- User-facing symptom:
+  - `forward` still looked like counter-clockwise spin on hardware.
+  - `stop` sometimes felt flaky from the browser panel.
+- Current conclusion:
+  - This was no longer mainly a `pico_bridge`/REPL issue once `pico_status` recovered.
+  - The stronger remaining problem was the wheel-mix model on the Pico side.
+- Current fix set:
+  - `firmware/pico_motor_controller/config.py`
+    - keep `MOTOR_DIRECTION_SIGNS` at `1/1/1`
+    - add `WHEEL_ANGLES_DEG` for the kiwi base using the same motor order as the working `AMR` reference
+  - `firmware/pico_motor_controller/kinematics.py`
+    - replace the old ad-hoc mixer with AMR-style kiwi-drive math adapted to ROS `x=forward, y=left`
+  - `firmware/pico_motor_controller/test_kinematics.py`
+    - updated and passing locally
+  - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
+    - send a second `stop` command 120ms later to make manual stop less timing-sensitive
+- Pi deployment reminder:
+  - after pulling, re-copy at least:
+    - `firmware/pico_motor_controller/config.py`
+    - `firmware/pico_motor_controller/kinematics.py`
+    - `firmware/pico_motor_controller/main.py`
+  - then `mpremote ... reset`
+  - then start ROS
+  - do not use `mpremote fs cat/cp` while ROS is running
