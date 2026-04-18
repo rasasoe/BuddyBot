@@ -28,6 +28,10 @@ PID_KD = 0.05
 MAX_MOTOR_SPEED = 1.0
 MIN_MOTOR_SPEED = -1.0
 
+# Treat very small command magnitudes as an explicit stop so the firmware
+# can bypass PID holdover and drop motor output immediately.
+COMMAND_ZERO_DEADBAND = 0.02
+
 # Per-wheel motor polarity correction for the real BuddyBot wiring.
 # Keep these as +/-1 so field fixes can be made without rewiring or
 # changing the higher-level kinematics. Current field symptom was that

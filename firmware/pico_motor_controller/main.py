@@ -2,7 +2,12 @@
 
 import utime
 
-from config import CONTROL_LOOP_PERIOD_MS, STATUS_REPORT_INTERVAL, BATTERY_VOLTAGE_DIVIDER_RATIO
+from config import (
+    BATTERY_VOLTAGE_DIVIDER_RATIO,
+    COMMAND_ZERO_DEADBAND,
+    CONTROL_LOOP_PERIOD_MS,
+    STATUS_REPORT_INTERVAL,
+)
 from pins import battery_adc
 from motor_driver import motors
 from encoder import encoders
@@ -22,6 +27,19 @@ def read_battery_voltage():
 def stop_all():
     for motor in motors.values():
         motor.stop()
+
+
+def reset_all_pid(pid_controllers):
+    for controller in pid_controllers.values():
+        controller.reset()
+
+
+def targets_are_zero():
+    return (
+        abs(system_state.target_vx) <= COMMAND_ZERO_DEADBAND
+        and abs(system_state.target_vy) <= COMMAND_ZERO_DEADBAND
+        and abs(system_state.target_wz) <= COMMAND_ZERO_DEADBAND
+    )
 
 
 def control_loop(pid_controllers):
@@ -48,6 +66,11 @@ def control_loop(pid_controllers):
     safety_system.check_watchdog_timeout(timeout)
 
     if safety_system.is_emergency_stop_active():
+        reset_all_pid(pid_controllers)
+        stop_all()
+    elif targets_are_zero():
+        system_state.update_wheel_targets({'left': 0.0, 'right': 0.0, 'back': 0.0})
+        reset_all_pid(pid_controllers)
         stop_all()
     else:
         wheel_targets = kinematics.robot_to_wheel_velocities(

@@ -681,3 +681,19 @@ bash scripts/start_presentation_mode.sh mapping
 - `PSU_MAX_CURRENT=5000` 적용 후에도 Pico `ttyACM0` 재연결이 완전히 사라졌다고 확정할 수는 없음
 - C920는 초기화 후에도 장시간 런에서 reset이 다시 나타날 수 있음
 - 전진이 제자리 회전으로 보이는 증상은 별도의 Pico wheel polarity / field wiring 검증이 계속 필요
+
+추가 메모:
+- 실기에서 "정지 버튼을 눌러도 계속 회전한다"는 증상이 다시 확인됨
+- 로그상 `/cmd_vel_final`에는 `wz=0.0` zero command가 실제로 들어오기도 했지만, 물리적으로는 계속 도는 현상이 있었음
+- 원인 후보:
+  - 엔코더 피드백이 없거나 의미 없는 상태에서 PID 적분/잔류 출력이 남아 0 명령 뒤에도 계속 회전
+- 후속 수정:
+  - `firmware/pico_motor_controller/config.py`
+    - `COMMAND_ZERO_DEADBAND = 0.02` 추가
+  - `firmware/pico_motor_controller/main.py`
+    - target `(vx, vy, wz)`가 deadband 이하이면 즉시 `stop_all()`
+    - 같은 조건에서 PID controller 전체 reset
+    - estop 경로에서도 PID reset 후 정지
+- 의미:
+  - 이제는 "0 명령이면 PID 수렴을 기다리지 않고 모터 출력을 바로 차단"하는 쪽으로 바뀜
+  - 이 변경은 Pico에 `config.py`, `main.py` 재배포가 필요함
