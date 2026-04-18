@@ -726,3 +726,38 @@ bash scripts/start_presentation_mode.sh mapping
   - "직진인데 계속 CCW 회전"을 wheel polarity 땜질이 아니라 kiwi kinematics 정렬로 바로잡는 방향
   - `stop`은 Pico zero-deadband 강제정지 + panel 재전송 두 겹으로 안정화
   - 이 변경은 Pico에 `config.py`, `kinematics.py`, `main.py` 재배포가 필요함
+
+## 2026-04-19
+
+환경:
+- 장비: Raspberry Pi 5 (`pi@pi-desktop`), Ubuntu 24.04, ROS 2 Jazzy
+- 기준 커밋: `66b4a0f`
+- 운영 제약:
+  - ROS 실행 중 `mpremote` 금지
+  - destructive git 금지
+  - 시연 우선
+
+현장 재확인:
+- `stop`은 이전 라운드보다 훨씬 안정적으로 즉시 반응함
+- `command_mux.log` / `pico_bridge.log` 기준으로 manual `vx/wz` 명령은 Pico까지 정상 전달됨
+- 다만 `forward`, `backward`, `rotate_left`, `rotate_right` 모두 물리적으로는 반시계 회전 쪽으로 무너지는 현상이 남았음
+- 별도 `mpremote` 단품 테스트에서:
+  - `back` 명령은 뒤 바퀴가 정상 반응
+  - `left` 명령은 실제 오른쪽 바퀴가 반응
+  - `right` 명령은 기대한 왼쪽 바퀴가 아닌 비정상 반응으로 보였음
+- 추가 현장 관찰로 원인은 "받침대/차체 기준이 바뀌면서 현재 로봇의 물리 left/right가 기존 alias와 뒤집힌 상태"로 정리
+
+후속 수정:
+- `firmware/pico_motor_controller/pins.py`
+  - `motor_pins['left']` / `motor_pins['right']` alias를 서로 교체
+  - `encoder_pins['left']` / `encoder_pins['right']` alias도 동일하게 교체
+
+의미:
+- GP2/8/12 저수준 핀맵은 유지하면서, 상위 kiwi kinematics가 바라보는 좌/우 의미만 현장 하드웨어 기준에 맞춤
+- 이번 수정은 `left/right` semantic mapping 보정이므로, Pi에서 `git pull` 후 Pico에 `pins.py` 포함 재배포가 필요함
+
+Pi 재검증 순서:
+1. `git pull origin main`
+2. ROS를 올리기 전에 Pico에 `pins.py`, `config.py`, `kinematics.py`, `main.py` 재배포
+3. `bash scripts/start_presentation_mode.sh mapping`
+4. panel에서 `forward`, `backward`, `rotate_left`, `rotate_right`, `stop`을 짧게 재확인

@@ -62,8 +62,12 @@ motor_pins = {
 }
 
 # Compatibility aliases for existing code paths.
-motor_pins['left'] = motor_pins['m0']
-motor_pins['right'] = motor_pins['m1']
+# Field verification on 2026-04-19 showed the current chassis orientation
+# presents the physical left/right wheels opposite to the original alias map.
+# Keep the low-level GP2/8/12 pin wiring intact and swap only the semantic
+# wheel labels so higher-level kiwi kinematics target the correct side.
+motor_pins['left'] = motor_pins['m1']
+motor_pins['right'] = motor_pins['m0']
 motor_pins['back'] = motor_pins['m2']
 
 encoder_pins = {
@@ -71,8 +75,8 @@ encoder_pins = {
     'm1': _make_encoder(MOTOR1_ENCA_PIN, MOTOR1_ENCB_PIN),
     'm2': _make_encoder(MOTOR2_ENCA_PIN, MOTOR2_ENCB_PIN),
 }
-encoder_pins['left'] = encoder_pins['m0']
-encoder_pins['right'] = encoder_pins['m1']
+encoder_pins['left'] = encoder_pins['m1']
+encoder_pins['right'] = encoder_pins['m0']
 encoder_pins['back'] = encoder_pins['m2']
 
 emergency_stop_pin = None
