@@ -17,19 +17,14 @@ class Kinematics:
         wz: normalized angular velocity
         Returns: dict of wheel velocities (left, right, back)
         """
-        # Reuse the AMR kiwi-drive formulation that was already field-tuned on
-        # the same Pico motor pin order. AMR uses x=right, y=forward, while
-        # BuddyBot follows ROS x=forward, y=left, so convert coordinates first.
-        amr_vx = -vy
-        amr_vy = vx
         rotation = wz * self.rotation_mix_gain
 
         wheel_velocities = {}
         for wheel_name in ('left', 'right', 'back'):
             angle_rad = math.radians(self.wheel_angles_deg[wheel_name])
             wheel_velocities[wheel_name] = (
-                -math.sin(angle_rad) * amr_vx
-                + math.cos(angle_rad) * amr_vy
+                math.cos(angle_rad) * vx
+                + math.sin(angle_rad) * vy
                 + rotation
             )
 
@@ -50,10 +45,8 @@ class Kinematics:
         right = wheel_velocities.get('right', 0.0)
         back = wheel_velocities.get('back', 0.0)
         rotation = (left + right + back) / 3.0
-        amr_vy = ((left - back) / 2.0) + ((right - back) / 2.0)
-        amr_vx = right - left
-        vx = amr_vy
-        vy = -amr_vx / 2.0
+        vx = (right - left) / 1.7320508075688772
+        vy = (left + right - 2.0 * back) / 3.0
         wz = rotation / self.rotation_mix_gain if self.rotation_mix_gain else 0.0
         return vx, vy, wz
 

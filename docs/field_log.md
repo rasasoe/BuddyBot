@@ -761,3 +761,13 @@ Pi 재검증 순서:
 2. ROS를 올리기 전에 Pico에 `pins.py`, `config.py`, `kinematics.py`, `main.py` 재배포
 3. `bash scripts/start_presentation_mode.sh mapping`
 4. panel에서 `forward`, `backward`, `rotate_left`, `rotate_right`, `stop`을 짧게 재확인
+
+추가 수정:
+- 단품 테스트 기준으로 각 바퀴의 `+/-` 방향 반전은 정상적으로 확인됨
+- 따라서 남은 핵심 문제는 모터 방향 부호보다는 `BuddyBot 정면축 정의와 맞지 않는 kiwi 각도/좌표계`로 판단
+- `firmware/pico_motor_controller/config.py`
+  - `WHEEL_ANGLES_DEG`를 BuddyBot 실제 정면축(좌/우 바퀴 중간 앞쪽) 기준으로 재정의
+- `firmware/pico_motor_controller/kinematics.py`
+  - AMR 좌표계 변환 경유 대신 ROS body frame (`x=forward`, `y=left`)에서 직접 휠 속도 계산으로 변경
+- `firmware/pico_motor_controller/test_kinematics.py`
+  - 새 정면축 기준 expectation 갱신

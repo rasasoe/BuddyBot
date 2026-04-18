@@ -14,9 +14,9 @@ def _all_zero(values):
 def test_pure_forward():
     wheels = kinematics.robot_to_wheel_velocities(0.3, 0.0, 0.0)
     passed = (
-        wheels["left"] > 0
-        and wheels["back"] < 0
-        and abs(wheels["right"]) < 1e-6
+        wheels["left"] < 0
+        and wheels["right"] > 0
+        and abs(wheels["back"]) < 1e-6
     )
     return passed, wheels
 
@@ -31,8 +31,8 @@ def test_pure_rotate():
 def test_strafe_left():
     wheels = kinematics.robot_to_wheel_velocities(0.0, 0.3, 0.0)
     passed = (
-        wheels["right"] > 0
-        and wheels["left"] < 0
+        wheels["left"] > 0
+        and wheels["right"] > 0
         and wheels["back"] < 0
     )
     return passed, wheels

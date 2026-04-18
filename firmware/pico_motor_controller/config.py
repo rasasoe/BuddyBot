@@ -62,12 +62,15 @@ WHEEL_RADIUS = 0.05
 WHEEL_BASE_WIDTH = 0.2  # Distance between left/right wheels
 WHEEL_BASE_LENGTH = 0.15  # Distance from back wheel to front axle
 
-# Wheel tangent angles for the 3-wheel kiwi base, matching the working AMR
-# controller's M1/M2/M3 order on the same GP2/8/12 motor wiring.
+# Wheel drive-direction angles for BuddyBot's kiwi base in the ROS body frame
+# (x=forward, y=left). The robot's forward axis is defined as the direction
+# pointing outward from the midpoint between the physical left/right wheels.
+# With that definition, pure forward should be produced mainly by the front
+# left/right pair while the back wheel contribution stays near zero.
 WHEEL_ANGLES_DEG = {
-    'left': 330.0,
-    'right': 90.0,
-    'back': 210.0,
+    'left': 150.0,
+    'right': 30.0,
+    'back': 270.0,
 }
 
 # Manual teleop and ROS cmd_vel values are already normalized to roughly [-1, 1]
