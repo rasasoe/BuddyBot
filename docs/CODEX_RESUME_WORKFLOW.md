@@ -18,7 +18,7 @@ git pull origin main
 git rev-parse --short HEAD
 ```
 
-Codex에게 작업을 넘길 때는 아래 3개만 먼저 읽게 하면 됩니다.
+Codex에게 작업을 넘길 때는 아래 3개를 먼저 읽게 하면 됩니다.
 
 1. `AI_HANDOFF.md`
 2. `docs/field_log.md` 최신 날짜 항목
@@ -28,6 +28,7 @@ Codex에게 작업을 넘길 때는 아래 3개만 먼저 읽게 하면 됩니�
 
 - `AI_HANDOFF.md`의 `Latest Motion Fix Direction`
 - 현재 기준은 `전체 방향은 맞고, 남은 것은 좌측 편향 미세조정`이다.
+- `78a7db3`는 큰 방향성을 다시 맞춘 기준선이고, 그 다음 단계들에서 우측 편향이 좌측 미세편향으로 이동한 상태다.
 - 따라서 새 작업환경에서는 바퀴 각도/좌우 이름/기본 직식 자체를 다시 뒤집지 말고 시작한다.
 
 ## 2. Pi5에서 상태 맞추기
@@ -43,12 +44,33 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
+다른 작업환경에서 바로 실기 테스트까지 가려면, 이어서 아래를 수행합니다.
+
+```bash
+cd ~/BuddyBot
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/config.py :config.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/pins.py :pins.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/kinematics.py :kinematics.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/motor_driver.py :motor_driver.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/encoder.py :encoder.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/main.py :main.py
+mpremote connect /dev/ttyACM0 reset
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
 Pico 펌웨어 파일도 최근 변경이 있으면 다시 올립니다.
 
 최소 재배포 기준:
 - `firmware/pico_motor_controller/main.py`
 - `firmware/pico_motor_controller/config.py`
 - `firmware/pico_motor_controller/motor_driver.py`
+- `firmware/pico_motor_controller/pins.py`
+- `firmware/pico_motor_controller/kinematics.py`
+- `firmware/pico_motor_controller/encoder.py`
 
 ## 3. Codex에 붙여넣을 추천 프롬프트
 

@@ -225,6 +225,18 @@ How to read it quickly:
 
 ## Latest Motion Fix Direction
 
+- Commit flow to remember:
+  - `78a7db3`
+    - restored the legacy standalone-style Pico control baseline
+    - this is the point where gross `forward/backward` heading started matching the user's intended direction again
+    - residual issue at that stage was a rightward steering bias
+  - `ba4186b` and follow-up documentation commits
+    - moved the behavior away from the earlier rightward bias
+    - the robot is now closer to the intended heading overall, but the residual bias flipped to a slight left drift
+  - Current interpretation:
+    - keep the post-`78a7db3` overall direction baseline
+    - do not reopen the full geometry/remap problem
+    - only tune the remaining slight left drift
 - User-facing symptom:
   - gross `forward/backward` direction is now finally close to the intended heading on hardware.
   - the remaining issue is smaller: both `forward` and `backward` still drift slightly to the left, so the robot traces a shallow arc.
@@ -282,3 +294,10 @@ How to read it quickly:
   - then `mpremote ... reset`
   - then start ROS
   - do not use `mpremote fs cat/cp` while ROS is running
+- Immediate resume test on Pi:
+  - `git pull origin main`
+  - copy `config.py`, `pins.py`, `kinematics.py`, `motor_driver.py`, `encoder.py`, `main.py` to Pico
+  - `mpremote ... reset`
+  - `bash scripts/start_presentation_mode.sh mapping`
+  - verify `forward`, `backward`, `rotate_left`, `rotate_right`, `stop`
+  - treat any new failure as a regression from this baseline unless single-wheel tests prove otherwise

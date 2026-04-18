@@ -4,6 +4,70 @@
 
 이 레포는 라즈베리파이 5와 라즈베리파이 Pico에서 돌아가는 실제 로봇 제어 스택을 담고 있습니다.
 
+## 다음 세션 바로 시작
+
+다른 로컬 환경 / 다른 노트북 / 다음 Codex 세션에서 바로 이어서 테스트하려면, 맨 먼저 아래 문서 3개를 이 순서대로 봅니다.
+
+1. `AI_HANDOFF.md`
+2. `docs/field_log.md` 최신 날짜 항목
+3. `docs/CODEX_RESUME_WORKFLOW.md`
+
+현재 Pico 주행 기준은 아래 흐름으로 이해하면 됩니다.
+
+- `78a7db3`
+  - legacy standalone 구조를 모듈화 코드에 다시 맞춘 기준선
+  - 전진/후진의 큰 방향성은 이 시점부터 맞기 시작했음
+  - 다만 공통으로 오른쪽으로 도는 편향이 남아 있었음
+- `ba4186b` 이후
+  - 엔코더 부호 쪽까지 같이 맞추면서, 기존 오른쪽 편향이 반대편으로 넘어가
+  - 지금은 전진/후진 모두 `조금씩 왼쪽으로 도는` 상태로 남아 있음
+- 현재 결론
+  - 전체 방향은 더 이상 다시 뒤집지 않는다
+  - 다음 작업은 `왼쪽으로 도는 미세 편향`만 줄이는 것이다
+
+즉, 다음 작업환경에서는 `78a7db3` 계열의 전체 방향성 + 그다음 커밋들까지 포함된 현재 기준을 그대로 받고, 작은 steering bias만 조정해야 합니다.
+
+## 다른 환경에서 바로 테스트
+
+Pi에서는 ROS를 올리기 전에 먼저 최신 코드를 받고 Pico를 재배포합니다.
+
+```bash
+cd ~/BuddyBot
+git pull origin main
+git rev-parse --short HEAD
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/config.py :config.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/pins.py :pins.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/kinematics.py :kinematics.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/motor_driver.py :motor_driver.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/encoder.py :encoder.py
+mpremote connect /dev/ttyACM0 fs cp firmware/pico_motor_controller/main.py :main.py
+mpremote connect /dev/ttyACM0 reset
+```
+
+그다음 바로 실행:
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+바로 확인할 테스트:
+
+- `forward`
+- `backward`
+- `rotate_left`
+- `rotate_right`
+- `stop`
+
+현재 기대 상태:
+
+- 전진/후진의 큰 방향은 맞음
+- 남은 증상은 `forward`와 `backward`에서 공통으로 조금씩 왼쪽으로 도는 것
+- 따라서 다음 조정도 그 편향만 다뤄야 함
+
 포함 기능:
 - ROS 2 기반 로봇 스택
 - Pi5 <-> Pico 시리얼 브리지
