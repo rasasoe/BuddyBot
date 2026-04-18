@@ -690,10 +690,12 @@ bash scripts/start_presentation_mode.sh mapping
 - 후속 수정:
   - `firmware/pico_motor_controller/config.py`
     - `COMMAND_ZERO_DEADBAND = 0.02` 추가
+    - `PID_KP = 0.6`, `PID_KI = 0.0`, `PID_KD = 0.0` 로 변경해 P-only 제어로 단순화
   - `firmware/pico_motor_controller/main.py`
     - target `(vx, vy, wz)`가 deadband 이하이면 즉시 `stop_all()`
     - 같은 조건에서 PID controller 전체 reset
     - estop 경로에서도 PID reset 후 정지
 - 의미:
   - 이제는 "0 명령이면 PID 수렴을 기다리지 않고 모터 출력을 바로 차단"하는 쪽으로 바뀜
+  - 엔코더 품질이 충분히 검증되기 전까지는 I/D를 빼고 P-only로 시연 우선 안정화
   - 이 변경은 Pico에 `config.py`, `main.py` 재배포가 필요함

@@ -19,10 +19,14 @@ UART_BAUDRATE = 115200
 # Watchdog timeout (ms)
 WATCHDOG_TIMEOUT_MS = 1000
 
-# PID gains (tune these for your motors)
-PID_KP = 1.0
-PID_KI = 0.1
-PID_KD = 0.05
+# Demo-first motor control gains.
+# Keep BuddyBot on P-only control for now because the current field setup
+# still has noisy/limited encoder feedback, and I/D terms caused stop lag
+# and oscillation risks during live testing. This matches the simpler AMR
+# reference controller that only tunes kp in the field.
+PID_KP = 0.6
+PID_KI = 0.0
+PID_KD = 0.0
 
 # Motor speed limits (-1.0 to 1.0)
 MAX_MOTOR_SPEED = 1.0
