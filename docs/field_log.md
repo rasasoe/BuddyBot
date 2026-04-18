@@ -774,3 +774,11 @@ Pi 재검증 순서:
   - AMR 좌표계 변환 경유 대신 ROS body frame (`x=forward`, `y=left`)에서 직접 휠 속도 계산으로 변경
 - `firmware/pico_motor_controller/test_kinematics.py`
   - 새 정면축 기준 expectation 갱신
+
+추가 시도:
+- 상위 `cmd_vel`과 kiwi 각도 정의는 정상으로 보였지만, 실주행에서는 여전히 모든 명령이 CCW 쪽으로 무너지는 현상이 남음
+- 팀 검토 결과 역기구학 뼈대보다는 실물 모터 극성과 수학적 부호 가정이 어긋났을 가능성을 우선 확인하기로 함
+- `firmware/pico_motor_controller/config.py`
+  - 1차 현장 실험용으로 `MOTOR_DIRECTION_SIGNS['left'] = -1` 적용
+- 목적:
+  - 현재 `forward` 기대식에서 `left < 0`, `right > 0`가 실제 바퀴 구동 방향과 일치하도록 맞추는지 확인
