@@ -818,3 +818,25 @@ Pi 재검증 순서:
 - 추가 실험:
   - `firmware/pico_motor_controller/config.py`
     - `MOTOR_DIRECTION_SIGNS['left'] = -1`를 다시 적용해서, 직식 기준 `forward/backward`가 서로 반대 방향으로 분리되는지 확인
+
+추가 정리:
+- 팀 검토에서 ROS 이전 단일 Pico 코드의 핵심은 아래 두 가지로 정리됨
+  - 1월 정상 맵핑 그대로 유지:
+    - `m0 = left`
+    - `m1 = right`
+    - `m2 = back`
+  - 직접 혼합식:
+    - `left = vx + 0.5 * vy + w`
+    - `right = -vx + 0.5 * vy + w`
+    - `back = -vy + w`
+- 이에 맞춰 모듈화 코드도 다시 정렬:
+  - `pins.py`
+    - left/right alias를 원래 January 채널 순서로 복원
+  - `kinematics.py`
+    - 직접 혼합식 유지
+    - 바퀴별 부호 보정을 위한 `WHEEL_COMMAND_SIGNS` 훅 추가
+  - `main.py`
+    - 순수 PID 출력만 모터에 넣던 구조에서, 예전처럼 `base drive + RPM correction` 구조로 변경
+  - `config.py`
+    - `ENCODER_CPR=11`, `GEAR_RATIO=270`, `OUTPUT_CPR` 등 예전 단일 파일 기준 상수 복원
+    - `PID_KP`도 예전 `P_GAIN=0.3`에 맞춤

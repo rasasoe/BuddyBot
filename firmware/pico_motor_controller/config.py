@@ -24,9 +24,13 @@ WATCHDOG_TIMEOUT_MS = 1000
 # still has noisy/limited encoder feedback, and I/D terms caused stop lag
 # and oscillation risks during live testing. This matches the simpler AMR
 # reference controller that only tunes kp in the field.
-PID_KP = 0.6
+PID_KP = 0.3
 PID_KI = 0.0
 PID_KD = 0.0
+
+# Legacy closed-loop tuning from the pre-ROS Pico controller.
+MAX_RPM_EST = 60.0
+PID_CORR_MAX = 0.30
 
 # Motor speed limits (-1.0 to 1.0)
 MAX_MOTOR_SPEED = 1.0
@@ -43,7 +47,7 @@ COMMAND_ZERO_DEADBAND = 0.02
 # point is to keep all wheels aligned and solve motion mix issues in the
 # kinematics layer rather than by flipping one wheel ad hoc.
 MOTOR_DIRECTION_SIGNS = {
-    'left': -1,
+    'left': 1,
     'right': 1,
     'back': 1,
 }
@@ -52,8 +56,10 @@ MOTOR_DIRECTION_SIGNS = {
 BATTERY_ADC_PIN = 26
 BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0  # Assuming voltage divider
 
-# Encoder counts per revolution (adjust for your encoders)
-ENCODER_CPR = 360  # Example value
+# Encoder constants from the field-proven standalone Pico controller.
+ENCODER_CPR = 11
+GEAR_RATIO = 270
+OUTPUT_CPR = ENCODER_CPR * GEAR_RATIO
 
 # Wheel radius (meters) - for velocity calculation
 WHEEL_RADIUS = 0.05
@@ -62,20 +68,16 @@ WHEEL_RADIUS = 0.05
 WHEEL_BASE_WIDTH = 0.2  # Distance between left/right wheels
 WHEEL_BASE_LENGTH = 0.15  # Distance from back wheel to front axle
 
-# Wheel drive-direction angles for BuddyBot's kiwi base in the ROS body frame
-# (x=forward, y=left). The robot's forward axis is defined as the direction
-# pointing outward from the midpoint between the physical left/right wheels.
-# With that definition, pure forward should be produced mainly by the front
-# left/right pair while the back wheel contribution stays near zero.
-WHEEL_ANGLES_DEG = {
-    'left': 150.0,
-    'right': 30.0,
-    'back': 270.0,
+# Legacy direct-mix sign hooks. Keep the January motor channel order intact and
+# flip individual wheel commands here if a specific wheel is physically
+# "green-onion" / backwards on the real robot.
+WHEEL_COMMAND_SIGNS = {
+    'left': 1.0,
+    'right': 1.0,
+    'back': 1.0,
 }
 
-# Manual teleop and ROS cmd_vel values are already normalized to roughly [-1, 1]
-# before they reach the Pico. Keep the rotational term in the same normalized
-# space so pure rotation does not get scaled down into a barely moving command.
+# Keep rotational commands in the same normalized space as vx/vy.
 ROTATION_MIX_GAIN = 1.5
 
 # Status reporting interval (control loops)
