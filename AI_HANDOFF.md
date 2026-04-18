@@ -234,21 +234,45 @@ How to read it quickly:
 - Current fix set:
   - `firmware/pico_motor_controller/config.py`
     - keep `MOTOR_DIRECTION_SIGNS` at `1/1/1`
-    - define `WHEEL_ANGLES_DEG` for BuddyBot's actual body frame:
-      - `right = 30`
-      - `left = 150`
-      - `back = 270`
-    - define robot forward as the outward direction from the midpoint between the physical left/right wheels
+    - keep the legacy standalone baseline:
+      - `ENCODER_CPR = 11`
+      - `GEAR_RATIO = 270`
+      - `PID_KP = 0.3`
   - `firmware/pico_motor_controller/kinematics.py`
-    - replace the old ad-hoc mixer with BuddyBot body-frame kiwi-drive math in ROS `x=forward, y=left`
+    - keep the legacy direct wheel mix:
+      - `left = vx + 0.5 * vy + w`
+      - `right = -vx + 0.5 * vy + w`
+      - `back = -vy + w`
+    - for pure `forward/backward`, the current intended behavior is `back ~= 0`
   - `firmware/pico_motor_controller/test_kinematics.py`
-    - updated to reflect the BuddyBot front-axis expectation and passing locally
+    - updated to reflect the legacy direct-mix expectation and passing locally
+  - `firmware/pico_motor_controller/pins.py`
+    - keep the January channel mapping:
+      - `left = m0`
+      - `right = m1`
+      - `back = m2`
+  - `firmware/pico_motor_controller/motor_driver.py`
+    - keep the legacy polarity convention:
+      - `+speed -> in1=0, in2=1`
+      - `-speed -> in1=1, in2=0`
+  - `firmware/pico_motor_controller/encoder.py`
+    - keep the legacy encoder sign convention:
+      - `enc_b == 0 -> +count`
+      - `enc_b == 1 -> -count`
   - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
-    - send a second `stop` command 120ms later to make manual stop less timing-sensitive
+    - keep manual default speed conservative for indoor testing
+      - slider default `60%`
+      - lower base speeds than the original 100% profile
+- Important operating note:
+  - Treat the above Pico baseline as the current reference configuration.
+  - If motion regresses, first verify `pins.py`, `motor_driver.py`, `encoder.py`, `kinematics.py`, and `config.py` still match this baseline before changing geometry again.
 - Pi deployment reminder:
   - after pulling, re-copy at least:
     - `firmware/pico_motor_controller/config.py`
+    - `firmware/pico_motor_controller/pins.py`
     - `firmware/pico_motor_controller/kinematics.py`
+    - `firmware/pico_motor_controller/motor_driver.py`
+    - `firmware/pico_motor_controller/encoder.py`
     - `firmware/pico_motor_controller/main.py`
   - then `mpremote ... reset`
   - then start ROS

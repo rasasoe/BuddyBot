@@ -13,7 +13,15 @@ class Encoder:
         self.pin_a.irq(trigger=machine.Pin.IRQ_RISING, handler=self._callback)
 
     def _callback(self, _pin):
-        self.count += 1 if self.pin_b.value() else -1
+        # Match the legacy standalone Pico controller's quadrature sign
+        # convention:
+        #   enc_b == 0 -> positive count
+        #   enc_b == 1 -> negative count
+        # This must stay aligned with the motor polarity and direct wheel-mix
+        # baseline, otherwise the RPM correction term will push the robot into a
+        # consistent arc even when forward/backward commands are nominally
+        # symmetric.
+        self.count += 1 if not self.pin_b.value() else -1
 
     def get_count(self):
         return self.count
