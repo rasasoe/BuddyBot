@@ -27,14 +27,15 @@ class MotorDriver:
         speed *= self.direction_sign
 
         if speed > 0:
-            # Forward direction
-            self.dir1.value(1)
-            self.dir2.value(0)
-            duty = int(speed * 65535)  # Convert to 16-bit duty cycle
-        elif speed < 0:
-            # Reverse direction
+            # Preserve the legacy Pico single-file convention that was already
+            # field-proven on BuddyBot before the firmware was modularized.
+            # In that implementation, positive output meant IN1=0, IN2=1.
             self.dir1.value(0)
             self.dir2.value(1)
+            duty = int(speed * 65535)  # Convert to 16-bit duty cycle
+        elif speed < 0:
+            self.dir1.value(1)
+            self.dir2.value(0)
             duty = int(-speed * 65535)  # Use absolute value
         else:
             # Stop

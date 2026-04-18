@@ -116,10 +116,10 @@
         </div>
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:15px;background:#f6f0e4">
           <span style="font-size:.82rem;color:var(--muted);white-space:nowrap">속도</span>
-          <input type="range" id="speed-slider" min="10" max="200" value="100" step="10"
+          <input type="range" id="speed-slider" min="10" max="200" value="60" step="10"
             oninput="document.getElementById('speed-label').textContent=this.value+'%'"
             style="flex:1;accent-color:var(--accent);height:4px;cursor:pointer">
-          <span id="speed-label" style="font-size:.88rem;font-weight:700;min-width:42px;text-align:right">100%</span>
+          <span id="speed-label" style="font-size:.88rem;font-weight:700;min-width:42px;text-align:right">60%</span>
         </div>
         <div class="button-grid">
           <button class="secondary" id="btn-forward" data-toggle-direction="forward">전진</button>
@@ -593,16 +593,16 @@
           rotate_right: "우회전",
           stop: "정지",
         })[direction] || direction;
-        const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 100) / 100);
+        const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 60) / 100);
         const speed = ({
-          forward: 0.35,
-          backward: 0.3,
-          strafe_left: 0.35,
-          strafe_right: 0.35,
-          rotate_left: 0.55,
-          rotate_right: 0.55,
+          forward: 0.24,
+          backward: 0.2,
+          strafe_left: 0.22,
+          strafe_right: 0.22,
+          rotate_left: 0.38,
+          rotate_right: 0.38,
           stop: 0.0,
-        })[direction] ?? 0.35;
+        })[direction] ?? 0.24;
         await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: speed * mult})});
         addMsg("bot", direction === "stop" ? "수동 주행을 멈췄습니다." : `수동 명령: ${label}`);
         await refreshStatus();
@@ -610,16 +610,16 @@
     }
 
     async function manualSilent(direction){
-      const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 100) / 100);
+      const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 60) / 100);
       const speed = ({
-        forward: 0.35,
-        backward: 0.3,
-        strafe_left: 0.35,
-        strafe_right: 0.35,
-        rotate_left: 0.55,
-        rotate_right: 0.55,
+        forward: 0.24,
+        backward: 0.2,
+        strafe_left: 0.22,
+        strafe_right: 0.22,
+        rotate_left: 0.38,
+        rotate_right: 0.38,
         stop: 0.0,
-      })[direction] ?? 0.35;
+      })[direction] ?? 0.24;
       return apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: speed * mult})});
     }
 

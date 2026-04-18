@@ -794,3 +794,18 @@ Pi 재검증 순서:
   - `left = -vx + 0.5 * vy + w`
   - `back = -vy + w`
 - 따라서 최신 각도 기반 일반식 대신, 현장에서 이미 주행 검증된 레거시 직접식을 `kinematics.py`에 복원하기로 함
+
+추가 확인 및 수정:
+- ROS 이전 단일 파일 버전과 현재 모듈화 버전을 대조한 결과, 저수준 모터 방향 출력 규약도 서로 달랐음
+- 예전 단일 파일:
+  - `+speed -> in1=0, in2=1`
+  - `-speed -> in1=1, in2=0`
+- 모듈화 이후 `motor_driver.py`는 이 방향이 반대로 들어가 있었음
+- 후속 수정:
+  - `firmware/pico_motor_controller/motor_driver.py`
+    - 방향 출력을 예전 단일 파일과 같은 규약으로 복원
+  - `firmware/pico_motor_controller/config.py`
+    - 실험용으로 넣어둔 `MOTOR_DIRECTION_SIGNS['left'] = -1`를 제거하고 다시 `1/1/1`로 정렬
+  - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
+    - 수동 주행 기본 속도 슬라이더를 `100% -> 60%`로 낮춤
+    - forward/backward/strafe/rotate 기본 속도도 한 단계 낮춤
