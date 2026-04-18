@@ -39,8 +39,8 @@ class FollowControllerNode(Node):
         super().__init__('follow_controller_node')
 
         # Declare parameters with practical defaults
-        self.declare_parameter('image_width', 640)
-        self.declare_parameter('image_height', 480)
+        self.declare_parameter('image_width', 320)
+        self.declare_parameter('image_height', 240)
         self.declare_parameter('center_x_gain', 0.002)  # Angular velocity gain for center offset
         self.declare_parameter('height_gain', 0.0005)   # Linear velocity gain for box height
         self.declare_parameter('target_height_ratio', 0.6)  # Target box height as fraction of image
@@ -70,20 +70,25 @@ class FollowControllerNode(Node):
         self.target_height = self.image_height * self.target_height_ratio
 
         # Publisher for velocity commands
-        qos_profile = QoSProfile(
+        command_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
             depth=10
         )
+        bbox_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1
+        )
 
         self.cmd_publisher = self.create_publisher(
-            Twist, '/cmd_vel_follow', qos_profile)
+            Twist, '/cmd_vel_follow', command_qos)
 
         # Subscriber for person bounding box
         self.bbox_subscriber = self.create_subscription(
-            Float32MultiArray, '/vision/person_bbox', self.bbox_callback, qos_profile)
+            Float32MultiArray, '/vision/person_bbox', self.bbox_callback, bbox_qos)
         self.follow_enabled_subscriber = self.create_subscription(
-            Bool, self.follow_enabled_topic, self.follow_enabled_callback, qos_profile)
+            Bool, self.follow_enabled_topic, self.follow_enabled_callback, command_qos)
         self.watchdog_timer = self.create_timer(0.1, self.watchdog_callback)
 
         # State

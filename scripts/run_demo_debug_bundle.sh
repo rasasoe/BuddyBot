@@ -32,6 +32,7 @@ start_topic_capture() {
   local name="$1"
   local topic="$2"
   local type_name="$3"
+  shift 3
   local log_path="$BUNDLE_DIR/$name.log"
   {
     echo "### ros2 topic echo $topic $type_name"
@@ -39,9 +40,9 @@ start_topic_capture() {
     echo
   } > "$log_path"
   if command -v stdbuf >/dev/null 2>&1; then
-    nohup env PYTHONUNBUFFERED=1 stdbuf -oL -eL ros2 topic echo "$topic" "$type_name" >> "$log_path" 2>&1 &
+    nohup env PYTHONUNBUFFERED=1 stdbuf -oL -eL ros2 topic echo "$@" "$topic" "$type_name" >> "$log_path" 2>&1 &
   else
-    nohup env PYTHONUNBUFFERED=1 ros2 topic echo "$topic" "$type_name" >> "$log_path" 2>&1 &
+    nohup env PYTHONUNBUFFERED=1 ros2 topic echo "$@" "$topic" "$type_name" >> "$log_path" 2>&1 &
   fi
   TOPIC_PIDS+=("$!")
 }
@@ -126,8 +127,8 @@ start_topic_capture cmd_vel_manual /cmd_vel_manual geometry_msgs/msg/Twist
 start_topic_capture cmd_vel_final /cmd_vel_final geometry_msgs/msg/Twist
 start_topic_capture pico_status /buddybot/pico_status buddybot_msgs/msg/Status
 start_topic_capture pico_safety /buddybot/pico_safety_event std_msgs/msg/String
-start_topic_capture scan /scan sensor_msgs/msg/LaserScan
-start_topic_capture camera_image /camera/image_raw sensor_msgs/msg/Image
+start_topic_capture scan /scan sensor_msgs/msg/LaserScan --qos-reliability best_effort
+start_topic_capture camera_image /camera/image_raw sensor_msgs/msg/Image --qos-reliability best_effort
 start_topic_capture detector_status /vision/detector_status std_msgs/msg/String
 start_topic_capture navigation_status /nav/navigation_status std_msgs/msg/String
 start_topic_capture command_status /system/command_status std_msgs/msg/String

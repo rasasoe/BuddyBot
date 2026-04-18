@@ -79,15 +79,15 @@ LIDAR_PID=""
 LIDAR_RECOVERY_ATTEMPTED=0
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-10}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-10}"
-CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-160}"
-CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-120}"
-CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-10.0}")"
-CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-5.0}")"
+CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
+CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
+CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-15.0}")"
+CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-15.0}")"
 CAMERA_PIXEL_FORMAT="${BUDDYBOT_CAMERA_PIXEL_FORMAT:-MJPG}"
 CAMERA_BUFFER_SIZE="${BUDDYBOT_CAMERA_BUFFER_SIZE:-1}"
 DETECT_INTERVAL="${BUDDYBOT_DETECT_INTERVAL:-5}"
 DETECT_CONFIDENCE="$(float_param_value "${BUDDYBOT_DETECT_CONFIDENCE:-0.5}")"
-DETECT_HOG_RESIZE_WIDTH="${BUDDYBOT_DETECT_HOG_RESIZE_WIDTH:-480}"
+DETECT_HOG_RESIZE_WIDTH="${BUDDYBOT_DETECT_HOG_RESIZE_WIDTH:-320}"
 DETECT_ALLOW_HOG_FALLBACK="${BUDDYBOT_DETECT_ALLOW_HOG_FALLBACK:-1}"
 DETECT_ALLOW_HOG_FALLBACK_PARAM="$(bool_param_value "$DETECT_ALLOW_HOG_FALLBACK")"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
@@ -96,6 +96,7 @@ FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
 ENABLE_OFFLINE_VOICE="${BUDDYBOT_ENABLE_OFFLINE_VOICE:-1}"
 ENABLE_MIC_LISTENER="${BUDDYBOT_ENABLE_MIC_LISTENER:-${MIC_AVAILABLE:-0}}"
 ENABLE_PI_SPEAKER="${BUDDYBOT_ENABLE_PI_SPEAKER:-1}"
+SPEAKER_VOLUME_PERCENT="${BUDDYBOT_SPEAKER_VOLUME_PERCENT:-35}"
 VOICE_MIC_PARAM="$(bool_param_value "$ENABLE_MIC_LISTENER")"
 VOICE_SPEAKER_PARAM="$(bool_param_value "$ENABLE_PI_SPEAKER")"
 
@@ -152,14 +153,52 @@ wait_for_message() {
   timeout "${timeout}s" ros2 topic echo --once "$topic" >/dev/null 2>&1
 }
 
+wait_for_best_effort_message() {
+  local topic="$1"
+  local timeout="${2:-8}"
+  timeout "${timeout}s" ros2 topic echo --qos-reliability best_effort --once "$topic" >/dev/null 2>&1 \
+    || timeout "${timeout}s" ros2 topic echo --qos-reliability reliable --once "$topic" >/dev/null 2>&1
+}
+
 scan_streaming() {
   local timeout="${1:-8}"
-  wait_for_message "/scan" "$timeout" || scan_available
+  wait_for_best_effort_message "/scan" "$timeout" || scan_available
 }
 
 camera_streaming() {
   local timeout="${1:-8}"
-  wait_for_message "/camera/image_raw" "$timeout" || camera_available
+  wait_for_best_effort_message "/camera/image_raw" "$timeout" || camera_available
+}
+
+set_speaker_volume() {
+  local volume="${1:-35}"
+
+  if ! is_truthy "$ENABLE_PI_SPEAKER"; then
+    return 0
+  fi
+
+  if command -v wpctl >/dev/null 2>&1; then
+    if wpctl set-volume @DEFAULT_AUDIO_SINK@ "${volume}%" >/dev/null 2>&1; then
+      echo "[mapping] Pi speaker volume set to ${volume}% via wpctl"
+      return 0
+    fi
+  fi
+
+  if command -v pactl >/dev/null 2>&1; then
+    if pactl set-sink-volume @DEFAULT_SINK@ "${volume}%" >/dev/null 2>&1; then
+      echo "[mapping] Pi speaker volume set to ${volume}% via pactl"
+      return 0
+    fi
+  fi
+
+  if command -v amixer >/dev/null 2>&1; then
+    if amixer -q sset Master "${volume}%" >/dev/null 2>&1; then
+      echo "[mapping] Pi speaker volume set to ${volume}% via amixer"
+      return 0
+    fi
+  fi
+
+  echo "[mapping] warning: could not clamp Pi speaker volume to ${volume}%"
 }
 
 stop_lidar_node() {
@@ -268,6 +307,7 @@ echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
 echo "[mapping] Pi speaker enabled: ${ENABLE_PI_SPEAKER}"
+echo "[mapping] Pi speaker volume target: ${SPEAKER_VOLUME_PERCENT}%"
 echo "[mapping] panel build: ${BUDDYBOT_PANEL_BUILD}"
 echo "[mapping] ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "[mapping] ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY}"
@@ -292,6 +332,7 @@ start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 if is_truthy "$ENABLE_OFFLINE_VOICE"; then
+  set_speaker_volume "$SPEAKER_VOLUME_PERCENT"
   start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}"
 fi
 if is_truthy "$DISABLE_CAMERA"; then

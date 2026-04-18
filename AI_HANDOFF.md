@@ -131,27 +131,33 @@ bash scripts/start_presentation_mode.sh mapping
 
 What presentation mode changes by default:
 - skips preflight re-open churn
-- disables always-on microphone listener
-- disables Pi speaker output path
-- keeps camera at low bandwidth
+- enables microphone listener for voice demos
+- enables Pi speaker output path but clamps output volume to 35%
+- keeps camera at the demo-safe full-feature profile
 - keeps MJPG + small buffer
-- reduces detector frequency and fallback workload
+- keeps detector fallback workload within the Pi 5 USB/power budget
+- aligns camera/debug topic checks with BEST_EFFORT image transport
 - still runs through `run_demo_debug_bundle.sh` so shutdown produces logs automatically
 
 ## Recommended Runtime Knobs
 
-If camera and LiDAR barely coexist, keep these defaults or lower further:
+Current full-function demo defaults:
 
 ```bash
 BUDDYBOT_CAMERA_WIDTH=320
 BUDDYBOT_CAMERA_HEIGHT=240
-BUDDYBOT_CAMERA_FPS=10
-BUDDYBOT_CAMERA_PUBLISH_RATE=5
+BUDDYBOT_CAMERA_FPS=15
+BUDDYBOT_CAMERA_PUBLISH_RATE=15
 BUDDYBOT_CAMERA_PIXEL_FORMAT=MJPG
 BUDDYBOT_CAMERA_BUFFER_SIZE=1
-BUDDYBOT_DETECT_INTERVAL=8
+BUDDYBOT_DETECT_INTERVAL=5
 BUDDYBOT_DETECT_HOG_RESIZE_WIDTH=320
+BUDDYBOT_ENABLE_MIC_LISTENER=1
+BUDDYBOT_ENABLE_PI_SPEAKER=1
+BUDDYBOT_SPEAKER_VOLUME_PERCENT=35
 ```
+
+If camera and LiDAR barely coexist, lower from there rather than starting from a heavier profile.
 
 If the camera is not required for the current demo slice:
 

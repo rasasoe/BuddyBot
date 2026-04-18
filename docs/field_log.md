@@ -613,3 +613,71 @@ bash scripts/start_presentation_mode.sh mapping
 1. 발표 전에는 `start_presentation_mode.sh` 경로를 기준으로만 재검증
 2. 새 로그를 받을 때는 반드시 번들 디렉토리 기준으로 해석
 3. 커널 로그에 undervoltage / USB disconnect가 보이면 소프트웨어 원인보다 먼저 취급
+
+## 2026-04-18
+
+환경:
+- 장비: Raspberry Pi 5 (`pi@pi-desktop`)
+- 메인 레포: `BuddyBot`
+- 기준 메인 커밋: `3e934b4`에서 후속 시연 안정화 작업 진행
+- 운영 제약:
+  - UPS 5V 5A, Ubuntu 24.04
+  - USB current budget 1.6A 해제 상태 전제
+  - C920는 USB 3.0 전담
+  - LiDAR/Pico/기타는 USB 2.0 경로
+
+현장 판단:
+- 시연이 임박해 `풀스택은 유지하되 기본 프로파일을 전력/대역폭 제약에 맞게 보수적으로 고정`하는 방향으로 전환
+- 지금 문제는 ROS 자체보다
+  - USB/power jitter
+  - camera topic 확인 QoS 혼선
+  - detector/follow bbox QoS mismatch
+  쪽이 더 직접적이었음
+
+이번 라운드 코드 수정:
+- `scripts/start_presentation_mode.sh`
+  - 기본값을 시연용 풀기능 프로파일로 변경
+  - microphone listener 기본 `1`
+  - Pi speaker 기본 `1`
+  - speaker volume target 기본 `35%`
+  - camera 기본 `320x240 @ 15fps publish 15Hz`
+  - detector interval 기본 `5`
+- `scripts/start_mapping_panel.sh`
+  - same profile defaults 적용
+  - `BUDDYBOT_SPEAKER_VOLUME_PERCENT` 추가
+  - voice node 실행 전 `wpctl` / `pactl` / `amixer` 중 가능한 경로로 볼륨 35% clamp
+  - `/scan`, `/camera/image_raw` 확인을 `BEST_EFFORT -> RELIABLE` 순서로 보도록 수정
+- `scripts/start_offline_demo.sh`
+  - mapping 쪽과 동일한 demo-safe defaults / speaker volume clamp / BEST_EFFORT topic checks 적용
+- `scripts/check_all_devices.sh`
+  - preflight 기본 카메라 프로파일을 `320x240 @ 15/15`로 상향
+  - `/camera/image_raw` 확인도 `BEST_EFFORT` 우선으로 변경
+- `scripts/run_demo_debug_bundle.sh`
+  - `/scan`, `/camera/image_raw` topic capture를 `--qos-reliability best_effort`로 수정
+  - 이전처럼 "토픽이 실제론 살아 있는데 bundle에는 안 찍히는" 혼선을 줄이려는 목적
+- `software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py`
+  - 노드 기본값을 `320x240`, `15fps`, `publish_rate 15Hz`로 변경
+- `software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/detector_node.py`
+  - `hog_resize_width` 기본값을 `320`으로 낮춤
+- `software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/follow_controller_node.py`
+  - image size 기본값을 `320x240`으로 조정
+  - `/vision/person_bbox` subscription QoS를 `BEST_EFFORT`로 변경
+  - `/cmd_vel_follow`, `/follow/enabled`는 기존 `RELIABLE` 유지
+
+무엇이 개선되나:
+- presentation / mapping / offline demo가 같은 power-budget-aware 기본값을 공유
+- camera가 `BEST_EFFORT`인데 shell check와 bundle capture가 `RELIABLE`이라서 생기던 false negative가 줄어듦
+- detector -> follow bbox QoS mismatch가 제거되어 follow controller가 bbox를 실제로 받을 수 있게 됨
+- speaker를 켜더라도 순간 전류를 줄이기 위해 기본 볼륨을 35%로 clamp
+
+현장 재확인 포인트:
+1. `bash scripts/start_presentation_mode.sh mapping`
+2. `sudo dmesg -w | grep -Ei 'under-voltage|usb .*disconnect|usb .*reset|uvcvideo|cdc_acm'`
+3. `ros2 topic echo --qos-reliability best_effort /camera/image_raw`
+4. `tail -n 80 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/follow_controller.log`
+5. panel/manual/follow 모두에서 실제 시연 경로가 끊기지 않는지 확인
+
+여전히 남는 리스크:
+- `PSU_MAX_CURRENT=5000` 적용 후에도 Pico `ttyACM0` 재연결이 완전히 사라졌다고 확정할 수는 없음
+- C920는 초기화 후에도 장시간 런에서 reset이 다시 나타날 수 있음
+- 전진이 제자리 회전으로 보이는 증상은 별도의 Pico wheel polarity / field wiring 검증이 계속 필요

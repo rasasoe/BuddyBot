@@ -41,11 +41,11 @@ class CameraNode(Node):
 
         # Declare parameters with sensible defaults for Raspberry Pi camera
         self.declare_parameter('device', 'auto')
-        self.declare_parameter('width', 640)
-        self.declare_parameter('height', 480)
-        self.declare_parameter('fps', 30.0)
+        self.declare_parameter('width', 320)
+        self.declare_parameter('height', 240)
+        self.declare_parameter('fps', 15.0)
         self.declare_parameter('frame_id', 'camera_link')
-        self.declare_parameter('publish_rate', 30.0)  # Hz
+        self.declare_parameter('publish_rate', 15.0)  # Hz
         self.declare_parameter('backend', 'v4l2')
         self.declare_parameter('pixel_format', 'MJPG')
         self.declare_parameter('buffer_size', 1)

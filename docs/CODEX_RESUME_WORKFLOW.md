@@ -86,14 +86,14 @@ BuddyBot 디버깅 이어서 해줘.
 
 ## 5. Pi5 실기에서 자주 쓰는 재현 명령
 
-저부하 presentation profile:
+시연용 presentation profile:
 
 ```bash
 cd ~/BuddyBot
 bash scripts/start_presentation_mode.sh mapping
 ```
 
-수동으로 더 낮춘 카메라 프로파일:
+더 보수적인 저부하 카메라 프로파일:
 
 ```bash
 cd ~/BuddyBot
@@ -130,6 +130,7 @@ source /opt/ros/jazzy/setup.bash
 source ~/BuddyBot/software/pi5/ros2_ws/install/setup.bash
 ros2 topic echo /cmd_vel_final
 ros2 topic echo /buddybot/pico_status
+ros2 topic echo --qos-reliability best_effort /camera/image_raw
 ```
 
 ## 7. 다음 작업자가 빠르게 판단해야 할 축
@@ -144,6 +145,7 @@ ros2 topic echo /buddybot/pico_status
    - `pico_bridge.log`
 3. 카메라 publish
    - `camera_node`는 살아 있는데 `/camera/image_raw`가 실제 뜨는지
+   - 이미지는 `BEST_EFFORT`라서 토픽 확인도 같은 QoS로 할 것
 4. detector/follow 연결
    - `/vision/person_bbox` QoS mismatch 여부
 5. 실제 주행 방향

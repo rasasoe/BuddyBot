@@ -71,7 +71,7 @@ class DetectorNode(Node):
         self.declare_parameter("person_class_id", 15)
         self.declare_parameter("allow_hog_fallback", True)
         self.declare_parameter("hog_confidence_threshold", 0.12)
-        self.declare_parameter("hog_resize_width", 480)
+        self.declare_parameter("hog_resize_width", 320)
         self.declare_parameter("hog_win_stride", [8, 8])
         self.declare_parameter("hog_padding", [8, 8])
         self.declare_parameter("hog_scale", 1.03)

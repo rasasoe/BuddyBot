@@ -50,10 +50,10 @@ eval "$(python3 "$ROOT_DIR/scripts/probe_pi5_devices.py" --shell)"
 PIDS=()
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-10}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-10}"
-CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-160}"
-CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-120}"
-CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-10.0}")"
-CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-5.0}")"
+CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
+CAMERA_HEIGHT="${BUDDYBOT_CAMERA_HEIGHT:-240}"
+CAMERA_FPS="$(float_param_value "${BUDDYBOT_CAMERA_FPS:-15.0}")"
+CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-15.0}")"
 CAMERA_PIXEL_FORMAT="${BUDDYBOT_CAMERA_PIXEL_FORMAT:-MJPG}"
 CAMERA_BUFFER_SIZE="${BUDDYBOT_CAMERA_BUFFER_SIZE:-1}"
 
@@ -122,6 +122,13 @@ wait_for_message() {
   timeout "${timeout}s" ros2 topic echo --once "$topic" >/dev/null 2>&1
 }
 
+wait_for_best_effort_message() {
+  local topic="$1"
+  local timeout="${2:-8}"
+  timeout "${timeout}s" ros2 topic echo --qos-reliability best_effort --once "$topic" >/dev/null 2>&1 \
+    || timeout "${timeout}s" ros2 topic echo --qos-reliability reliable --once "$topic" >/dev/null 2>&1
+}
+
 wait_for_scan_message() {
   local timeout="${1:-8}"
   timeout "${timeout}s" ros2 topic echo --qos-reliability best_effort --once /scan >/dev/null 2>&1 \
@@ -170,7 +177,7 @@ echo "[check] camera test"
 if [[ -n "${CAMERA_DEVICE:-}" ]]; then
   pause_before_step "$CAMERA_START_DELAY" "starting camera after USB devices settle"
   start_bg camera ros2 run buddybot_vision camera_node --ros-args -p device:="${CAMERA_DEVICE}" -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}" -p pixel_format:="${CAMERA_PIXEL_FORMAT}" -p buffer_size:="${CAMERA_BUFFER_SIZE}"
-  if wait_for_message "/camera/image_raw" 10 || wait_for_topic "/camera/image_raw" 10 || publisher_visible "/camera_node" "camera/image_raw"; then
+  if wait_for_best_effort_message "/camera/image_raw" 10 || wait_for_topic "/camera/image_raw" 10 || publisher_visible "/camera_node" "camera/image_raw"; then
     echo "  result: PASS (/camera/image_raw present)"
   else
     echo "  result: FAIL (/camera/image_raw missing)"
