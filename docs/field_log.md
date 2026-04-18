@@ -707,14 +707,14 @@ bash scripts/start_presentation_mode.sh mapping
   - 한동안 `right motor polarity = -1`로 현장 보정을 시도했지만, 이 방식은 pure rotation/strafe/forward를 동시에 일관되게 맞추기 어려웠음
 - 원인 해석:
   - 문제를 단일 wheel polarity로 때우기보다, 3-wheel kiwi base의 휠 방향 혼합 자체를 잘못 가정한 쪽이 더 유력했음
-  - 같은 GP2/8/12 순서를 쓰는 `AMR` 레퍼런스는 ad-hoc sign flip이 아니라 kiwi wheel angle 기반으로 `kp`만 사용하는 단순 제어를 사용하고 있었음
+  - 초기에는 같은 GP2/8/12 순서를 쓰는 `AMR` 레퍼런스를 참고했지만, 이후 현장 검증 결과 BuddyBot 실물의 정면축/좌우 해석과 그대로 일치한다고 볼 수는 없었음
 - 후속 수정:
   - `firmware/pico_motor_controller/config.py`
     - `MOTOR_DIRECTION_SIGNS`를 다시 `left/right/back = 1/1/1`로 정렬
-    - `WHEEL_ANGLES_DEG = {left: 330, right: 90, back: 210}` 추가
+    - 당시에는 임시로 `WHEEL_ANGLES_DEG = {left: 330, right: 90, back: 210}`을 추가해 AMR식 기준으로 정렬을 시도
   - `firmware/pico_motor_controller/kinematics.py`
     - ad-hoc `left=vx-vy-rot`, `right=vx+vy+rot`, `back=vy-rot` 믹서를 제거
-    - AMR kiwi-drive 공식을 BuddyBot ROS 좌표계(`x=forward`, `y=left`)로 변환해 사용
+    - 당시에는 AMR kiwi-drive 공식을 BuddyBot ROS 좌표계(`x=forward`, `y=left`)로 변환해 사용
     - pure forward / pure rotate / strafe-left 케이스가 일관되게 나오도록 재구성
   - `firmware/pico_motor_controller/test_kinematics.py`
     - 새 kiwi 믹싱에 맞춰 테스트 expectation을 갱신
@@ -764,9 +764,12 @@ Pi 재검증 순서:
 
 추가 수정:
 - 단품 테스트 기준으로 각 바퀴의 `+/-` 방향 반전은 정상적으로 확인됨
-- 따라서 남은 핵심 문제는 모터 방향 부호보다는 `BuddyBot 정면축 정의와 맞지 않는 kiwi 각도/좌표계`로 판단
+- 따라서 남은 핵심 문제는 모터 방향 부호보다는 `BuddyBot 정면축 정의와 맞지 않던 기존 kiwi 각도/좌표계 해석`으로 판단
 - `firmware/pico_motor_controller/config.py`
-  - `WHEEL_ANGLES_DEG`를 BuddyBot 실제 정면축(좌/우 바퀴 중간 앞쪽) 기준으로 재정의
+  - `WHEEL_ANGLES_DEG`를 BuddyBot 실제 정면축 기준으로 재정의
+    - `right = 30`
+    - `left = 150`
+    - `back = 270`
 - `firmware/pico_motor_controller/kinematics.py`
   - AMR 좌표계 변환 경유 대신 ROS body frame (`x=forward`, `y=left`)에서 직접 휠 속도 계산으로 변경
 - `firmware/pico_motor_controller/test_kinematics.py`

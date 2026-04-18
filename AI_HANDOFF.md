@@ -41,7 +41,7 @@ Root cause:
 - `command_mux` kept flipping between `manual` and `idle`
 
 Relevant fix:
-- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py)
+- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py](software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py)
 
 Expected behavior now:
 - panel manual buttons are toggle-style
@@ -58,9 +58,9 @@ Root cause:
 - ROS rejected the parameter type
 
 Relevant fixes:
-- [scripts/check_all_devices.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/check_all_devices.sh)
-- [scripts/start_mapping_panel.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_mapping_panel.sh)
-- [scripts/start_offline_demo.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_offline_demo.sh)
+- [scripts/check_all_devices.sh](scripts/check_all_devices.sh)
+- [scripts/start_mapping_panel.sh](scripts/start_mapping_panel.sh)
+- [scripts/start_offline_demo.sh](scripts/start_offline_demo.sh)
 
 ### 3. Camera + LiDAR + Pico instability
 
@@ -199,15 +199,15 @@ How to read it quickly:
 
 ## High-Signal Files
 
-- [scripts/start_presentation_mode.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_presentation_mode.sh)
-- [scripts/run_demo_debug_bundle.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/run_demo_debug_bundle.sh)
-- [scripts/start_all_pi5.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_all_pi5.sh)
-- [scripts/start_mapping_panel.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_mapping_panel.sh)
-- [scripts/start_offline_demo.sh](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/scripts/start_offline_demo.sh)
-- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py)
-- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html)
-- [software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py)
-- [docs/field_log.md](/Users/rasasoe/workspace/BuddyBotProject/BuddyBot/docs/field_log.md)
+- [scripts/start_presentation_mode.sh](scripts/start_presentation_mode.sh)
+- [scripts/run_demo_debug_bundle.sh](scripts/run_demo_debug_bundle.sh)
+- [scripts/start_all_pi5.sh](scripts/start_all_pi5.sh)
+- [scripts/start_mapping_panel.sh](scripts/start_mapping_panel.sh)
+- [scripts/start_offline_demo.sh](scripts/start_offline_demo.sh)
+- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py](software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/panel_server.py)
+- [software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html](software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html)
+- [software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py](software/pi5/ros2_ws/src/buddybot_vision/buddybot_vision/camera_node.py)
+- [docs/field_log.md](docs/field_log.md)
 
 ## Known Residual Risks
 
@@ -234,11 +234,15 @@ How to read it quickly:
 - Current fix set:
   - `firmware/pico_motor_controller/config.py`
     - keep `MOTOR_DIRECTION_SIGNS` at `1/1/1`
-    - add `WHEEL_ANGLES_DEG` for the kiwi base using the same motor order as the working `AMR` reference
+    - define `WHEEL_ANGLES_DEG` for BuddyBot's actual body frame:
+      - `right = 30`
+      - `left = 150`
+      - `back = 270`
+    - define robot forward as the outward direction from the midpoint between the physical left/right wheels
   - `firmware/pico_motor_controller/kinematics.py`
-    - replace the old ad-hoc mixer with AMR-style kiwi-drive math adapted to ROS `x=forward, y=left`
+    - replace the old ad-hoc mixer with BuddyBot body-frame kiwi-drive math in ROS `x=forward, y=left`
   - `firmware/pico_motor_controller/test_kinematics.py`
-    - updated and passing locally
+    - updated to reflect the BuddyBot front-axis expectation and passing locally
   - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
     - send a second `stop` command 120ms later to make manual stop less timing-sensitive
 - Pi deployment reminder:
