@@ -809,3 +809,12 @@ Pi 재검증 순서:
   - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
     - 수동 주행 기본 속도 슬라이더를 `100% -> 60%`로 낮춤
     - forward/backward/strafe/rotate 기본 속도도 한 단계 낮춤
+
+후속 현장 관찰:
+- 기본 속도에서는 정지마찰 때문에 잘 안 움직였고, speed slider를 `110%`까지 올리면 다시 움직이기 시작함
+- 다만 `forward`와 `backward`가 둘 다 같은 시계방향 회전으로 무너지는 현상이 남음
+- 해석:
+  - 직식 복원 이후에도 좌/우 앞바퀴 중 하나의 물리 극성이 여전히 현재 수학 가정과 어긋나 있는 상태일 가능성이 높음
+- 추가 실험:
+  - `firmware/pico_motor_controller/config.py`
+    - `MOTOR_DIRECTION_SIGNS['left'] = -1`를 다시 적용해서, 직식 기준 `forward/backward`가 서로 반대 방향으로 분리되는지 확인

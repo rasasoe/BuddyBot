@@ -43,7 +43,7 @@ COMMAND_ZERO_DEADBAND = 0.02
 # point is to keep all wheels aligned and solve motion mix issues in the
 # kinematics layer rather than by flipping one wheel ad hoc.
 MOTOR_DIRECTION_SIGNS = {
-    'left': 1,
+    'left': -1,
     'right': 1,
     'back': 1,
 }
