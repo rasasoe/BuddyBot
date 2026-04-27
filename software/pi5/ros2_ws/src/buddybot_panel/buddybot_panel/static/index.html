@@ -144,11 +144,15 @@
           <div class="manual-shell">
             <div class="note">화살표를 누르면 계속 구동되고, 같은 버튼을 다시 누르거나 정지를 누르면 멈춥니다. 전진과 후진은 더 쉽게 출발하도록, 회전은 더 천천히 돌도록 자동 보정합니다.</div>
             <div class="manual-pad">
-              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="manual-button" id="btn-rotate_left" data-toggle-direction="rotate_left">
+                <span class="glyph">↺</span><span class="label">좌회전</span>
+              </button>
               <button class="secondary manual-button" id="btn-forward" data-toggle-direction="forward">
                 <span class="glyph">↑</span><span class="label">전진</span>
               </button>
-              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="manual-button" id="btn-rotate_right" data-toggle-direction="rotate_right">
+                <span class="glyph">↻</span><span class="label">우회전</span>
+              </button>
               <button class="secondary manual-button" id="btn-strafe_left" data-toggle-direction="strafe_left">
                 <span class="glyph">←</span><span class="label">왼쪽 이동</span>
               </button>
@@ -165,15 +169,11 @@
               <div class="manual-spacer" aria-hidden="true"></div>
             </div>
             <div class="manual-aux">
-              <button class="manual-button" id="btn-rotate_left" data-toggle-direction="rotate_left">
-                <span class="glyph">↺</span><span class="label">좌회전</span>
-              </button>
+              <div class="manual-spacer" aria-hidden="true"></div>
               <button class="warn manual-button" onclick="cancelNavigation()">
                 <span class="glyph">×</span><span class="label">경로 취소</span>
               </button>
-              <button class="manual-button" id="btn-rotate_right" data-toggle-direction="rotate_right">
-                <span class="glyph">↻</span><span class="label">우회전</span>
-              </button>
+              <div class="manual-spacer" aria-hidden="true"></div>
             </div>
           </div>
         </div>
