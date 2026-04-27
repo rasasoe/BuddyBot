@@ -133,12 +133,6 @@
           <div class="camera-frame" id="camera-frame"><img id="camera-feed" alt="버디봇 카메라 화면"><div class="overlay"><div class="chip" id="camera-chip">카메라: 대기 중</div></div></div>
           <p class="note" id="camera-note">/camera/image_raw 가 퍼블리시되면 여기에서 바로 전방 영상을 확인할 수 있습니다.</p>
         </div>
-        <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
-        <div class="dual">
-          <button class="secondary" onclick="startFollowTrial()">추종 시험 시작</button>
-          <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
-        </div>
-        <div class="callout"><strong>추종 시험 준비 상태</strong><div class="note" id="follow-note">실시간 센서 상태를 기다리는 중입니다.</div></div>
         <div class="drive-stack">
           <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:15px;background:#f6f0e4">
             <span style="font-size:.82rem;color:var(--muted);white-space:nowrap">수동 속도</span>
@@ -183,6 +177,12 @@
             </div>
           </div>
         </div>
+        <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
+        <div class="dual">
+          <button class="secondary" onclick="startFollowTrial()">추종 시험 시작</button>
+          <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
+        </div>
+        <div class="callout"><strong>추종 시험 준비 상태</strong><div class="note" id="follow-note">실시간 센서 상태를 기다리는 중입니다.</div></div>
         <div class="callout"><strong>운용 준비 요약</strong><div class="note" id="fusion-note">카메라, LiDAR, 위치, 맵, 사람 검출기 상태 요약이 여기에 표시됩니다.</div></div>
       </article>
       <article class="card stack">

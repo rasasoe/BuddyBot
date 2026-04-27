@@ -301,3 +301,37 @@ How to read it quickly:
   - `bash scripts/start_presentation_mode.sh mapping`
   - verify `forward`, `backward`, `rotate_left`, `rotate_right`, `stop`
   - treat any new failure as a regression from this baseline unless single-wheel tests prove otherwise
+
+## 2026-04-27 Validation Snapshot
+
+- Field result:
+  - The user explicitly reported that the robot now moves very well on hardware.
+  - Treat the current motion stack as the best known live-demo baseline, not as another temporary experiment.
+- What this means operationally:
+  - Do not reopen full wheel-geometry or sign-remap work unless a brand-new hardware regression proves this baseline wrong.
+  - Prefer tiny tuning only.
+  - Preserve the current manual-drive feel, avoidance behavior, and Pico output smoothing unless a concrete new failure appears.
+
+## 2026-04-27 UI Follow-up
+
+- Final UI request from the user after the successful field test:
+  - keep the manual arrow control block directly below `전방 카메라`
+  - keep it above `빠른 명령`
+- Why:
+  - this is the most practical operator flow during demos:
+    - open camera
+    - see robot response live
+    - drive immediately from the arrow pad
+- Source file:
+  - `software/pi5/ros2_ws/src/buddybot_panel/buddybot_panel/static/index.html`
+
+## Documentation Rule Going Forward
+
+- If the user says a hardware baseline is finally working well, record that fact in both:
+  - `docs/field_log.md`
+  - `AI_HANDOFF.md`
+- Do not only log code deltas.
+- Also log the user-observed quality signal:
+  - "moves well"
+  - "good for field demo"
+  - "treat as locked baseline until a real regression appears"
