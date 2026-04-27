@@ -7,6 +7,9 @@ from config import (
     COMMAND_ZERO_DEADBAND,
     CONTROL_LOOP_PERIOD_MS,
     MAX_RPM_EST,
+    MOTOR_OUTPUT_SLEW_DOWN,
+    MOTOR_OUTPUT_SLEW_REVERSAL,
+    MOTOR_OUTPUT_SLEW_UP,
     OUTPUT_CPR,
     PID_CORR_MAX,
     STATUS_REPORT_INTERVAL,
@@ -37,6 +40,11 @@ def reset_all_pid(pid_controllers):
         controller.reset()
 
 
+def reset_applied_outputs(applied_outputs):
+    for wheel_name in applied_outputs:
+        applied_outputs[wheel_name] = 0.0
+
+
 def targets_are_zero():
     return (
         abs(system_state.target_vx) <= COMMAND_ZERO_DEADBAND
@@ -45,7 +53,23 @@ def targets_are_zero():
     )
 
 
-def control_loop(pid_controllers):
+def ramp_output(current, target):
+    if current * target < 0.0:
+        step = MOTOR_OUTPUT_SLEW_REVERSAL
+    elif abs(target) > abs(current):
+        step = MOTOR_OUTPUT_SLEW_UP
+    else:
+        step = MOTOR_OUTPUT_SLEW_DOWN
+
+    delta = target - current
+    if delta > step:
+        return current + step
+    if delta < -step:
+        return current - step
+    return target
+
+
+def control_loop(pid_controllers, applied_outputs):
     command_type, params = uart_protocol.parse_command()
     if command_type == 'HB':
         uart_protocol.send_ack('HB')
@@ -70,10 +94,12 @@ def control_loop(pid_controllers):
 
     if safety_system.is_emergency_stop_active():
         reset_all_pid(pid_controllers)
+        reset_applied_outputs(applied_outputs)
         stop_all()
     elif targets_are_zero():
         system_state.update_wheel_targets({'left': 0.0, 'right': 0.0, 'back': 0.0})
         reset_all_pid(pid_controllers)
+        reset_applied_outputs(applied_outputs)
         stop_all()
     else:
         wheel_targets = kinematics.robot_to_wheel_velocities(
@@ -93,13 +119,16 @@ def control_loop(pid_controllers):
             base_drive = system_state.wheel_targets[wheel_name]
             if abs(base_drive) < COMMAND_ZERO_DEADBAND:
                 pid_controllers[wheel_name].reset()
+                applied_outputs[wheel_name] = 0.0
                 motors[wheel_name].set_speed(0.0)
                 continue
             error = base_drive - measured_drive
             correction = pid_controllers[wheel_name].update(error, dt)
             correction = max(-PID_CORR_MAX, min(PID_CORR_MAX, correction))
-            output = max(-1.0, min(1.0, base_drive + correction))
-            motors[wheel_name].set_speed(output)
+            target_output = max(-1.0, min(1.0, base_drive + correction))
+            applied_output = ramp_output(applied_outputs[wheel_name], target_output)
+            applied_outputs[wheel_name] = applied_output
+            motors[wheel_name].set_speed(applied_output)
 
     system_state.update_battery(read_battery_voltage())
     system_state.loop_count += 1
@@ -119,11 +148,12 @@ def main():
         'right': PIDController(),
         'back': PIDController(),
     }
+    applied_outputs = {'left': 0.0, 'right': 0.0, 'back': 0.0}
     watchdog.reset()
 
     while True:
         start = utime.ticks_ms()
-        control_loop(pid_controllers)
+        control_loop(pid_controllers, applied_outputs)
         elapsed = utime.ticks_diff(utime.ticks_ms(), start)
         sleep_ms = CONTROL_LOOP_PERIOD_MS - elapsed
         if sleep_ms > 0:

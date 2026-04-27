@@ -34,6 +34,7 @@
     .mission-actions{grid-template-columns:1fr}
     .control-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .camera-toolbar{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;align-self:flex-start}
+    .drive-stack,.camera-inline,.manual-shell,.manual-pad,.manual-aux{display:grid;gap:12px}
     input,select{width:100%;padding:12px 14px;border-radius:15px;border:1px solid var(--line);background:#fffdf8;font:inherit;color:var(--ink)}
     button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent);line-height:1.25;text-align:center}
     button:hover{background:var(--accent-strong)}
@@ -46,9 +47,13 @@
     button.danger{background:var(--danger)}
     button.danger:hover{background:#903228}
     button.active-toggle{background:var(--rust);color:#fff;box-shadow:0 0 0 3px var(--rust)}
-    .button-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .button-grid button,.manual-stop{min-height:64px}
-    .manual-stop{grid-column:2}
+    .camera-inline,.manual-shell{padding:14px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,#fffefb 0%,#f4ecde 100%)}
+    .manual-pad{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+    .manual-spacer{min-height:1px}
+    .manual-button,.manual-stop{min-height:88px;display:grid;align-content:center;justify-items:center;gap:6px}
+    .manual-button .glyph,.manual-stop .glyph{font-size:2rem;line-height:1}
+    .manual-button .label,.manual-stop .label{font-size:.82rem}
+    .manual-aux{grid-template-columns:repeat(3,minmax(0,1fr))}
     .dual{grid-template-columns:repeat(2,minmax(0,1fr))}
     .triple{grid-template-columns:repeat(3,minmax(0,1fr))}
     .map-wrap,.camera-frame{position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--line);background:#f5f1e8}
@@ -73,8 +78,8 @@
     .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
     .callout strong{display:block;margin-bottom:6px}
     @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}.main > :nth-child(1),.main > :nth-child(2),.main > :nth-child(3){grid-column:auto;grid-row:auto}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media (max-width:1024px){.camera-toolbar,.control-pair{grid-template-columns:1fr}}
-    @media (max-width:860px){.status-grid,.chip-row,.button-grid,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.camera-toolbar,.control-pair{grid-template-columns:1fr}.manual-stop{grid-column:auto}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}}
+    @media (max-width:1024px){.camera-toolbar,.control-pair,.manual-aux{grid-template-columns:1fr}}
+    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.camera-toolbar,.control-pair,.manual-aux{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
   </style>
 </head>
 <body>
@@ -110,34 +115,74 @@
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>주행과 추종</h2>
-            <p class="note">수동 주행을 누르면 경로와 추종이 해제됩니다. 추종 준비 상태는 카메라, 사람 검출기, LiDAR, 안전 래치를 함께 확인합니다.</p>
+            <h2>카메라 추종과 명령</h2>
+            <p class="note">카메라 화면을 보면서 추종, 빠른 명령, 수동 화살표 제어를 한 카드에서 바로 쓰도록 정리했습니다. 수동 주행을 누르면 경로와 추종은 자동으로 해제됩니다.</p>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:15px;background:#f6f0e4">
-          <span style="font-size:.82rem;color:var(--muted);white-space:nowrap">속도</span>
-          <input type="range" id="speed-slider" min="10" max="200" value="60" step="10"
-            oninput="document.getElementById('speed-label').textContent=this.value+'%'"
-            style="flex:1;accent-color:var(--accent);height:4px;cursor:pointer">
-          <span id="speed-label" style="font-size:.88rem;font-weight:700;min-width:42px;text-align:right">60%</span>
+        <div class="camera-inline">
+          <div class="section-head">
+            <div>
+              <h3>전방 카메라</h3>
+              <p class="note" id="camera-summary">카메라 미리보기와 수동 조작을 한 위치에 모았습니다.</p>
+            </div>
+            <div class="camera-toolbar">
+              <button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 닫기</button>
+              <button class="secondary" onclick="refreshCamera(true)">새로고침</button>
+            </div>
+          </div>
+          <div class="camera-frame" id="camera-frame"><img id="camera-feed" alt="버디봇 카메라 화면"><div class="overlay"><div class="chip" id="camera-chip">카메라: 대기 중</div></div></div>
+          <p class="note" id="camera-note">/camera/image_raw 가 퍼블리시되면 여기에서 바로 전방 영상을 확인할 수 있습니다.</p>
         </div>
-        <div class="button-grid">
-          <button class="secondary" id="btn-forward" data-toggle-direction="forward">전진</button>
-          <button class="danger manual-stop" onclick="stopManualToggle()">정지</button>
-          <button class="secondary" id="btn-backward" data-toggle-direction="backward">후진</button>
-          <button class="secondary" id="btn-strafe_left" data-toggle-direction="strafe_left">왼쪽 이동</button>
-          <button class="warn" onclick="cancelNavigation()">경로 취소</button>
-          <button class="secondary" id="btn-strafe_right" data-toggle-direction="strafe_right">오른쪽 이동</button>
-          <button id="btn-rotate_left" data-toggle-direction="rotate_left">좌회전</button>
-          <button id="btn-rotate_right" data-toggle-direction="rotate_right">우회전</button>
-          <button class="accent" onclick="sendChat('status')">상태 말해줘</button>
-        </div>
+        <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
         <div class="dual">
           <button class="secondary" onclick="startFollowTrial()">추종 시험 시작</button>
           <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
         </div>
         <div class="callout"><strong>추종 시험 준비 상태</strong><div class="note" id="follow-note">실시간 센서 상태를 기다리는 중입니다.</div></div>
-        <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
+        <div class="drive-stack">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:15px;background:#f6f0e4">
+            <span style="font-size:.82rem;color:var(--muted);white-space:nowrap">수동 속도</span>
+            <input type="range" id="speed-slider" min="40" max="160" value="100" step="5"
+              oninput="document.getElementById('speed-label').textContent=this.value+'%'"
+              style="flex:1;accent-color:var(--accent);height:4px;cursor:pointer">
+            <span id="speed-label" style="font-size:.88rem;font-weight:700;min-width:48px;text-align:right">100%</span>
+          </div>
+          <div class="manual-shell">
+            <div class="note">화살표를 누르면 계속 구동되고, 같은 버튼을 다시 누르거나 정지를 누르면 멈춥니다. 전진과 후진은 더 쉽게 출발하도록, 회전은 더 천천히 돌도록 자동 보정합니다.</div>
+            <div class="manual-pad">
+              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="secondary manual-button" id="btn-forward" data-toggle-direction="forward">
+                <span class="glyph">↑</span><span class="label">전진</span>
+              </button>
+              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="secondary manual-button" id="btn-strafe_left" data-toggle-direction="strafe_left">
+                <span class="glyph">←</span><span class="label">왼쪽 이동</span>
+              </button>
+              <button class="danger manual-stop" onclick="stopManualToggle()">
+                <span class="glyph">■</span><span class="label">정지</span>
+              </button>
+              <button class="secondary manual-button" id="btn-strafe_right" data-toggle-direction="strafe_right">
+                <span class="glyph">→</span><span class="label">오른쪽 이동</span>
+              </button>
+              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="secondary manual-button" id="btn-backward" data-toggle-direction="backward">
+                <span class="glyph">↓</span><span class="label">후진</span>
+              </button>
+              <div class="manual-spacer" aria-hidden="true"></div>
+            </div>
+            <div class="manual-aux">
+              <button class="manual-button" id="btn-rotate_left" data-toggle-direction="rotate_left">
+                <span class="glyph">↺</span><span class="label">좌회전</span>
+              </button>
+              <button class="warn manual-button" onclick="cancelNavigation()">
+                <span class="glyph">×</span><span class="label">경로 취소</span>
+              </button>
+              <button class="manual-button" id="btn-rotate_right" data-toggle-direction="rotate_right">
+                <span class="glyph">↻</span><span class="label">우회전</span>
+              </button>
+            </div>
+          </div>
+        </div>
         <div class="callout"><strong>운용 준비 요약</strong><div class="note" id="fusion-note">카메라, LiDAR, 위치, 맵, 사람 검출기 상태 요약이 여기에 표시됩니다.</div></div>
       </article>
       <article class="card stack">
@@ -200,13 +245,10 @@
       <article class="card stack">
         <div class="section-head">
           <div>
-            <h2>카메라 추종과 명령</h2>
-            <p class="note" id="camera-summary">카메라를 열기 전까지 미리보기는 꺼져 있습니다.</p>
+            <h2>음성 명령과 로그</h2>
+            <p class="note">카메라 미리보기는 왼쪽 주행 카드 위로 이동했습니다. 여기서는 음성 입력과 채팅 로그를 집중해서 봅니다.</p>
           </div>
-          <div class="camera-toolbar"><button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 열기</button><button class="secondary" onclick="refreshCamera(true)">새로고침</button></div>
         </div>
-        <div class="camera-frame" id="camera-frame" style="display:none"><img id="camera-feed" alt="버디봇 카메라 화면"><div class="overlay"><div class="chip" id="camera-chip">카메라: 대기 중</div></div></div>
-        <p class="note" id="camera-note">/camera/image_raw 가 퍼블리시되면 미리보기가 표시됩니다.</p>
         <div class="callout"><strong>명령 콘솔</strong><div class="note">상태, 주방, 정지, 추종, 좌회전, 충전 같은 짧은 명령을 바로 보낼 수 있습니다. 브라우저 음성 입력과 브라우저 TTS도 여기서 계속 쓸 수 있습니다.</div></div>
         <div class="dual"><button id="voice-btn">음성 입력</button><button class="secondary" onclick="sendChat('status')">상태 요약</button></div>
         <div class="chat-log" id="chat-log"></div>
@@ -216,7 +258,7 @@
   </main>
   <script>
     let assistantEnabled = false;
-    let cameraEnabled = false;
+    let cameraEnabled = true;
     let lastMap = null;
     let lastPose = null;
     let lastStatus = null;
@@ -279,6 +321,24 @@
         const direction = button.dataset.toggleDirection;
         button.addEventListener("click", () => toggleManual(direction));
       });
+    }
+
+    function manualSpeed(direction){
+      const throttle = parseFloat(document.getElementById("speed-slider")?.value ?? 100) / 100;
+      const profiles = {
+        forward: {offset:0.28, gain:0.12},
+        backward: {offset:0.27, gain:0.11},
+        strafe_left: {offset:0.16, gain:0.10},
+        strafe_right: {offset:0.16, gain:0.10},
+        rotate_left: {offset:0.04, gain:0.08},
+        rotate_right: {offset:0.04, gain:0.08},
+        stop: {offset:0.0, gain:0.0},
+      };
+      const profile = profiles[direction] || profiles.forward;
+      if(direction === "stop"){
+        return 0.0;
+      }
+      return profile.offset + (profile.gain * throttle);
     }
 
     function updateToggleButtonStyles(){
@@ -475,7 +535,7 @@
       document.getElementById("follow-note").textContent = fusion.follow_ready
         ? `추종 준비 완료. ${String(detector.backend || "unknown").toUpperCase()} 검출기를 쓰고 있으며, 사람을 화면에 잡으면 바로 따라갑니다.`
         : `추종을 막는 항목: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"} | 검출기: ${detector.backend || "waiting"} (${detector.reason || "waiting"})`;
-      document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 열기 전까지 미리보기는 꺼져 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
+      document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 다시 열면 수동 조작 위에서 바로 전방 영상을 볼 수 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
       document.getElementById("camera-note").textContent = data.pico_connected ? `Pico 상태가 최신입니다. 베이스 브리지가 살아 있고 검출기는 ${detector.backend || "waiting"} 상태입니다.` : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
       document.getElementById("minimap-note").textContent = minimap.active
         ? `미니맵 생성 중: ${minimap.progress_percent || Math.round((minimap.progress || 0) * 100)}% | 단계 ${minimap.explore_phase_label || "탐색"} | 전방 여유 ${minimap.front_clearance_m ?? "-"}m | 셀 ${minimap.known_cells || 0} | 이동거리 ${minimap.distance_m || 0}m`
@@ -593,34 +653,14 @@
           rotate_right: "우회전",
           stop: "정지",
         })[direction] || direction;
-        const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 60) / 100);
-        const speed = ({
-          forward: 0.24,
-          backward: 0.2,
-          strafe_left: 0.22,
-          strafe_right: 0.22,
-          rotate_left: 0.38,
-          rotate_right: 0.38,
-          stop: 0.0,
-        })[direction] ?? 0.24;
-        await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: speed * mult})});
+        await apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: manualSpeed(direction)})});
         addMsg("bot", direction === "stop" ? "수동 주행을 멈췄습니다." : `수동 명령: ${label}`);
         await refreshStatus();
       }catch(error){ showError(error); }
     }
 
     async function manualSilent(direction){
-      const mult = direction === "stop" ? 1.0 : (parseFloat(document.getElementById("speed-slider")?.value ?? 60) / 100);
-      const speed = ({
-        forward: 0.24,
-        backward: 0.2,
-        strafe_left: 0.22,
-        strafe_right: 0.22,
-        rotate_left: 0.38,
-        rotate_right: 0.38,
-        stop: 0.0,
-      })[direction] ?? 0.24;
-      return apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: speed * mult})});
+      return apiJson("/api/manual", {method:"POST", body:JSON.stringify({direction, speed: manualSpeed(direction)})});
     }
 
     async function toggleManual(direction){
@@ -852,14 +892,19 @@
       document.getElementById("camera-toggle-btn").textContent = cameraEnabled ? "카메라 닫기" : "카메라 열기";
       if(cameraEnabled){ refreshCamera(true); }
       else{
-        document.getElementById("camera-summary").textContent = "카메라를 열기 전까지 미리보기는 꺼져 있습니다.";
+        document.getElementById("camera-summary").textContent = "카메라를 다시 열면 수동 조작 위에서 바로 전방 영상을 볼 수 있습니다.";
         document.getElementById("camera-feed").removeAttribute("src");
       }
     }
 
     async function refreshCamera(force){
       if(!cameraEnabled){ return; }
-      if(!force && (!lastStatus || !lastStatus.camera_available)){ return; }
+      if(!lastStatus || !lastStatus.camera_available){
+        if(force){
+          document.getElementById("camera-feed").removeAttribute("src");
+        }
+        return;
+      }
       document.getElementById("camera-feed").src = `/api/camera.jpg?ts=${Date.now()}`;
     }
 
@@ -882,6 +927,9 @@
     });
 
     const voiceBtn = document.getElementById("voice-btn");
+    document.getElementById("camera-feed").addEventListener("error", () => {
+      document.getElementById("camera-feed").removeAttribute("src");
+    });
     if("webkitSpeechRecognition" in window || "SpeechRecognition" in window){
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();

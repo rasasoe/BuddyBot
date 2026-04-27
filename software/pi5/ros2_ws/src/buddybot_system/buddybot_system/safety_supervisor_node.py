@@ -3,8 +3,8 @@
 Safety Supervisor Node for BuddyBot.
 
 Aggregates hard-stop safety sources. LiDAR avoidance is handled separately as a
-soft safety override in command_mux, but a severe obstacle state can still latch
-the system safety topic here.
+soft safety override in command_mux, while an explicit hard-stop state from the
+LiDAR avoidance node can still latch the system safety topic here.
 """
 
 import time
@@ -79,7 +79,7 @@ class SafetySupervisorNode(Node):
 
     def lidar_status_callback(self, msg: String):
         self.last_lidar_status = msg.data or "unknown"
-        active = msg.data.startswith("avoid_stop:")
+        active = msg.data.startswith("hard_stop:")
         self._update_safety_source("lidar_blocked", active)
 
     def command_status_callback(self, msg: String):

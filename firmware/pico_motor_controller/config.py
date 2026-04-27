@@ -36,6 +36,13 @@ PID_CORR_MAX = 0.30
 MAX_MOTOR_SPEED = 1.0
 MIN_MOTOR_SPEED = -1.0
 
+# Limit how quickly wheel output can change between control-loop ticks. This
+# reduces current spikes when the operator jumps between forward/reverse/turn
+# commands and helps keep the Pico USB bridge alive under load.
+MOTOR_OUTPUT_SLEW_UP = 0.06
+MOTOR_OUTPUT_SLEW_DOWN = 0.14
+MOTOR_OUTPUT_SLEW_REVERSAL = 0.05
+
 # Treat very small command magnitudes as an explicit stop so the firmware
 # can bypass PID holdover and drop motor output immediately.
 COMMAND_ZERO_DEADBAND = 0.02

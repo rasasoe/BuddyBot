@@ -182,6 +182,12 @@ class PanelBridge:
         self.follow_enabled = False
         self.assistant_enabled = False
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
+        self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))
+        self._manual_linear_limit = float(os.getenv("BUDDYBOT_MANUAL_LINEAR_LIMIT", "0.52"))
+        self._manual_strafe_limit = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LIMIT", "0.34"))
+        self._manual_angular_limit = float(os.getenv("BUDDYBOT_MANUAL_ANGULAR_LIMIT", "0.18"))
+        self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.05"))
+        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.05"))
         self.last_command = "idle"
         self.ros2_connected = False
 
@@ -602,27 +608,41 @@ class PanelBridge:
             "cells": cells,
         }
 
-    def _summarize_scan(self, msg: LaserScan) -> Dict[str, float]:
-        def sector_min(start_ratio: float, end_ratio: float) -> float:
-            count = len(msg.ranges)
-            if count <= 0:
-                return float("inf")
-            start = max(0, min(count, int(count * start_ratio)))
-            end = max(start + 1, min(count, int(count * end_ratio)))
-            values = []
-            for raw_range in msg.ranges[start:end]:
-                distance = float(raw_range)
+    @staticmethod
+    def _normalize_angle_rad(angle: float) -> float:
+        return math.atan2(math.sin(angle), math.cos(angle))
+
+    def _scan_sector_min(
+        self,
+        msg: LaserScan,
+        center_deg: float,
+        start_offset_deg: float,
+        end_offset_deg: float,
+    ) -> float:
+        center_rad = math.radians(center_deg)
+        start_rad = math.radians(min(start_offset_deg, end_offset_deg))
+        end_rad = math.radians(max(start_offset_deg, end_offset_deg))
+        values: List[float] = []
+
+        angle = float(msg.angle_min)
+        for raw_range in msg.ranges:
+            distance = float(raw_range)
+            relative_angle = self._normalize_angle_rad(angle - center_rad)
+            if start_rad <= relative_angle <= end_rad:
                 if math.isfinite(distance) and msg.range_min <= distance <= msg.range_max:
                     values.append(distance)
-            return min(values) if values else float("inf")
+            angle += float(msg.angle_increment)
+        return min(values) if values else float("inf")
 
+    def _summarize_scan(self, msg: LaserScan) -> Dict[str, float]:
+        center_deg = self._scan_forward_center_deg
         return {
-            "front_min": round(min(sector_min(0.0, 0.08), sector_min(0.92, 1.0)), 3),
-            "front_left_min": round(sector_min(0.08, 0.20), 3),
-            "front_right_min": round(sector_min(0.80, 0.92), 3),
-            "left_min": round(sector_min(0.20, 0.38), 3),
-            "right_min": round(sector_min(0.62, 0.80), 3),
-            "rear_min": round(sector_min(0.42, 0.58), 3),
+            "front_min": round(self._scan_sector_min(msg, center_deg, -30.0, 30.0), 3),
+            "front_left_min": round(self._scan_sector_min(msg, center_deg, 30.0, 72.0), 3),
+            "front_right_min": round(self._scan_sector_min(msg, center_deg, -72.0, -30.0), 3),
+            "left_min": round(self._scan_sector_min(msg, center_deg, 72.0, 136.0), 3),
+            "right_min": round(self._scan_sector_min(msg, center_deg, -136.0, -72.0), 3),
+            "rear_min": round(self._scan_sector_min(msg, center_deg + 180.0, -30.0, 30.0), 3),
             "valid_points": float(
                 sum(
                     1
@@ -1155,6 +1175,16 @@ class PanelBridge:
             self._manual_angular_z = float(angular_z)
             self._manual_updated_at = time.time()
 
+    @staticmethod
+    def _clamp_manual_speed(speed: float, limit: float) -> float:
+        return max(0.0, min(float(limit), abs(float(speed))))
+
+    @staticmethod
+    def _scaled_trim(trim: float, magnitude: float, limit: float) -> float:
+        if limit <= 1e-6 or magnitude <= 1e-6:
+            return 0.0
+        return float(trim) * min(1.0, max(0.55, float(magnitude) / float(limit)))
+
     def _set_explore_phase(self, phase: str, duration_sec: float, direction: float, now: Optional[float] = None) -> None:
         started_at = time.time() if now is None else float(now)
         self._explore_phase = phase
@@ -1539,22 +1569,33 @@ class PanelBridge:
         self.follow_enabled = False
         self._publish_follow_state(False)
         self.cancel_navigation()
+        magnitude = max(0.0, abs(float(speed)))
         linear_x = 0.0
         linear_y = 0.0
         angular_z = 0.0
 
         if direction == "forward":
-            linear_x = speed
+            linear_x = self._clamp_manual_speed(magnitude, self._manual_linear_limit)
+            angular_z = self._scaled_trim(
+                self._manual_forward_yaw_trim,
+                linear_x,
+                self._manual_linear_limit,
+            )
         elif direction == "backward":
-            linear_x = -speed
+            linear_x = -self._clamp_manual_speed(magnitude, self._manual_linear_limit)
+            angular_z = self._scaled_trim(
+                self._manual_backward_yaw_trim,
+                abs(linear_x),
+                self._manual_linear_limit,
+            )
         elif direction == "strafe_left":
-            linear_y = speed
+            linear_y = self._clamp_manual_speed(magnitude, self._manual_strafe_limit)
         elif direction == "strafe_right":
-            linear_y = -speed
+            linear_y = -self._clamp_manual_speed(magnitude, self._manual_strafe_limit)
         elif direction == "rotate_left":
-            angular_z = speed
+            angular_z = self._clamp_manual_speed(magnitude, self._manual_angular_limit)
         elif direction == "rotate_right":
-            angular_z = -speed
+            angular_z = -self._clamp_manual_speed(magnitude, self._manual_angular_limit)
 
         if direction == "stop":
             with self._lock:
