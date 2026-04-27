@@ -335,3 +335,19 @@ How to read it quickly:
   - "moves well"
   - "good for field demo"
   - "treat as locked baseline until a real regression appears"
+
+## 2026-04-27 Live Minimap + Checkpoint Follow-up
+
+- New field request after the stable motion baseline:
+  - right turns still felt slower than left turns
+  - pressing `미니맵 생성` should not make the robot wander on its own
+  - checkpoints must be reachable during live LiDAR operation, not only after a separate map-building phase
+- Implementation direction locked in:
+  - panel manual `rotate_right` now gets a small boost to match left-turn feel
+  - local checkpoint navigation also boosts negative angular commands slightly for the same chassis asymmetry
+  - minimap start now means "begin live LiDAR accumulation" instead of "autonomous roaming"
+  - manual drive, waypoint go, destination go, and route run no longer shut the live minimap off
+  - waypoint manager now reloads the waypoint YAML from disk on navigation requests and honors `BUDDYBOT_WAYPOINT_FILE`
+  - when pose source is not `amcl`, checkpoint go should prefer local navigation immediately
+- Operational expectation on Pi:
+  - in live presentation mode, the operator can start the minimap, drive manually or press checkpoint go, and watch the map keep updating without autonomous sweep behavior

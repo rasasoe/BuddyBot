@@ -87,8 +87,8 @@
     <section class="hero">
       <article class="card stack">
         <div class="eyebrow">BuddyBot Mission Console</div>
-        <h1>오프라인 미니맵 생성부터 체크포인트, 사용자 추종까지 한 화면에서 마무리합니다.</h1>
-        <p class="lead">미니맵 생성 버튼을 누르면 버디봇이 로봇청소기처럼 천천히 회피 주행하며 방을 훑고, 생성이 끝나면 그 맵 위에 체크포인트를 자유롭게 저장, 삭제, 경로화할 수 있습니다.</p>
+        <h1>라이브 LiDAR 미니맵, 체크포인트 이동, 사용자 추종까지 한 화면에서 바로 운용합니다.</h1>
+        <p class="lead">미니맵 시작 버튼을 누르면 로봇은 제자리에서 유지되고, 라이브 주행 중 들어오는 LiDAR 스캔으로 로컬 미니맵만 계속 누적합니다. 그 상태에서 바로 체크포인트 저장과 이동을 이어갈 수 있습니다.</p>
         <div class="hero-actions">
           <input id="server-url" value="http://127.0.0.1:8000">
           <button class="secondary" onclick="toggleAssistant()">어시스턴트 전환</button>
@@ -189,7 +189,7 @@
         <div class="section-head">
           <div>
             <h2>미니맵, 체크포인트, 경로</h2>
-            <p class="note" id="map-summary">생성 중인 미니맵이나 현재 사용 가능한 지도를 불러오는 중입니다.</p>
+            <p class="note" id="map-summary">라이브 LiDAR 미니맵이나 현재 사용 가능한 지도를 불러오는 중입니다.</p>
           </div>
           <button class="secondary" onclick="refreshMap()">맵 새로고침</button>
         </div>
@@ -201,11 +201,11 @@
           </div>
         </div>
         <div class="callout">
-          <strong>미니맵 생성기</strong>
-          <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 만들고, 완성되면 그 맵에 바로 체크포인트를 저장할 수 있습니다.</div>
+          <strong>라이브 미니맵</strong>
+          <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 라이브로 누적하고, 같은 화면에서 바로 체크포인트 저장과 이동까지 이어갈 수 있습니다.</div>
           <div class="control-pair">
-            <button class="accent" onclick="startMiniMap()">미니맵 생성</button>
-            <button class="secondary" onclick="stopMiniMap()">미니맵 중지</button>
+            <button class="accent" onclick="startMiniMap()">미니맵 시작</button>
+            <button class="secondary" onclick="stopMiniMap()">미니맵 정지</button>
           </div>
           <div class="control-pair">
             <button class="secondary" onclick="refreshMiniMapStatus()">미니맵 새로고침</button>
@@ -528,7 +528,7 @@
       document.getElementById("follow-chip").textContent = `추종: ${data.follow_enabled ? "켜짐" : "꺼짐"}`;
       document.getElementById("pose-chip").textContent = data.pose ? `위치: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})` : "위치: 없음";
       document.getElementById("camera-chip").textContent = data.camera_available ? `카메라: 정상 (${data.camera_age_sec}s 전)` : "카메라: 대기 중";
-      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 미니맵 생성, 경로 작업을 바로 시작할 수 있습니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"}`;
+      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 라이브 미니맵, 체크포인트 이동을 바로 시작할 수 있습니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"}`;
       document.getElementById("fusion-note").textContent = fusion.fusion_ready
         ? `카메라, LiDAR, 맵, 위치가 모두 준비되었습니다. 사람 검출기는 ${detector.backend || "unknown"} 백엔드로 동작 중입니다.`
         : `운용은 가능하지만 아직 비어 있는 항목이 있습니다. 부족한 항목: ${(fusion.blockers || []).join(", ") || "unknown"} | 검출기: ${detector.backend || "waiting"} (${detector.reason || "waiting"})`;
@@ -538,12 +538,12 @@
       document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 다시 열면 수동 조작 위에서 바로 전방 영상을 볼 수 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
       document.getElementById("camera-note").textContent = data.pico_connected ? `Pico 상태가 최신입니다. 베이스 브리지가 살아 있고 검출기는 ${detector.backend || "waiting"} 상태입니다.` : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
       document.getElementById("minimap-note").textContent = minimap.active
-        ? `미니맵 생성 중: ${minimap.progress_percent || Math.round((minimap.progress || 0) * 100)}% | 단계 ${minimap.explore_phase_label || "탐색"} | 전방 여유 ${minimap.front_clearance_m ?? "-"}m | 셀 ${minimap.known_cells || 0} | 이동거리 ${minimap.distance_m || 0}m`
+        ? `라이브 미니맵 누적 중: 셀 ${minimap.known_cells || 0} | 프레임 ${minimap.frames || 0} | 이동거리 ${minimap.distance_m || 0}m | 이 상태에서 체크포인트 저장과 이동을 계속할 수 있습니다.`
         : minimap.completed
-          ? `미니맵 생성 완료. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 이 맵 위에서 체크포인트를 저장하고 삭제할 수 있습니다.`
+          ? `미니맵 누적이 멈춘 상태입니다. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 이 맵 위에서 체크포인트를 저장하고 이동할 수 있습니다.`
           : minimap.map_available
-            ? `미니맵 일시 정지 상태입니다. 마지막 단계는 ${minimap.explore_phase_label || "대기"}였고 확인된 셀은 ${minimap.known_cells || 0}개입니다.`
-            : "미니맵 생성 버튼을 누르면 버디봇이 회피 주행으로 방을 훑고, 완료되면 그 맵 위에서 체크포인트를 관리할 수 있습니다.";
+            ? `저장된 미니맵이 준비되어 있습니다. 확인된 셀 ${minimap.known_cells || 0}개 기준으로 체크포인트 저장과 이동을 계속할 수 있습니다.`
+            : "미니맵 시작 버튼을 누르면 로봇을 움직이지 않고 LiDAR 미니맵만 라이브로 누적합니다. 그 상태에서 바로 체크포인트를 저장하거나 이동할 수 있습니다.";
     }
 
     async function refreshMissionData(){
@@ -593,10 +593,10 @@
         ? "전역 SLAM 맵이 준비되었습니다."
         : mapData.source === "mini_map"
           ? lastMiniMapStatus?.active
-            ? `생성 중인 미니맵을 우선 표시하고 있습니다. 현재 단계는 ${lastMiniMapStatus?.explore_phase_label || "탐색"}입니다.`
-            : "누적 LiDAR 미니맵이 준비되어 이 맵 위에 체크포인트를 저장하고 삭제할 수 있습니다."
+            ? "라이브로 누적 중인 LiDAR 미니맵을 표시하고 있습니다. 같은 상태에서 체크포인트 저장과 이동을 계속할 수 있습니다."
+            : "누적 LiDAR 미니맵이 준비되어 이 맵 위에서 체크포인트를 저장하고 이동할 수 있습니다."
           : mapData.source === "scan_local"
-            ? "전역 맵이 아직 준비되지 않아 로봇 주변 LiDAR 로컬 맵을 보여주고 있습니다."
+            ? "전역 맵이 아직 없어도 로봇 주변 LiDAR 로컬 맵을 보여주며, 라이브 상태 체크포인트 이동은 계속 가능합니다."
             : syntheticReason;
       drawMap(mapData, waypointData.items || []);
     }
@@ -616,7 +616,7 @@
       try{
         const data = await apiJson("/api/minimap/start", {method:"POST"});
         lastMiniMapStatus = data;
-        addMsg("bot", "미니맵 생성을 시작했습니다. 버디봇이 로봇청소기처럼 회피 주행하며 방을 훑습니다.");
+        addMsg("bot", "라이브 미니맵 누적을 시작했습니다. 이제 로봇을 움직여도 자동 배회 없이 LiDAR 미니맵만 계속 쌓습니다.");
         await refreshStatus();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -626,7 +626,7 @@
       try{
         const data = await apiJson("/api/minimap/stop", {method:"POST"});
         lastMiniMapStatus = data;
-        addMsg("bot", "미니맵 생성을 중지했습니다.");
+        addMsg("bot", "라이브 미니맵 누적을 멈췄습니다.");
         await refreshStatus();
       }catch(error){ showError(error); }
     }

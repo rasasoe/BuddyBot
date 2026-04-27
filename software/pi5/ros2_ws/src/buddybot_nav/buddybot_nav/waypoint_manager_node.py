@@ -73,25 +73,29 @@ class WaypointManagerNode(Node):
         self.declare_parameter('local_nav_rate', 10.0)
         self.declare_parameter('local_position_gain', 0.75)
         self.declare_parameter('local_heading_gain', 1.2)
+        self.declare_parameter('prefer_local_navigation', True)
+        self.declare_parameter('local_right_turn_boost', 1.18)
         self.declare_parameter('max_nav_linear_velocity', 0.3)
         self.declare_parameter('max_nav_angular_velocity', 0.6)
         self.declare_parameter('use_sim_time', False)
 
         # Get parameters
         waypoint_config = self.get_parameter('waypoint_config').value
-        self.waypoint_config = waypoint_config
+        self.waypoint_config = self._resolve_waypoint_config(waypoint_config)
         self.navigation_timeout = self.get_parameter('navigation_timeout').value
         self.goal_tolerance = self.get_parameter('goal_tolerance').value
         self.yaw_tolerance = float(self.get_parameter('yaw_tolerance').value)
         self.local_nav_rate = float(self.get_parameter('local_nav_rate').value)
         self.local_position_gain = float(self.get_parameter('local_position_gain').value)
         self.local_heading_gain = float(self.get_parameter('local_heading_gain').value)
+        self.prefer_local_navigation = bool(self.get_parameter('prefer_local_navigation').value)
+        self.local_right_turn_boost = float(self.get_parameter('local_right_turn_boost').value)
         self.max_nav_linear_velocity = float(self.get_parameter('max_nav_linear_velocity').value)
         self.max_nav_angular_velocity = float(self.get_parameter('max_nav_angular_velocity').value)
         self.use_sim_time = self.get_parameter('use_sim_time').value
 
         # Load waypoint database
-        self.config_data = self._load_waypoints(waypoint_config)
+        self.config_data = self._load_waypoints(self.waypoint_config)
         self.waypoints = self.config_data.get('waypoints', {})
         self.destinations = self.config_data.get('destinations', {})
 
@@ -184,14 +188,7 @@ class WaypointManagerNode(Node):
     def _load_waypoints(self, config_file: str) -> Dict[str, Dict]:
         """Load waypoint database from YAML configuration."""
         try:
-            # Try to find config file in package share directory
-            config_path = config_file
-            if not os.path.exists(config_path):
-                # Fallback to relative path from package
-                package_share = os.path.join(
-                    os.path.dirname(__file__), '..', 'config', 'waypoints.yaml')
-                if os.path.exists(package_share):
-                    config_path = package_share
+            config_path = self._resolve_waypoint_config(config_file)
 
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f) or {}
@@ -203,6 +200,35 @@ class WaypointManagerNode(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to load waypoints: {e}")
             return {"waypoints": {}, "destinations": {}, "constraints": {}}
+
+    def _resolve_waypoint_config(self, config_file: str) -> str:
+        env_path = os.getenv("BUDDYBOT_WAYPOINT_FILE", "").strip()
+        candidates = []
+        if env_path:
+            candidates.append(env_path)
+        if config_file:
+            candidates.append(config_file)
+        candidates.append(
+            os.path.abspath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    '..',
+                    'config',
+                    'waypoints.yaml',
+                )
+            )
+        )
+
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                return os.path.abspath(candidate)
+
+        return os.path.abspath(candidates[0] if candidates else config_file)
+
+    def _reload_waypoints_from_disk(self) -> None:
+        self.config_data = self._load_waypoints(self.waypoint_config)
+        self.waypoints = self.config_data.get('waypoints', {})
+        self.destinations = self.config_data.get('destinations', {})
 
     def _log_available_waypoints(self):
         """Log all available waypoints."""
@@ -230,6 +256,7 @@ class WaypointManagerNode(Node):
         waypoint_name = msg.data.strip()
         if not waypoint_name:
             return
+        self._reload_waypoints_from_disk()
         if waypoint_name not in self.waypoints:
             self.get_logger().warn(f"Unknown waypoint from topic request: {waypoint_name}")
             self._publish_navigation_status(f"unknown_waypoint:{waypoint_name}")
@@ -250,6 +277,7 @@ class WaypointManagerNode(Node):
         if not raw:
             self.get_logger().warn("Empty route sequence received")
             return
+        self._reload_waypoints_from_disk()
 
         try:
             payload = json.loads(raw)
@@ -335,6 +363,7 @@ class WaypointManagerNode(Node):
         raw = msg.data.strip()
         if not raw:
             return
+        self._reload_waypoints_from_disk()
 
         try:
             if raw.startswith("{"):
@@ -400,11 +429,7 @@ class WaypointManagerNode(Node):
             self._cancel_navigation("cancelled")
 
     def _config_path(self) -> str:
-        config_path = self.waypoint_config
-        if not os.path.isabs(config_path):
-            config_path = os.path.join(
-                os.path.dirname(__file__), '..', 'config', 'waypoints.yaml')
-        return config_path
+        return self._resolve_waypoint_config(self.waypoint_config)
 
     def _save_waypoints(self):
         config_path = self._config_path()
@@ -514,6 +539,7 @@ class WaypointManagerNode(Node):
         # 4. Monitor progress and provide feedback
 
         waypoint_name = request.data if hasattr(request, 'data') else "unknown"
+        self._reload_waypoints_from_disk()
 
         self.get_logger().info(f"Waypoint request: {waypoint_name}")
 
@@ -549,8 +575,10 @@ class WaypointManagerNode(Node):
 
     def _start_navigation(self, waypoint_name: str):
         """Start navigation to specified waypoint."""
+        self._reload_waypoints_from_disk()
         if waypoint_name not in self.waypoints:
             self.get_logger().error(f"Unknown waypoint: {waypoint_name}")
+            self._publish_navigation_status(f"unknown_waypoint:{waypoint_name}")
             return
 
         if self.navigation_active or self.goal_handle is not None:
@@ -583,7 +611,17 @@ class WaypointManagerNode(Node):
         self.navigation_started_at = time.time()
         self._publish_current_waypoint(waypoint_name)
 
-        if self.nav_action_client.wait_for_server(timeout_sec=0.5):
+        prefer_local_navigation = (
+            self.prefer_local_navigation
+            and self.current_pose is not None
+            and self.current_pose_source != "amcl"
+        )
+        if prefer_local_navigation:
+            self.get_logger().info(
+                f"Using local checkpoint navigation for '{waypoint_name}' from pose source '{self.current_pose_source}'"
+            )
+
+        if not prefer_local_navigation and self.nav_action_client.wait_for_server(timeout_sec=0.5):
             self.navigation_active = True
             self.control_mode = "nav2_pending"
             self.goal_future = self.nav_action_client.send_goal_async(goal)
@@ -664,10 +702,7 @@ class WaypointManagerNode(Node):
                 self._finish_navigation(f"arrived:{self.current_waypoint}")
                 return
 
-            angular_z = self._clamp(
-                yaw_error * self.local_heading_gain,
-                self.max_nav_angular_velocity,
-            )
+            angular_z = self._tune_angular_velocity(yaw_error * self.local_heading_gain)
             self._publish_nav_velocity(0.0, 0.0, angular_z)
             return
 
@@ -678,7 +713,7 @@ class WaypointManagerNode(Node):
 
         linear_x = self._clamp(error_x * self.local_position_gain, self.max_nav_linear_velocity)
         linear_y = self._clamp(error_y * self.local_position_gain, self.max_nav_linear_velocity)
-        angular_z = self._clamp(yaw_error * self.local_heading_gain, self.max_nav_angular_velocity)
+        angular_z = self._tune_angular_velocity(yaw_error * self.local_heading_gain)
 
         self._publish_nav_velocity(linear_x, linear_y, angular_z)
 
@@ -798,6 +833,13 @@ class WaypointManagerNode(Node):
 
     def _clamp(self, value: float, limit: float) -> float:
         return max(-limit, min(limit, value))
+
+    def _tune_angular_velocity(self, angular_z: float) -> float:
+        limit = self.max_nav_angular_velocity
+        if angular_z < 0.0:
+            angular_z *= self.local_right_turn_boost
+            limit *= self.local_right_turn_boost
+        return self._clamp(angular_z, limit)
 
     def _publish_current_waypoint(self, waypoint: str):
         """Publish current navigation waypoint."""

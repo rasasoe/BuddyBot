@@ -186,6 +186,13 @@ class PanelBridge:
         self._manual_linear_limit = float(os.getenv("BUDDYBOT_MANUAL_LINEAR_LIMIT", "0.52"))
         self._manual_strafe_limit = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LIMIT", "0.34"))
         self._manual_angular_limit = float(os.getenv("BUDDYBOT_MANUAL_ANGULAR_LIMIT", "0.18"))
+        self._manual_right_turn_boost = float(os.getenv("BUDDYBOT_MANUAL_RIGHT_TURN_BOOST", "1.18"))
+        self._manual_right_angular_limit = float(
+            os.getenv(
+                "BUDDYBOT_MANUAL_RIGHT_ANGULAR_LIMIT",
+                f"{self._manual_angular_limit * self._manual_right_turn_boost:.3f}",
+            )
+        )
         self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.05"))
         self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.05"))
         self.last_command = "idle"
@@ -246,6 +253,7 @@ class PanelBridge:
         self._last_cli_scan_attempt = 0.0
         self._mini_map: Optional[Dict[str, Any]] = None
         self._mini_map_active = False
+        self._mini_map_auto_drive = False
         self._mini_map_completed = False
         self._mini_map_started_at: Optional[float] = None
         self._mini_map_completed_at: Optional[float] = None
@@ -717,8 +725,9 @@ class PanelBridge:
         with self._lock:
             mini_map = self._mini_map
             active = self._mini_map_active
+            auto_drive = self._mini_map_auto_drive
 
-        if mini_map is None:
+        if mini_map is None or not active:
             return
 
         base_pose = pose or self.current_pose() or {"x": 0.0, "y": 0.0, "theta": 0.0}
@@ -750,8 +759,9 @@ class PanelBridge:
             if last_pose is not None:
                 self._mini_map_distance_m += math.hypot(base_x - float(last_pose["x"]), base_y - float(last_pose["y"]))
             self._mini_map_last_pose = {"x": base_x, "y": base_y, "theta": theta}
-            if active and self._mini_map_should_complete(now):
+            if active and auto_drive and self._mini_map_should_complete(now):
                 self._mini_map_active = False
+                self._mini_map_auto_drive = False
                 self._mini_map_completed = True
                 self._mini_map_completed_at = now
                 self._manual_active = False
@@ -1090,6 +1100,7 @@ class PanelBridge:
         with self._lock:
             mini_map = dict(self._mini_map) if self._mini_map is not None else None
             active = bool(self._mini_map_active)
+            auto_drive = bool(self._mini_map_auto_drive)
             completed = bool(self._mini_map_completed)
             started_at = self._mini_map_started_at
             completed_at = self._mini_map_completed_at
@@ -1111,8 +1122,10 @@ class PanelBridge:
             progress = round(min(1.0, (cell_progress * 0.75) + (time_progress * 0.25)), 3)
 
         status = "idle"
-        if active:
+        if active and auto_drive:
             status = "building"
+        elif active:
+            status = "live"
         elif completed:
             status = "complete"
         elif mini_map is not None:
@@ -1138,6 +1151,7 @@ class PanelBridge:
 
         return {
             "active": active,
+            "auto_drive": auto_drive,
             "completed": completed,
             "status": status,
             "duration_sec": duration_sec,
@@ -1202,11 +1216,12 @@ class PanelBridge:
 
         with self._lock:
             active = bool(self._mini_map_active)
+            auto_drive = bool(self._mini_map_auto_drive)
             scan_summary = dict(self._latest_scan_summary) if self._latest_scan_summary is not None else None
             safety_active = bool(self._safety_active)
             scan_stamp = self._latest_scan_stamp
 
-        if not active:
+        if not active or not auto_drive:
             return
 
         # Pause exploration on safety latch or stale scan data.
@@ -1301,12 +1316,10 @@ class PanelBridge:
 
     def start_mini_map(self) -> Dict[str, Any]:
         anchor_pose = self.current_pose() or {"x": 0.0, "y": 0.0, "theta": 0.0, "source": "panel"}
-        self.set_follow_enabled(False, update_last_command=False)
-        self.cancel_navigation()
-        self._clear_manual_motion()
         with self._lock:
             self._mini_map = self._new_mini_map(anchor_pose)
             self._mini_map_active = True
+            self._mini_map_auto_drive = False
             self._mini_map_completed = False
             self._mini_map_started_at = time.time()
             self._mini_map_completed_at = None
@@ -1325,10 +1338,14 @@ class PanelBridge:
     def stop_mini_map(self, *, update_last_command: bool = True) -> Dict[str, Any]:
         with self._lock:
             was_active = bool(self._mini_map_active)
+            was_auto_drive = bool(self._mini_map_auto_drive)
+            had_frames = self._mini_map_frames > 0
             self._mini_map_active = False
-        # Avoid injecting a zero manual command when callers use this as a
-        # generic "make sure minimap is off" guard before sending manual drive.
-        if was_active:
+            self._mini_map_auto_drive = False
+            if had_frames:
+                self._mini_map_completed = True
+                self._mini_map_completed_at = time.time()
+        if was_active and was_auto_drive:
             self._clear_manual_motion()
         self._explore_phase = "forward"
         if update_last_command:
@@ -1339,6 +1356,7 @@ class PanelBridge:
         with self._lock:
             self._mini_map = None
             self._mini_map_active = False
+            self._mini_map_auto_drive = False
             self._mini_map_completed = False
             self._mini_map_started_at = None
             self._mini_map_completed_at = None
@@ -1565,7 +1583,6 @@ class PanelBridge:
 
     def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
-        self.stop_mini_map(update_last_command=False)
         self.follow_enabled = False
         self._publish_follow_state(False)
         self.cancel_navigation()
@@ -1595,7 +1612,10 @@ class PanelBridge:
         elif direction == "rotate_left":
             angular_z = self._clamp_manual_speed(magnitude, self._manual_angular_limit)
         elif direction == "rotate_right":
-            angular_z = -self._clamp_manual_speed(magnitude, self._manual_angular_limit)
+            angular_z = -self._clamp_manual_speed(
+                magnitude * self._manual_right_turn_boost,
+                self._manual_right_angular_limit,
+            )
 
         if direction == "stop":
             with self._lock:
@@ -1617,7 +1637,6 @@ class PanelBridge:
 
     def go_waypoint(self, name: str) -> None:
         self.last_command = f"nav:{name}"
-        self.stop_mini_map(update_last_command=False)
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
         if self.ros2_connected and self._waypoint_goal_pub is not None:
@@ -1627,7 +1646,6 @@ class PanelBridge:
 
     def run_destination(self, name: str) -> None:
         self.last_command = f"destination:{name}"
-        self.stop_mini_map(update_last_command=False)
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
         if self.ros2_connected and self._destination_goal_pub is not None:
@@ -1646,7 +1664,6 @@ class PanelBridge:
             raise ValueError(f"Unknown checkpoints in route: {', '.join(missing)}")
 
         self.last_command = f"route:{name}"
-        self.stop_mini_map(update_last_command=False)
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
 
