@@ -126,6 +126,11 @@ class WaypointManagerNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             depth=1
         )
+        command_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10,
+        )
 
         self.current_waypoint_pub = self.create_publisher(
             String, '/nav/current_waypoint', qos_profile)
@@ -146,23 +151,23 @@ class WaypointManagerNode(Node):
         self.create_subscription(
             String, '/system/mode', self.mode_callback, qos_profile)
         self.create_subscription(
-            String, '/nav/waypoint_goal', self.waypoint_goal_callback, qos_profile)
+            String, '/nav/waypoint_goal', self.waypoint_goal_callback, command_qos)
         self.create_subscription(
-            String, '/nav/route_goal', self.route_goal_callback, qos_profile)
+            String, '/nav/route_goal', self.route_goal_callback, command_qos)
         self.create_subscription(
-            String, '/nav/waypoint_save', self.waypoint_save_callback, qos_profile)
+            String, '/nav/waypoint_save', self.waypoint_save_callback, command_qos)
         self.create_subscription(
-            String, '/nav/waypoint_delete', self.waypoint_delete_callback, qos_profile)
+            String, '/nav/waypoint_delete', self.waypoint_delete_callback, command_qos)
         self.create_subscription(
-            String, '/nav/waypoint_clear', self.waypoint_clear_callback, qos_profile)
+            String, '/nav/waypoint_clear', self.waypoint_clear_callback, command_qos)
         self.create_subscription(
-            String, '/nav/destination_goal', self.destination_goal_callback, qos_profile)
+            String, '/nav/destination_goal', self.destination_goal_callback, command_qos)
         self.create_subscription(
-            String, '/nav/destination_save', self.destination_save_callback, qos_profile)
+            String, '/nav/destination_save', self.destination_save_callback, command_qos)
         self.create_subscription(
-            String, '/nav/destination_delete', self.destination_delete_callback, qos_profile)
+            String, '/nav/destination_delete', self.destination_delete_callback, command_qos)
         self.create_subscription(
-            String, '/nav/cancel', self.cancel_topic_callback, qos_profile)
+            String, '/nav/cancel', self.cancel_topic_callback, command_qos)
 
         # Services
         self.create_service(

@@ -368,3 +368,21 @@ How to read it quickly:
     - checkpoint save
     - route builder
   - the saved checkpoint list is now selection-focused with only one inline action (`경로에 추가`) instead of stacked move/delete buttons on every row
+## 2026-04-28 Manual Avoidance Toggle + Checkpoint Ack
+
+- New field feedback:
+  - manual driving should be able to bypass LiDAR avoidance
+  - obstacle avoidance is still needed for autonomous navigation and follow mode
+  - pressing checkpoint go sometimes appeared to do nothing
+- What changed:
+  - `lidar_avoidance_node.py` now accepts `/system/manual_avoidance_enabled`
+  - manual driving bypasses LiDAR avoidance when that toggle is `False`
+  - autonomous navigation and follow commands still go through LiDAR avoidance as before
+  - panel UI now exposes a `수동 회피 ON/OFF` control inside the manual-drive card
+  - panel publishes the toggle state with transient-local QoS so restart order is less fragile
+  - waypoint manager command subscribers now use reliable + volatile command QoS instead of transient-local
+  - panel waits briefly for `waypoint_manager` navigation-status acknowledgement after checkpoint/route requests and raises an API error if the request was published but not acknowledged
+- Operational expectation on Pi:
+  - default manual mode feels direct because manual avoidance is off
+  - if the operator wants extra protection during slow indoor tests, manual avoidance can be turned on from the panel
+  - checkpoint go should now either start moving or return a clear panel error instead of silently doing nothing

@@ -141,6 +141,15 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class ManualCommandRequest(BaseModel):
+    direction: str = "stop"
+    speed: float = 0.35
+
+
+class ManualAvoidanceRequest(BaseModel):
+    enabled: bool
+
+
 class WaypointSaveRequest(BaseModel):
     name: str
     x: Optional[float] = None
@@ -178,9 +187,17 @@ class RouteRunRequest(BaseModel):
 
 
 class PanelBridge:
+    @staticmethod
+    def _env_flag(name: str, default: bool = False) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
     def __init__(self) -> None:
         self.follow_enabled = False
         self.assistant_enabled = False
+        self.manual_avoidance_enabled = self._env_flag("BUDDYBOT_MANUAL_AVOIDANCE_ENABLED", False)
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
         self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))
         self._manual_linear_limit = float(os.getenv("BUDDYBOT_MANUAL_LINEAR_LIMIT", "0.52"))
@@ -201,6 +218,7 @@ class PanelBridge:
         self._node = None
         self._spin_thread = None
         self._manual_pub = None
+        self._manual_avoidance_pub = None
         self._follow_pub = None
         self._estop_pub = None
         self._route_pub = None
@@ -242,6 +260,7 @@ class PanelBridge:
         self._safety_status = "active:False,sources:"
         self._system_status = "idle"
         self._navigation_status = "idle"
+        self._navigation_status_updates = 0
         self._manual_active = False
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
@@ -300,20 +319,42 @@ class PanelBridge:
                 rclpy.init(args=None)
 
             self._node = Node("buddybot_local_panel")
-            self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", 10)
-            self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", 10)
-            self._estop_pub = self._node.create_publisher(Bool, "/system/estop", 10)
-            self._route_pub = self._node.create_publisher(String, "/nav/route_goal", 10)
-            self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", 10)
-            self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", 10)
-            self._waypoint_delete_pub = self._node.create_publisher(String, "/nav/waypoint_delete", 10)
-            self._waypoint_clear_pub = self._node.create_publisher(String, "/nav/waypoint_clear", 10)
-            self._destination_goal_pub = self._node.create_publisher(String, "/nav/destination_goal", 10)
-            self._destination_save_pub = self._node.create_publisher(String, "/nav/destination_save", 10)
-            self._destination_delete_pub = self._node.create_publisher(String, "/nav/destination_delete", 10)
-            self._nav_cancel_pub = self._node.create_publisher(String, "/nav/cancel", 10)
+            command_qos = 10
+            state_qos = 10
+            if QoSProfile is not None:
+                try:
+                    command_qos = QoSProfile(
+                        reliability=ReliabilityPolicy.RELIABLE,
+                        durability=DurabilityPolicy.VOLATILE,
+                        history=HistoryPolicy.KEEP_LAST,
+                        depth=10,
+                    )
+                    state_qos = QoSProfile(
+                        reliability=ReliabilityPolicy.RELIABLE,
+                        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                        history=HistoryPolicy.KEEP_LAST,
+                        depth=1,
+                    )
+                except Exception:
+                    command_qos = 10
+                    state_qos = 10
+
+            self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", command_qos)
+            self._manual_avoidance_pub = self._node.create_publisher(Bool, "/system/manual_avoidance_enabled", state_qos)
+            self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", command_qos)
+            self._estop_pub = self._node.create_publisher(Bool, "/system/estop", command_qos)
+            self._route_pub = self._node.create_publisher(String, "/nav/route_goal", command_qos)
+            self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", command_qos)
+            self._waypoint_save_pub = self._node.create_publisher(String, "/nav/waypoint_save", command_qos)
+            self._waypoint_delete_pub = self._node.create_publisher(String, "/nav/waypoint_delete", command_qos)
+            self._waypoint_clear_pub = self._node.create_publisher(String, "/nav/waypoint_clear", command_qos)
+            self._destination_goal_pub = self._node.create_publisher(String, "/nav/destination_goal", command_qos)
+            self._destination_save_pub = self._node.create_publisher(String, "/nav/destination_save", command_qos)
+            self._destination_delete_pub = self._node.create_publisher(String, "/nav/destination_delete", command_qos)
+            self._nav_cancel_pub = self._node.create_publisher(String, "/nav/cancel", command_qos)
             self._node.create_timer(0.1, self._manual_publish_timer)
             self._node.create_timer(0.2, self._mini_map_timer)
+            self._publish_manual_avoidance_state()
 
             map_qos = 10
             if QoSProfile is not None:
@@ -390,7 +431,9 @@ class PanelBridge:
         self._system_status = msg.data
 
     def _navigation_status_callback(self, msg: String) -> None:
-        self._navigation_status = msg.data
+        with self._lock:
+            self._navigation_status = msg.data
+            self._navigation_status_updates += 1
 
     def _safety_status_callback(self, msg: String) -> None:
         self._safety_status = msg.data
@@ -862,13 +905,16 @@ class PanelBridge:
 
     def status(self) -> Dict[str, Any]:
         pose = self.current_pose()
+        with self._lock:
+            navigation_status = self._navigation_status
+            manual_avoidance_enabled = bool(self.manual_avoidance_enabled)
         return {
             "panel_build": PANEL_BUILD,
             "panel_static_dir": str(STATIC_DIR),
             "waypoint_file": str(WAYPOINT_FILE),
             "mode": "assistant" if self.assistant_enabled else "standalone",
             "follow_enabled": self.follow_enabled,
-            "navigation_status": self._navigation_status,
+            "navigation_status": navigation_status,
             "ros2_connected": self.ros2_connected,
             "server_url": self.server_url,
             "server_connected": self._cached_server_connected(),
@@ -891,6 +937,7 @@ class PanelBridge:
             "pico_connected": self.pico_connected(),
             "pico_status": self.pico_status(),
             "manual_active": self.manual_active(),
+            "manual_avoidance_enabled": manual_avoidance_enabled,
             "manual_command": self.manual_command_state(),
             "safety_active": self.safety_active(),
             "safety_status": self.safety_status(),
@@ -1419,6 +1466,19 @@ class PanelBridge:
         msg.data = "cancel"
         self._nav_cancel_pub.publish(msg)
 
+    def _publish_manual_avoidance_state(self) -> None:
+        if self._manual_avoidance_pub is None:
+            return
+        msg = Bool()
+        msg.data = bool(self.manual_avoidance_enabled)
+        self._manual_avoidance_pub.publish(msg)
+
+    def set_manual_avoidance_enabled(self, enabled: bool) -> Dict[str, Any]:
+        self.manual_avoidance_enabled = bool(enabled)
+        self.last_command = f"manual_avoidance:{'on' if self.manual_avoidance_enabled else 'off'}"
+        self._publish_manual_avoidance_state()
+        return self.status()
+
     def trigger_estop(self) -> None:
         self.last_command = "estop"
         self.stop_mini_map(update_last_command=False)
@@ -1660,13 +1720,20 @@ class PanelBridge:
         self.last_command = f"nav:{cleaned_name}"
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
+        _, previous_updates = self._navigation_status_snapshot()
         msg = String()
         msg.data = cleaned_name
         self._waypoint_goal_pub.publish(msg)
+        acknowledged_status = self._await_navigation_ack(
+            [cleaned_name],
+            previous_updates,
+            timeout_sec=1.2,
+        )
         return {
             "name": cleaned_name,
             "pose_source": str(pose.get("source", "unknown")),
             "requires_minimap": False,
+            "navigation_status": acknowledged_status,
         }
 
     def run_destination(self, name: str) -> Dict[str, Any]:
@@ -1685,13 +1752,20 @@ class PanelBridge:
         self.last_command = f"destination:{cleaned_name}"
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
+        _, previous_updates = self._navigation_status_snapshot()
         msg = String()
         msg.data = cleaned_name
         self._destination_goal_pub.publish(msg)
+        acknowledged_status = self._await_navigation_ack(
+            [cleaned_name],
+            previous_updates,
+            timeout_sec=1.2,
+        )
         return {
             "name": cleaned_name,
             "pose_source": str(pose.get("source", "unknown")),
             "requires_minimap": False,
+            "navigation_status": acknowledged_status,
         }
 
     def run_route(self, name: str, sequence: List[str]) -> Dict[str, Any]:
@@ -1712,6 +1786,7 @@ class PanelBridge:
         self.last_command = f"route:{name}"
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
+        _, previous_updates = self._navigation_status_snapshot()
 
         payload = {"name": name or "route_now", "sequence": cleaned_sequence}
         if self.ros2_connected and self._route_pub is not None:
@@ -1722,12 +1797,61 @@ class PanelBridge:
             msg = String()
             msg.data = json.dumps(payload, ensure_ascii=True)
             self._destination_goal_pub.publish(msg)
+        acknowledged_status = self._await_navigation_ack(
+            [payload["name"], cleaned_sequence[0]],
+            previous_updates,
+            timeout_sec=1.2,
+        )
         return {
             "name": name or "route_now",
             "sequence": cleaned_sequence,
             "pose_source": str(pose.get("source", "unknown")),
             "requires_minimap": False,
+            "navigation_status": acknowledged_status,
         }
+
+    def _navigation_status_snapshot(self) -> tuple[str, int]:
+        with self._lock:
+            return str(self._navigation_status), int(self._navigation_status_updates)
+
+    def _await_navigation_ack(self, target_tokens: List[str], previous_updates: int, timeout_sec: float) -> str:
+        deadline = time.time() + max(0.1, timeout_sec)
+        failure_prefixes = (
+            "unknown_waypoint:",
+            "unknown_destination:",
+            "destination_missing_waypoint:",
+            "destination_empty:",
+            "pose_unavailable",
+            "nav2_goal_rejected",
+            "nav2_send_failed",
+            "destination_goal_failed",
+            "route_unknown_waypoints:",
+        )
+        success_prefixes = (
+            "navigating_local:",
+            "navigating_nav2:",
+            "nav2_active:",
+            "destination_started:",
+            "destination_leg:",
+            "route_started:",
+            "route_step:",
+            "arrived:",
+        )
+        while time.time() < deadline:
+            status, updates = self._navigation_status_snapshot()
+            if updates <= previous_updates:
+                time.sleep(0.05)
+                continue
+            if status.startswith(failure_prefixes):
+                raise ValueError(f"Navigation node reported: {status}")
+            if status.startswith(success_prefixes):
+                if any(token and token in status for token in target_tokens):
+                    return status
+            time.sleep(0.05)
+        target_label = next((token for token in target_tokens if token), "navigation target")
+        raise ValueError(
+            f"Navigation request for '{target_label}' was published but not acknowledged by waypoint_manager."
+        )
 
     def save_waypoint(
         self,
@@ -2017,12 +2141,17 @@ def api_chat(request: ChatRequest):
 
 
 @app.post("/api/manual")
-def api_manual(request: Dict[str, Any]):
+def api_manual(request: ManualCommandRequest):
     bridge.manual_command(
-        request.get("direction", "stop"),
-        float(request.get("speed", 0.35)),
+        request.direction,
+        float(request.speed),
     )
     return bridge.status()
+
+
+@app.post("/api/manual-avoidance")
+def api_manual_avoidance(request: ManualAvoidanceRequest):
+    return bridge.set_manual_avoidance_enabled(request.enabled)
 
 
 @app.post("/api/follow")

@@ -25,7 +25,7 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 
 class LidarAvoidanceNode(Node):
@@ -44,6 +44,7 @@ class LidarAvoidanceNode(Node):
         self.declare_parameter("reverse_speed", 0.06)
         self.declare_parameter("escape_strafe_speed", 0.16)
         self.declare_parameter("check_rate", 15.0)
+        self.declare_parameter("manual_avoidance_enabled", False)
 
         self.scan_topic = self.get_parameter("scan_topic").value
         self.command_timeout = float(self.get_parameter("command_timeout").value)
@@ -57,11 +58,17 @@ class LidarAvoidanceNode(Node):
         self.reverse_speed = float(self.get_parameter("reverse_speed").value)
         self.escape_strafe_speed = float(self.get_parameter("escape_strafe_speed").value)
         self.check_rate = float(self.get_parameter("check_rate").value)
+        self.manual_avoidance_enabled = bool(self.get_parameter("manual_avoidance_enabled").value)
 
         control_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
             depth=10,
+        )
+        state_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            depth=1,
         )
         scan_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -76,6 +83,7 @@ class LidarAvoidanceNode(Node):
         self.create_subscription(Twist, "/cmd_vel_follow", self.follow_callback, control_qos)
         self.create_subscription(Twist, "/cmd_vel_nav", self.nav_callback, control_qos)
         self.create_subscription(Twist, "/cmd_vel_manual", self.manual_callback, control_qos)
+        self.create_subscription(Bool, "/system/manual_avoidance_enabled", self.manual_avoidance_callback, state_qos)
 
         self.latest_scan: Optional[LaserScan] = None
         self.latest_command = Twist()
@@ -99,6 +107,9 @@ class LidarAvoidanceNode(Node):
     def manual_callback(self, msg: Twist) -> None:
         self._store_command("manual", msg)
 
+    def manual_avoidance_callback(self, msg: Bool) -> None:
+        self.manual_avoidance_enabled = bool(msg.data)
+
     def _store_command(self, source: str, msg: Twist) -> None:
         self.latest_command = msg
         self.latest_command_source = source
@@ -118,6 +129,10 @@ class LidarAvoidanceNode(Node):
 
         if self._is_zero_twist(self.latest_command):
             self._clear_override("robot_idle")
+            return
+
+        if self.latest_command_source == "manual" and not self.manual_avoidance_enabled:
+            self._clear_override("manual_bypass")
             return
 
         center_deg = self._command_center_deg(self.latest_command)
