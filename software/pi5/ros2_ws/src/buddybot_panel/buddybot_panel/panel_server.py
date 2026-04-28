@@ -185,8 +185,8 @@ class PanelBridge:
         self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))
         self._manual_linear_limit = float(os.getenv("BUDDYBOT_MANUAL_LINEAR_LIMIT", "0.52"))
         self._manual_strafe_limit = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LIMIT", "0.34"))
-        self._manual_angular_limit = float(os.getenv("BUDDYBOT_MANUAL_ANGULAR_LIMIT", "0.18"))
-        self._manual_right_turn_boost = float(os.getenv("BUDDYBOT_MANUAL_RIGHT_TURN_BOOST", "1.18"))
+        self._manual_angular_limit = float(os.getenv("BUDDYBOT_MANUAL_ANGULAR_LIMIT", "0.28"))
+        self._manual_right_turn_boost = float(os.getenv("BUDDYBOT_MANUAL_RIGHT_TURN_BOOST", "1.10"))
         self._manual_right_angular_limit = float(
             os.getenv(
                 "BUDDYBOT_MANUAL_RIGHT_ANGULAR_LIMIT",
@@ -1571,13 +1571,22 @@ class PanelBridge:
                 f"카메라는 {'켜짐' if self.camera_available() else '대기'}, 맵은 {'준비됨' if self.map_available() else '대기'} 상태입니다."
             )
         if "kitchen" in text or "주방" in text or "부엌" in text:
-            self.go_waypoint("kitchen")
+            try:
+                self.go_waypoint("kitchen")
+            except ValueError as exc:
+                return str(exc)
             return "주방으로 이동 요청을 보냈습니다."
         if "living room" in text or "거실" in text:
-            self.go_waypoint("living_room_center")
+            try:
+                self.go_waypoint("living_room_center")
+            except ValueError as exc:
+                return str(exc)
             return "거실로 이동 요청을 보냈습니다."
         if "charge" in text or "충전" in text or "도킹" in text:
-            self.go_waypoint("charging_station")
+            try:
+                self.go_waypoint("charging_station")
+            except ValueError as exc:
+                return str(exc)
             return "충전 스테이션으로 이동 요청을 보냈습니다."
         return "Standalone BuddyBot mode입니다. 버디봇이라고 부른 뒤 전진, 좌회전, 왼쪽 이동, 정지, 추종, 상태, 주방 같은 명령을 써보세요."
 
@@ -1635,23 +1644,55 @@ class PanelBridge:
         self._log_manual_request(direction, speed, linear_x, linear_y, angular_z)
         self._set_manual_motion(linear_x, linear_y, angular_z)
 
-    def go_waypoint(self, name: str) -> None:
-        self.last_command = f"nav:{name}"
-        self.set_follow_enabled(False, update_last_command=False)
-        self._clear_manual_motion()
-        if self.ros2_connected and self._waypoint_goal_pub is not None:
-            msg = String()
-            msg.data = name
-            self._waypoint_goal_pub.publish(msg)
+    def go_waypoint(self, name: str) -> Dict[str, Any]:
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            raise ValueError("Checkpoint name is required.")
+        available = self._load_waypoints().get("waypoints", {})
+        if cleaned_name not in available:
+            raise ValueError(f"Checkpoint '{cleaned_name}' does not exist.")
+        pose = self.current_pose()
+        if pose is None:
+            raise ValueError("Checkpoint move does not need minimap start, but it does need a live current pose.")
+        if not self.ros2_connected or self._waypoint_goal_pub is None:
+            raise ValueError("Checkpoint navigation publisher is not ready yet.")
 
-    def run_destination(self, name: str) -> None:
-        self.last_command = f"destination:{name}"
+        self.last_command = f"nav:{cleaned_name}"
         self.set_follow_enabled(False, update_last_command=False)
         self._clear_manual_motion()
-        if self.ros2_connected and self._destination_goal_pub is not None:
-            msg = String()
-            msg.data = name
-            self._destination_goal_pub.publish(msg)
+        msg = String()
+        msg.data = cleaned_name
+        self._waypoint_goal_pub.publish(msg)
+        return {
+            "name": cleaned_name,
+            "pose_source": str(pose.get("source", "unknown")),
+            "requires_minimap": False,
+        }
+
+    def run_destination(self, name: str) -> Dict[str, Any]:
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            raise ValueError("Route name is required.")
+        available = self._load_waypoints().get("destinations", {})
+        if cleaned_name not in available:
+            raise ValueError(f"Route '{cleaned_name}' does not exist.")
+        pose = self.current_pose()
+        if pose is None:
+            raise ValueError("Route execution does not need minimap start, but it does need a live current pose.")
+        if not self.ros2_connected or self._destination_goal_pub is None:
+            raise ValueError("Route navigation publisher is not ready yet.")
+
+        self.last_command = f"destination:{cleaned_name}"
+        self.set_follow_enabled(False, update_last_command=False)
+        self._clear_manual_motion()
+        msg = String()
+        msg.data = cleaned_name
+        self._destination_goal_pub.publish(msg)
+        return {
+            "name": cleaned_name,
+            "pose_source": str(pose.get("source", "unknown")),
+            "requires_minimap": False,
+        }
 
     def run_route(self, name: str, sequence: List[str]) -> Dict[str, Any]:
         cleaned_sequence = self._normalize_sequence(sequence)
@@ -1662,6 +1703,11 @@ class PanelBridge:
         missing = [item for item in cleaned_sequence if item not in available]
         if missing:
             raise ValueError(f"Unknown checkpoints in route: {', '.join(missing)}")
+        pose = self.current_pose()
+        if pose is None:
+            raise ValueError("Route execution does not need minimap start, but it does need a live current pose.")
+        if not self.ros2_connected or (self._route_pub is None and self._destination_goal_pub is None):
+            raise ValueError("Route navigation publisher is not ready yet.")
 
         self.last_command = f"route:{name}"
         self.set_follow_enabled(False, update_last_command=False)
@@ -1679,6 +1725,8 @@ class PanelBridge:
         return {
             "name": name or "route_now",
             "sequence": cleaned_sequence,
+            "pose_source": str(pose.get("source", "unknown")),
+            "requires_minimap": False,
         }
 
     def save_waypoint(
@@ -2035,8 +2083,15 @@ def api_clear_waypoints_post():
 
 @app.post("/api/go")
 def api_go(request: WaypointGoRequest):
-    bridge.go_waypoint(request.name)
-    return {"success": True, "message": f"Sent navigation request to {request.name}."}
+    try:
+        result = bridge.go_waypoint(request.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "success": True,
+        **result,
+        "message": f"{result['name']} 체크포인트 이동 요청을 보냈습니다. 미니맵 시작은 필요 없고 현재 위치({result['pose_source']})만 잡히면 됩니다.",
+    }
 
 
 @app.post("/api/navigation/cancel")
@@ -2083,8 +2138,15 @@ def api_delete_destination(name: str):
 
 @app.post("/api/destinations/go")
 def api_go_destination(request: DestinationGoRequest):
-    bridge.run_destination(request.name)
-    return {"success": True, "message": f"Sent route {request.name}."}
+    try:
+        result = bridge.run_destination(request.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "success": True,
+        **result,
+        "message": f"{result['name']} 경로 실행 요청을 보냈습니다. 미니맵 시작은 필요 없고 현재 위치({result['pose_source']})만 잡히면 됩니다.",
+    }
 
 
 @app.post("/api/routes/run")
@@ -2093,7 +2155,11 @@ def api_run_route(request: RouteRunRequest):
         route = bridge.run_route(request.name, request.sequence)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"success": True, "route": route, "message": f"Sent ad-hoc route {route['name']}."}
+    return {
+        "success": True,
+        "route": route,
+        "message": f"{route['name']} 임시 경로 실행 요청을 보냈습니다. 미니맵 시작은 필요 없고 현재 위치({route['pose_source']})만 잡히면 됩니다.",
+    }
 
 
 def main() -> None:

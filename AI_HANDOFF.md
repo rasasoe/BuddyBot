@@ -351,3 +351,20 @@ How to read it quickly:
   - when pose source is not `amcl`, checkpoint go should prefer local navigation immediately
 - Operational expectation on Pi:
   - in live presentation mode, the operator can start the minimap, drive manually or press checkpoint go, and watch the map keep updating without autonomous sweep behavior
+
+## 2026-04-28 Checkpoint UI Cleanup
+
+- Follow-up request from the user:
+  - checkpoint move should not feel coupled to the minimap start button
+  - the minimap/checkpoint area had too many duplicated buttons and felt visually noisy
+  - left/right rotate buttons still felt too slow for manual driving
+- What changed:
+  - manual rotate speed was increased in the panel speed profile and panel-side angular cap defaults
+  - `/api/go`, `/api/destinations/go`, and ad-hoc route run now fail loudly when pose or ROS navigation publishers are missing instead of pretending success
+  - waypoint navigation in `waypoint_manager_node.py` no longer cancels just because the system mode is `IDLE`; only explicit `MANUAL` or `FOLLOW` mode changes cancel it
+  - the minimap card now states clearly that checkpoint movement does not require minimap start
+  - the checkpoint UI was simplified into three grouped areas:
+    - checkpoint move
+    - checkpoint save
+    - route builder
+  - the saved checkpoint list is now selection-focused with only one inline action (`경로에 추가`) instead of stacked move/delete buttons on every row

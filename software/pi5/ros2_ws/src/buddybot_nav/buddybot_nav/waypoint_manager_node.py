@@ -665,7 +665,7 @@ class WaypointManagerNode(Node):
         """Handle system mode changes."""
         mode = msg.data.strip().upper()
 
-        if mode not in {"NAV", "NAVIGATION"} and self.navigation_active:
+        if mode in {"MANUAL", "FOLLOW"} and self.navigation_active:
             self.get_logger().info(f"Mode changed to {mode}, cancelling navigation")
             self._cancel_navigation(f"mode_change:{mode}")
 

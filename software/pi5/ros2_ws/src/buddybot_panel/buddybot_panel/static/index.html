@@ -9,7 +9,7 @@
     *{box-sizing:border-box}
     body{margin:0;color:var(--ink);font-family:"IBM Plex Sans","Noto Sans KR","Segoe UI",sans-serif;background:radial-gradient(circle at top left,rgba(20,104,93,.14),transparent 24%),radial-gradient(circle at bottom right,rgba(165,88,44,.14),transparent 28%),linear-gradient(180deg,#f7f4ee 0%,#ece5d8 100%)}
     .shell{width:min(1560px,calc(100% - 28px));margin:0 auto;padding:22px 0 30px}
-    .stack,.status-grid,.button-grid,.dual,.triple,.panel-list,.chat-log,.chip-row,.hero-actions,.mission-actions,.form-grid,.chat-form{display:grid;gap:12px}
+    .stack,.status-grid,.button-grid,.dual,.triple,.panel-list,.chat-log,.chip-row,.hero-actions,.mission-actions,.form-grid,.chat-form,.checkpoint-grid,.button-strip,.checkpoint-shell{display:grid;gap:12px}
     .hero{display:grid;grid-template-columns:1.35fr .95fr;gap:16px;margin-bottom:16px}
     .main{display:grid;grid-template-columns:minmax(340px,430px) minmax(0,1fr);gap:16px;align-items:start}
     .main > :nth-child(1){grid-column:1;grid-row:1}
@@ -32,9 +32,13 @@
     .chip{display:flex;align-items:center;justify-content:center;padding:10px 12px;border-radius:999px;border:1px solid var(--line);background:#f3eee2;font-size:.88rem;font-weight:600;text-align:center}
     .hero-actions,.chat-form{grid-template-columns:1fr auto}
     .mission-actions{grid-template-columns:1fr}
+    .mission-actions.compact{grid-template-columns:minmax(0,1fr) minmax(220px,280px)}
     .control-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .camera-toolbar{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;align-self:flex-start}
     .drive-stack,.camera-inline,.manual-shell,.manual-pad,.manual-aux{display:grid;gap:12px}
+    .checkpoint-grid{grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr)}
+    .checkpoint-shell{padding:14px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,#fffefb 0%,#f4ecde 100%)}
+    .button-strip{grid-template-columns:repeat(3,minmax(0,1fr))}
     input,select{width:100%;padding:12px 14px;border-radius:15px;border:1px solid var(--line);background:#fffdf8;font:inherit;color:var(--ink)}
     button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent);line-height:1.25;text-align:center}
     button:hover{background:var(--accent-strong)}
@@ -65,8 +69,12 @@
     .overlay .chip{background:rgba(255,252,247,.86);backdrop-filter:blur(10px)}
     .panel-list{max-height:320px;overflow:auto}
     .panel-item{border:1px solid var(--line);border-radius:18px;padding:12px 14px;background:#fffaf1;display:grid;gap:10px}
+    .panel-item.selectable{cursor:pointer;transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease}
+    .panel-item.selectable:hover{transform:translateY(-1px)}
+    .panel-item.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(20,104,93,.14)}
     .panel-item .meta{font-size:.88rem;color:var(--muted)}
     .panel-item .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .panel-item .actions.compact{grid-template-columns:1fr}
     .panel-item.route .actions{grid-template-columns:repeat(2,minmax(0,1fr))}
     .route-sequence{min-height:62px;padding:12px;border:1px dashed var(--line);border-radius:18px;background:#faf5ea;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
     .route-token{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:#e4efe9;border:1px solid rgba(20,104,93,.18);font-size:.86rem;font-weight:600}
@@ -78,8 +86,8 @@
     .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
     .callout strong{display:block;margin-bottom:6px}
     @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}.main > :nth-child(1),.main > :nth-child(2),.main > :nth-child(3){grid-column:auto;grid-row:auto}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media (max-width:1024px){.camera-toolbar,.control-pair,.manual-aux{grid-template-columns:1fr}}
-    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.camera-toolbar,.control-pair,.manual-aux{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
+    @media (max-width:1024px){.camera-toolbar,.control-pair,.manual-aux,.mission-actions.compact,.button-strip,.checkpoint-grid{grid-template-columns:1fr}}
+    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.camera-toolbar,.control-pair,.manual-aux,.button-strip{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
   </style>
 </head>
 <body>
@@ -202,7 +210,7 @@
         </div>
         <div class="callout">
           <strong>라이브 미니맵</strong>
-          <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 라이브로 누적하고, 같은 화면에서 바로 체크포인트 저장과 이동까지 이어갈 수 있습니다.</div>
+          <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 라이브로 누적합니다. 체크포인트 이동은 미니맵 시작 없이도 가능하고, 미니맵은 지도 누적용 보조 기능입니다.</div>
           <div class="control-pair">
             <button class="accent" onclick="startMiniMap()">미니맵 시작</button>
             <button class="secondary" onclick="stopMiniMap()">미니맵 정지</button>
@@ -212,34 +220,54 @@
             <button class="danger" onclick="resetMiniMap()">미니맵 초기화</button>
           </div>
         </div>
-        <div class="mission-actions">
-          <select id="waypoint-select"></select>
-          <div class="dual">
-            <button class="accent" onclick="goWaypoint()">체크포인트 이동</button>
-            <button class="danger" onclick="deleteSelectedWaypoint()">체크포인트 삭제</button>
+        <div class="checkpoint-grid">
+          <div class="checkpoint-shell">
+            <div class="section-head">
+              <div>
+                <h3>체크포인트 이동</h3>
+                <p class="note" id="checkpoint-status-note">체크포인트 이동은 미니맵 시작 없이도 가능합니다. 현재 위치만 잡히면 바로 출발할 수 있습니다.</p>
+              </div>
+              <p class="note" id="waypoint-count-note">체크포인트 목록 확인 중입니다.</p>
+            </div>
+            <div class="mission-actions compact">
+              <select id="waypoint-select"></select>
+              <div class="dual">
+                <button class="accent" onclick="goWaypoint()">이동</button>
+                <button class="danger" onclick="deleteSelectedWaypoint()">삭제</button>
+              </div>
+            </div>
+            <div class="panel-list" id="waypoint-list"></div>
           </div>
+          <form class="checkpoint-shell" onsubmit="saveWaypoint(event)">
+            <div>
+              <h3>체크포인트 저장</h3>
+              <p class="note" id="clicked-point-note">맵 클릭, 현재 위치, 직접 좌표 중 하나로 저장할 수 있습니다. 현재 위치 저장과 맵 클릭 저장만 있으면 대부분 충분합니다.</p>
+            </div>
+            <input id="wp-name" placeholder="체크포인트 이름">
+            <div class="triple"><input id="wp-x" type="number" step="0.01" placeholder="x"><input id="wp-y" type="number" step="0.01" placeholder="y"><input id="wp-theta" type="number" step="0.01" placeholder="theta"></div>
+            <div class="button-strip">
+              <button type="button" class="accent" onclick="saveCurrentPoseWaypoint()">현재 위치 저장</button>
+              <button type="button" class="secondary" onclick="saveClickedWaypoint()">선택 지점 저장</button>
+              <button type="submit">좌표 저장</button>
+            </div>
+            <div class="dual">
+              <button type="button" class="secondary" onclick="fillCurrentPose()">현재 위치 불러오기</button>
+              <button type="button" class="secondary" onclick="clearClickedPoint()">선택 지점 해제</button>
+            </div>
+          </form>
         </div>
-        <div class="dual">
-          <button class="secondary" onclick="fillCurrentPose()">현재 위치 입력</button>
-          <button class="secondary" onclick="saveCurrentPoseWaypoint()">현재 위치 저장</button>
-        </div>
-        <form class="form-grid" onsubmit="saveWaypoint(event)">
-          <div><h3>새 체크포인트 저장</h3><p class="note" id="clicked-point-note">맵을 클릭하면 x, y가 입력됩니다. SLAM 맵이 아직 없으면 LiDAR 로컬 맵 기준으로 저장합니다.</p></div>
-          <input id="wp-name" placeholder="체크포인트 이름">
-          <div class="triple"><input id="wp-x" type="number" step="0.01" placeholder="x"><input id="wp-y" type="number" step="0.01" placeholder="y"><input id="wp-theta" type="number" step="0.01" placeholder="theta"></div>
-          <div class="dual"><button type="button" class="accent" onclick="saveClickedWaypoint()">선택 지점 저장</button><button type="button" class="secondary" onclick="clearClickedPoint()">선택 해제</button></div>
-          <button type="submit">직접 입력해서 저장</button>
-        </form>
-        <div class="stack">
-          <div><h3>경로 빌더</h3><p class="note">아래 체크포인트를 추가한 뒤 바로 실행하거나 저장 경로로 남길 수 있습니다.</p></div>
-          <div class="route-sequence" id="route-sequence"></div>
-          <input id="route-name" placeholder="경로 이름">
-          <div class="dual"><button class="accent" onclick="runRouteNow()">선택 경로 실행</button><button class="secondary" onclick="saveRoute()">경로 저장</button></div>
-          <div class="dual"><button class="secondary" onclick="clearRouteSequence()">경로 비우기</button><button class="danger" onclick="clearAllWaypoints()">체크포인트 전체 삭제</button></div>
-        </div>
-        <div class="dual">
-          <div class="stack"><div class="section-head"><div><h3>저장된 체크포인트</h3><p class="note" id="waypoint-count-note">체크포인트 목록 확인 중입니다.</p></div></div><div class="panel-list" id="waypoint-list"></div></div>
-          <div class="stack"><div class="section-head"><div><h3>저장된 경로</h3><p class="note" id="route-count-note">저장된 경로 확인 중입니다.</p></div></div><div class="panel-list" id="destination-list"></div></div>
+        <div class="checkpoint-grid">
+          <div class="checkpoint-shell">
+            <div><h3>경로 빌더</h3><p class="note">선택한 체크포인트만 쌓아서 실행하거나 저장합니다. 체크포인트 목록에서는 경로 추가 버튼만 남겨 과한 조작을 줄였습니다.</p></div>
+            <div class="route-sequence" id="route-sequence"></div>
+            <input id="route-name" placeholder="경로 이름">
+            <div class="dual"><button class="accent" onclick="runRouteNow()">선택 경로 실행</button><button class="secondary" onclick="saveRoute()">경로 저장</button></div>
+            <div class="dual"><button class="secondary" onclick="clearRouteSequence()">경로 비우기</button><button class="danger" onclick="clearAllWaypoints()">체크포인트 전체 삭제</button></div>
+          </div>
+          <div class="checkpoint-shell">
+            <div class="section-head"><div><h3>저장된 경로</h3><p class="note" id="route-count-note">저장된 경로 확인 중입니다.</p></div></div>
+            <div class="panel-list" id="destination-list"></div>
+          </div>
         </div>
       </article>
       <article class="card stack">
@@ -330,8 +358,8 @@
         backward: {offset:0.27, gain:0.11},
         strafe_left: {offset:0.16, gain:0.10},
         strafe_right: {offset:0.16, gain:0.10},
-        rotate_left: {offset:0.04, gain:0.08},
-        rotate_right: {offset:0.04, gain:0.08},
+        rotate_left: {offset:0.12, gain:0.14},
+        rotate_right: {offset:0.12, gain:0.14},
         stop: {offset:0.0, gain:0.0},
       };
       const profile = profiles[direction] || profiles.forward;
@@ -493,6 +521,57 @@
       syncRouteSequence();
     }
 
+    function updateWaypointSelectionUI(){
+      const selected = waypointSelect.value;
+      document.querySelectorAll("[data-waypoint-card]").forEach((card) => {
+        card.classList.toggle("selected", card.dataset.waypointCard === selected);
+      });
+    }
+
+    function selectWaypoint(name, announce = false){
+      if(!name){ return; }
+      waypointSelect.value = name;
+      updateWaypointSelectionUI();
+      if(announce){
+        addMsg("bot", `${name} 체크포인트를 선택했습니다.`);
+      }
+    }
+
+    function navigationReadyMessage(data){
+      const navStatus = String(data.navigation_status || "idle");
+      if(navStatus.startsWith("navigating_local:")){
+        return `${navStatus.split(":")[1] || "선택한 체크포인트"} 체크포인트로 라이브 위치 기준 이동 중입니다. 미니맵 시작은 필요하지 않습니다.`;
+      }
+      if(navStatus.startsWith("navigating_nav2:")){
+        return `${navStatus.split(":")[1] || "선택한 체크포인트"} 체크포인트로 전역 내비게이션 이동 중입니다.`;
+      }
+      if(navStatus === "pose_unavailable"){
+        return "체크포인트 이동은 미니맵 시작이 아니라 현재 위치가 필요합니다. pose가 아직 없어 출발하지 못하고 있습니다.";
+      }
+      if(navStatus.startsWith("unknown_waypoint:")){
+        return `${navStatus.split(":")[1] || "선택한 체크포인트"} 체크포인트를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 선택하세요.`;
+      }
+      if(navStatus.startsWith("arrived:")){
+        return `${navStatus.split(":")[1] || "체크포인트"} 체크포인트에 도착했습니다.`;
+      }
+      if(data.pose){
+        return `체크포인트 이동은 미니맵 시작 없이도 가능합니다. 현재 위치는 ${data.pose.source} 기준으로 잡혀 있습니다.`;
+      }
+      return "체크포인트 이동은 미니맵 시작 없이도 가능하지만, 현재 위치가 아직 없어 출발할 수 없습니다.";
+    }
+
+    function ensureNavigationReady(actionLabel){
+      if(!lastStatus?.ros2_connected){
+        addMsg("bot", `${actionLabel}을(를) 보내기 전에 ROS2 연결이 먼저 살아 있어야 합니다.`);
+        return false;
+      }
+      if(!lastStatus?.pose_available){
+        addMsg("bot", `${actionLabel}은(는) 미니맵 시작이 아니라 현재 위치가 필요합니다. pose가 잡힌 뒤 다시 시도하세요.`);
+        return false;
+      }
+      return true;
+    }
+
     async function refreshStatus(){
       const data = await apiJson("/api/status");
       const fusion = data.sensor_fusion || {};
@@ -537,8 +616,9 @@
         : `추종을 막는 항목: ${(fusion.follow_blockers || []).join(", ") || "person_not_detected"} | 검출기: ${detector.backend || "waiting"} (${detector.reason || "waiting"})`;
       document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 다시 열면 수동 조작 위에서 바로 전방 영상을 볼 수 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
       document.getElementById("camera-note").textContent = data.pico_connected ? `Pico 상태가 최신입니다. 베이스 브리지가 살아 있고 검출기는 ${detector.backend || "waiting"} 상태입니다.` : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
+      document.getElementById("checkpoint-status-note").textContent = navigationReadyMessage(data);
       document.getElementById("minimap-note").textContent = minimap.active
-        ? `라이브 미니맵 누적 중: 셀 ${minimap.known_cells || 0} | 프레임 ${minimap.frames || 0} | 이동거리 ${minimap.distance_m || 0}m | 이 상태에서 체크포인트 저장과 이동을 계속할 수 있습니다.`
+        ? `라이브 미니맵 누적 중: 셀 ${minimap.known_cells || 0} | 프레임 ${minimap.frames || 0} | 이동거리 ${minimap.distance_m || 0}m | 체크포인트 이동은 이 버튼과 무관하게 계속 가능합니다.`
         : minimap.completed
           ? `미니맵 누적이 멈춘 상태입니다. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 이 맵 위에서 체크포인트를 저장하고 이동할 수 있습니다.`
           : minimap.map_available
@@ -550,6 +630,8 @@
       const [waypointData, destinationData] = await Promise.all([apiJson("/api/waypoints"), apiJson("/api/destinations")]);
       const waypoints = waypointData.items || [];
       const destinations = destinationData.items || [];
+      const currentSelection = waypointSelect.value;
+      const selectedName = waypoints.some((item) => item.name === currentSelection) ? currentSelection : (waypoints[0]?.name || "");
       waypointSelect.innerHTML = "";
       if(!waypoints.length){
         waypointSelect.innerHTML = `<option value="">저장된 체크포인트가 없습니다</option>`;
@@ -560,11 +642,13 @@
           option.textContent = `${item.name} (${item.x}, ${item.y})`;
           waypointSelect.appendChild(option);
         });
+        waypointSelect.value = selectedName;
       }
 
       waypointList.innerHTML = waypoints.length ? waypoints.map((item) => {
         const encodedName = encodeURIComponent(item.name);
-        return `<div class="panel-item"><strong>${escapeHtml(item.name)}</strong><div class="meta">x=${item.x}, y=${item.y}, th=${item.theta}</div><div class="meta">${escapeHtml(item.description || "체크포인트")}</div><div class="actions"><button type="button" class="accent" onclick='goWaypointByName(decodeURIComponent("${encodedName}"))'>이동</button><button type="button" class="secondary" onclick='addToRoute(decodeURIComponent("${encodedName}"))'>경로에 추가</button><button type="button" class="danger" onclick='deleteWaypoint(decodeURIComponent("${encodedName}"))'>삭제</button></div></div>`;
+        const selectedClass = item.name === selectedName ? " selected" : "";
+        return `<div class="panel-item selectable${selectedClass}" data-waypoint-card="${escapeHtml(item.name)}" onclick='selectWaypoint(decodeURIComponent("${encodedName}"))'><strong>${escapeHtml(item.name)}</strong><div class="meta">x=${item.x}, y=${item.y}, th=${item.theta}</div><div class="meta">${escapeHtml(item.description || "체크포인트")}</div><div class="actions compact"><button type="button" class="secondary" onclick='event.stopPropagation();addToRoute(decodeURIComponent("${encodedName}"))'>경로에 추가</button></div></div>`;
       }).join("") : `<div class="panel-item"><div class="meta">저장된 체크포인트가 아직 없습니다.</div></div>`;
 
       destinationList.innerHTML = destinations.length ? destinations.map((item) => {
@@ -574,6 +658,7 @@
 
       document.getElementById("waypoint-count-note").textContent = `체크포인트 ${waypoints.length}개`;
       document.getElementById("route-count-note").textContent = `저장 경로 ${destinations.length}개`;
+      updateWaypointSelectionUI();
       if(lastMap){
         drawMap(lastMap, waypoints);
       }
@@ -616,7 +701,7 @@
       try{
         const data = await apiJson("/api/minimap/start", {method:"POST"});
         lastMiniMapStatus = data;
-        addMsg("bot", "라이브 미니맵 누적을 시작했습니다. 이제 로봇을 움직여도 자동 배회 없이 LiDAR 미니맵만 계속 쌓습니다.");
+        addMsg("bot", "라이브 미니맵 누적을 시작했습니다. 체크포인트 이동은 이 버튼과 별개로, 현재 위치만 잡히면 바로 사용할 수 있습니다.");
         await refreshStatus();
         await refreshMap();
       }catch(error){ showError(error); }
@@ -759,6 +844,8 @@
 
     async function goWaypointByName(name){
       try{
+        selectWaypoint(name, false);
+        if(!ensureNavigationReady("체크포인트 이동")){ return; }
         const data = await apiJson("/api/go", {method:"POST", body:JSON.stringify({name})});
         addMsg("bot", data.message);
         await refreshStatus();
@@ -805,7 +892,7 @@
 
     function clearClickedPoint(){
       lastClickedPoint = null;
-      document.getElementById("clicked-point-note").textContent = "맵을 클릭하면 x, y가 입력됩니다. SLAM 맵이 아직 없으면 LiDAR 로컬 맵 기준으로 저장합니다.";
+      document.getElementById("clicked-point-note").textContent = "맵 클릭, 현재 위치, 직접 좌표 중 하나로 저장할 수 있습니다. 현재 위치 저장과 맵 클릭 저장만 있으면 대부분 충분합니다.";
       if(lastMap){ apiJson("/api/waypoints").then((data) => drawMap(lastMap, data.items || [])).catch(() => {}); }
     }
 
@@ -862,6 +949,7 @@
     async function runRouteNow(){
       try{
         if(!routeSequence.length){ addMsg("bot", "먼저 체크포인트를 경로에 추가하세요."); return; }
+        if(!ensureNavigationReady("경로 실행")){ return; }
         const routeName = document.getElementById("route-name").value.trim() || "route_now";
         const data = await apiJson("/api/routes/run", {method:"POST", body:JSON.stringify({name:routeName, sequence:routeSequence})});
         addMsg("bot", data.message);
@@ -871,6 +959,7 @@
 
     async function goDestination(name){
       try{
+        if(!ensureNavigationReady("경로 실행")){ return; }
         const data = await apiJson("/api/destinations/go", {method:"POST", body:JSON.stringify({name})});
         addMsg("bot", data.message);
         await refreshStatus();
@@ -915,7 +1004,7 @@
       lastClickedPoint = {x:Number(point.x.toFixed(2)), y:Number(point.y.toFixed(2))};
       document.getElementById("wp-x").value = lastClickedPoint.x.toFixed(2);
       document.getElementById("wp-y").value = lastClickedPoint.y.toFixed(2);
-      document.getElementById("clicked-point-note").textContent = `선택한 지점 x=${lastClickedPoint.x}, y=${lastClickedPoint.y}. 저장하거나 선택 해제할 수 있습니다.`;
+      document.getElementById("clicked-point-note").textContent = `선택한 지점 x=${lastClickedPoint.x}, y=${lastClickedPoint.y}. 이름을 넣고 '선택 지점 저장'을 누르면 됩니다.`;
       apiJson("/api/waypoints").then((data) => drawMap(lastMap, data.items || [])).catch(() => {});
     });
 
@@ -925,6 +1014,7 @@
         sendChat();
       }
     });
+    waypointSelect.addEventListener("change", () => updateWaypointSelectionUI());
 
     const voiceBtn = document.getElementById("voice-btn");
     document.getElementById("camera-feed").addEventListener("error", () => {
@@ -961,7 +1051,7 @@
     }
 
     syncRouteSequence();
-    addMsg("bot", "패널 준비가 끝났습니다. 미니맵을 만들고, 체크포인트를 찍고, 사용자 추종을 시험해 보세요.");
+    addMsg("bot", "패널 준비가 끝났습니다. 체크포인트 이동은 미니맵 시작 없이도 가능하고, 미니맵은 지도 누적이 필요할 때만 켜면 됩니다.");
     refreshAll();
     bindManualHoldButtons();
     setInterval(refreshStatus, 1500);
