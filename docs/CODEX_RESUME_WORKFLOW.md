@@ -1,5 +1,11 @@
 # BuddyBot Codex Resume Workflow
 
+## 2026-04-29 Fast Resume Pointer
+
+Start new workspaces with `docs/CURRENT_FIELD_HANDOFF.md`.
+
+That file captures the latest field-tested baseline, manual avoidance toggle behavior, checkpoint navigation acknowledgement behavior, Pi commands, and the current blocker: checkpoint navigation needs a live pose from `/odom` or `/amcl_pose`, but this repo currently does not appear to publish `/odom`.
+
 이 문서는 **다른 노트북 / 다른 Codex 세션 / 다음날 재시작** 때 매번 상황을 다시 길게 설명하지 않도록 만드는 운영 문서입니다.
 
 목표:

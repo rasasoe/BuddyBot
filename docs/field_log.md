@@ -936,3 +936,24 @@ UI/운용 정리 추가:
   - 수동 주행 감각을 우선할 때는 `수동 회피 OFF`
   - 아주 좁은 실내에서 천천히 점검할 때만 `수동 회피 ON`
   - 체크포인트 이동이 다시 멎으면 패널 에러 메시지와 `/nav/navigation_status`를 먼저 본다
+
+## 2026-04-29
+
+Handoff documentation pass:
+- Added `docs/CURRENT_FIELD_HANDOFF.md` as the first-read document for another laptop, another Codex session, or the Pi5 field machine.
+- Captured the current stable baseline:
+  - manual driving feels good and should be treated as the locked hardware baseline
+  - manual LiDAR avoidance is now toggleable from the UI
+  - autonomous navigation and follow mode still keep LiDAR avoidance active
+  - checkpoint movement does not require minimap start
+- Captured the current blocker:
+  - checkpoint movement requires pose from `/odom` or `/amcl_pose`
+  - panel and waypoint manager both subscribe to these topics
+  - no repo node currently appears to publish `/odom`
+- Next recommended implementation:
+  - add encoder odometry in `buddybot_base`
+  - subscribe to `/buddybot/pico_status`
+  - publish `nav_msgs/Odometry` on `/odom`
+  - then retry local checkpoint navigation
+- Pi operator note:
+  - use `python3 -m json.tool`, not `python -m json.tool`, on the Pi desktop image

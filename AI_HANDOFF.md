@@ -1,5 +1,15 @@
 # BuddyBot AI Handoff
 
+## Start Here First
+
+For the latest cross-environment resume state, read:
+
+- `docs/CURRENT_FIELD_HANDOFF.md`
+- `docs/CODEX_RESUME_WORKFLOW.md`
+- latest entries in `docs/field_log.md`
+
+The most recent field blocker is checkpoint navigation waiting for pose. The code subscribes to `/odom` and `/amcl_pose`, but no repo node currently appears to publish `/odom`; the likely next task is adding an encoder odometry publisher from `/buddybot/pico_status`.
+
 ## Current State
 
 BuddyBot is in a usable Pi5-only demo state, but the latest field work confirmed that the remaining instability is mostly around USB/power behavior on the real robot rather than a single ROS logic bug.
