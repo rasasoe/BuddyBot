@@ -77,7 +77,6 @@ class WaypointManagerNode(Node):
         self.declare_parameter('local_right_turn_boost', 1.18)
         self.declare_parameter('max_nav_linear_velocity', 0.3)
         self.declare_parameter('max_nav_angular_velocity', 0.6)
-        self.declare_parameter('use_sim_time', False)
 
         # Get parameters
         waypoint_config = self.get_parameter('waypoint_config').value
