@@ -75,6 +75,10 @@ class DetectorNode(Node):
         self.declare_parameter("hog_win_stride", [8, 8])
         self.declare_parameter("hog_padding", [8, 8])
         self.declare_parameter("hog_scale", 1.03)
+        self.declare_parameter("allow_cascade_fallback", True)
+        self.declare_parameter("cascade_resize_width", 320)
+        self.declare_parameter("face_cascade", "haarcascade_frontalface_default.xml")
+        self.declare_parameter("upper_body_cascade", "haarcascade_upperbody.xml")
         self.declare_parameter("status_topic", "/vision/detector_status")
 
         self.model_config = str(self.get_parameter("model_config").value)
@@ -92,6 +96,10 @@ class DetectorNode(Node):
         self.hog_win_stride = _as_int_pair(list(self.get_parameter("hog_win_stride").value), (8, 8))
         self.hog_padding = _as_int_pair(list(self.get_parameter("hog_padding").value), (8, 8))
         self.hog_scale = float(self.get_parameter("hog_scale").value)
+        self.allow_cascade_fallback = bool(self.get_parameter("allow_cascade_fallback").value)
+        self.cascade_resize_width = int(self.get_parameter("cascade_resize_width").value)
+        self.face_cascade_name = str(self.get_parameter("face_cascade").value)
+        self.upper_body_cascade_name = str(self.get_parameter("upper_body_cascade").value)
         self.status_topic = str(self.get_parameter("status_topic").value)
 
         self.model_config_path = self._resolve_resource_path(self.model_config)
@@ -100,6 +108,8 @@ class DetectorNode(Node):
         self.bridge = cv_bridge.CvBridge()
         self.net = None
         self.hog = None
+        self.face_cascade = None
+        self.upper_body_cascade = None
         self.frame_count = 0
         self.detector_backend = "unavailable"
         self.detector_ready = False
@@ -214,21 +224,64 @@ class DetectorNode(Node):
         self.get_logger().info(f"  Detection interval: every {self.detection_interval} frames")
         self.get_logger().info(f"  Input size: {self.input_size}")
         self.get_logger().info(f"  HOG fallback: {'enabled' if self.allow_hog_fallback else 'disabled'}")
+        self.get_logger().info(f"  Cascade fallback: {'enabled' if self.allow_cascade_fallback else 'disabled'}")
         self.get_logger().info(f"  Active backend: {self.detector_backend}")
         self.get_logger().info(f"  Debug image: {'enabled' if self.publish_debug else 'disabled'}")
 
+    def _cascade_path(self, filename: str) -> Path:
+        cv2_data = getattr(cv2, "data", None)
+        haar_dir = Path(getattr(cv2_data, "haarcascades", "")) if cv2_data is not None else Path()
+        candidates = [
+            haar_dir / filename,
+            Path("/usr/share/opencv4/haarcascades") / filename,
+            Path("/usr/share/opencv/haarcascades") / filename,
+        ]
+        return _first_existing_path(candidates)
+
+    def _initialize_cascades(self) -> bool:
+        if not self.allow_cascade_fallback:
+            return False
+
+        loaded = False
+        for attr, filename in (
+            ("face_cascade", self.face_cascade_name),
+            ("upper_body_cascade", self.upper_body_cascade_name),
+        ):
+            path = self._cascade_path(filename)
+            try:
+                if path.exists():
+                    cascade = cv2.CascadeClassifier(str(path))
+                    if not cascade.empty():
+                        setattr(self, attr, cascade)
+                        loaded = True
+            except Exception:
+                pass
+        return loaded
+
     def _initialize_hog(self, reason: str) -> bool:
+        cascade_ready = self._initialize_cascades()
         if not self.allow_hog_fallback:
-            self._set_detector_status("unavailable", False, reason, "HOG fallback disabled")
+            if cascade_ready:
+                self._set_detector_status("cascade", True, reason, "Using OpenCV cascade fallback")
+                return True
+            self._set_detector_status("unavailable", False, reason, "HOG and cascade fallback disabled")
             return False
 
         try:
             self.hog = cv2.HOGDescriptor()
             self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-            self._set_detector_status("hog", True, reason, "Using OpenCV HOG fallback")
+            details = "Using OpenCV HOG fallback"
+            backend = "hog"
+            if cascade_ready:
+                details = "Using OpenCV HOG plus face/upper-body cascade fallback"
+                backend = "hog+cascade"
+            self._set_detector_status(backend, True, reason, details)
             return True
         except Exception as exc:
             self.hog = None
+            if cascade_ready:
+                self._set_detector_status("cascade", True, "hog_init_failed", "Using OpenCV cascade fallback")
+                return True
             self._set_detector_status("unavailable", False, "hog_init_failed", repr(exc))
             return False
 
@@ -284,8 +337,12 @@ class DetectorNode(Node):
         try:
             if self.detector_backend == "dnn":
                 best_person = self._run_dnn_detection(image)
-            elif self.detector_backend == "hog":
+            elif self.detector_backend in {"hog", "hog+cascade"}:
                 best_person = self._run_hog_detection(image)
+                if best_person is None:
+                    best_person = self._run_cascade_detection(image)
+            elif self.detector_backend == "cascade":
+                best_person = self._run_cascade_detection(image)
             else:
                 best_person = None
 
@@ -360,6 +417,62 @@ class DetectorNode(Node):
                     "height": mapped_h,
                     "confidence": confidence,
                 }
+
+        return best_detection
+
+    def _run_cascade_detection(self, image) -> Optional[Dict[str, float]]:
+        cascades = [
+            ("face", self.face_cascade),
+            ("upper_body", self.upper_body_cascade),
+        ]
+        cascades = [(name, item) for name, item in cascades if item is not None]
+        if not cascades:
+            return None
+
+        image_height, image_width = image.shape[:2]
+        scale_ratio = 1.0
+        working = image
+        if self.cascade_resize_width > 0 and image_width > self.cascade_resize_width:
+            scale_ratio = image_width / float(self.cascade_resize_width)
+            resized_height = max(1, int(round(image_height / scale_ratio)))
+            working = cv2.resize(image, (self.cascade_resize_width, resized_height))
+
+        gray = cv2.cvtColor(working, cv2.COLOR_BGR2GRAY)
+        gray = cv2.equalizeHist(gray)
+        best_detection = None
+        best_score = 0.0
+
+        for name, cascade in cascades:
+            rects = cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.08,
+                minNeighbors=4,
+                minSize=(28, 28),
+            )
+            for (x, y, width, height) in rects:
+                mapped_x = int(round(x * scale_ratio))
+                mapped_y = int(round(y * scale_ratio))
+                mapped_w = int(round(width * scale_ratio))
+                mapped_h = int(round(height * scale_ratio))
+                if name == "face":
+                    center_x = mapped_x + mapped_w / 2.0
+                    mapped_w = int(round(mapped_w * 2.0))
+                    mapped_h = int(round(mapped_h * 3.2))
+                    mapped_x = int(round(center_x - mapped_w / 2.0))
+                    mapped_y = max(0, mapped_y)
+                    mapped_x = max(0, mapped_x)
+                    mapped_w = min(mapped_w, image_width - mapped_x)
+                    mapped_h = min(mapped_h, image_height - mapped_y)
+                score = float(mapped_w * mapped_h)
+                if score > best_score:
+                    best_score = score
+                    best_detection = {
+                        "x": mapped_x,
+                        "y": mapped_y,
+                        "width": mapped_w,
+                        "height": mapped_h,
+                        "confidence": 0.45,
+                    }
 
         return best_detection
 

@@ -34,7 +34,7 @@
     .mission-actions{grid-template-columns:1fr}
     .mission-actions.compact{grid-template-columns:minmax(0,1fr) minmax(220px,280px)}
     .control-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-    .camera-toolbar{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;align-self:flex-start}
+    .camera-toolbar{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:10px;align-self:flex-start}
     .drive-stack,.camera-inline,.manual-shell,.manual-pad,.manual-aux{display:grid;gap:12px}
     .checkpoint-grid{grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr)}
     .checkpoint-shell{padding:14px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,#fffefb 0%,#f4ecde 100%)}
@@ -136,6 +136,8 @@
             <div class="camera-toolbar">
               <button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 닫기</button>
               <button class="secondary" onclick="refreshCamera(true)">새로고침</button>
+              <button class="accent" onclick="startFollowTrial()">추종 시작</button>
+              <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
             </div>
           </div>
           <div class="camera-frame" id="camera-frame"><img id="camera-feed" alt="버디봇 카메라 화면"><div class="overlay"><div class="chip" id="camera-chip">카메라: 대기 중</div></div></div>
@@ -190,10 +192,6 @@
           </div>
         </div>
         <div class="callout"><strong>빠른 명령</strong><div class="dual"><button class="accent" onclick="sendChat('follow')">추종 시작</button><button class="accent" onclick="sendChat('stop')">긴급 정지</button><button class="accent" onclick="sendChat('kitchen')">주방 이동</button><button class="accent" onclick="sendChat('charge')">충전소 이동</button></div></div>
-        <div class="dual">
-          <button class="secondary" onclick="startFollowTrial()">추종 시험 시작</button>
-          <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
-        </div>
         <div class="callout"><strong>추종 시험 준비 상태</strong><div class="note" id="follow-note">실시간 센서 상태를 기다리는 중입니다.</div></div>
         <div class="callout"><strong>운용 준비 요약</strong><div class="note" id="fusion-note">카메라, LiDAR, 위치, 맵, 사람 검출기 상태 요약이 여기에 표시됩니다.</div></div>
       </article>

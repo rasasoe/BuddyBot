@@ -1015,3 +1015,13 @@ Follow-up conservative local checkpoint tuning:
   - added `local_strafe_enabled`, default `False`
   - added gentle lateral heading correction instead of direct strafe by default
 - Goal: make checkpoint movement behave like cautious short-distance dead reckoning until encoder signs/scale and odom frame are field-calibrated.
+
+Follow-up user tracking usability/detection fix:
+- Field test showed follow mode did not move because `person_not_detected` stayed active.
+- Detector was alive, but MobileNet model files were missing, so it used HOG fallback only.
+- HOG is weak at close-range 320x240 upper-body views, so added OpenCV face/upper-body cascade fallback after HOG.
+- Presentation mode now defaults to a slightly faster detector interval and lower HOG threshold:
+  - `BUDDYBOT_DETECT_INTERVAL=3`
+  - `BUDDYBOT_DETECT_HOG_CONFIDENCE=0.08`
+  - `BUDDYBOT_DETECT_ALLOW_CASCADE_FALLBACK=1`
+- Moved follow start/stop controls into the camera toolbar next to camera close/refresh so the operator can watch the camera and arm follow in the same place.
