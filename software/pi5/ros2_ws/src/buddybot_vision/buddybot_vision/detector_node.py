@@ -118,6 +118,8 @@ class DetectorNode(Node):
         self.detector_details = "initializing"
         self._last_status_payload = ""
         self._last_not_ready_log = self.get_clock().now()
+        self._last_diag_log = self.get_clock().now()
+        self._last_dnn_best_person_conf = 0.0
 
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -137,6 +139,7 @@ class DetectorNode(Node):
             self.debug_publisher = self.create_publisher(Image, "/vision/debug_image", qos_profile)
 
         self._initialize_detector()
+        self._initialize_secondary_fallbacks()
         self.create_timer(1.0, self._publish_status)
 
         self.get_logger().info("Person detector node initialized")
@@ -310,6 +313,20 @@ class DetectorNode(Node):
             self.net = None
             return self._initialize_hog(f"dnn_init_failed:{type(exc).__name__}")
 
+    def _initialize_secondary_fallbacks(self) -> None:
+        """Always init HOG and cascade so they can back up DNN when it returns nothing."""
+        if self.allow_hog_fallback and self.hog is None:
+            try:
+                self.hog = cv2.HOGDescriptor()
+                self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+                self.get_logger().info("Secondary HOG detector initialized")
+            except Exception as exc:
+                self.get_logger().warn(f"Secondary HOG init failed: {exc}")
+        if self.allow_cascade_fallback and self.face_cascade is None and self.upper_body_cascade is None:
+            self._initialize_cascades()
+            if self.face_cascade is not None or self.upper_body_cascade is not None:
+                self.get_logger().info("Secondary cascade detector initialized")
+
     def image_callback(self, msg: Image) -> None:
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
@@ -338,6 +355,11 @@ class DetectorNode(Node):
         try:
             if self.detector_backend == "dnn":
                 best_person = self._run_dnn_detection(image)
+                # DNN returned nothing — try cascade then HOG as secondary
+                if best_person is None and self.allow_cascade_fallback:
+                    best_person = self._run_cascade_detection(image)
+                if best_person is None and self.allow_hog_fallback and self.hog is not None:
+                    best_person = self._run_hog_detection(image)
             elif self.detector_backend in {"hog", "hog+cascade"}:
                 best_person = self._run_hog_detection(image)
                 if best_person is None:
@@ -348,6 +370,15 @@ class DetectorNode(Node):
                 best_person = None
 
             if best_person is None:
+                now = self.get_clock().now()
+                if (now - self._last_diag_log).nanoseconds / 1e9 >= 10.0:
+                    self._last_diag_log = now
+                    self.get_logger().warn(
+                        f"No person detected. backend={self.detector_backend} "
+                        f"best_person_conf_dnn={self._last_dnn_best_person_conf:.3f} "
+                        f"threshold={self.confidence_threshold:.2f} "
+                        f"frame={self.frame_count}"
+                    )
                 return
 
             self._publish_bbox(best_person)
@@ -485,10 +516,13 @@ class DetectorNode(Node):
     ) -> Optional[Dict[str, float]]:
         best_detection = None
         best_score = 0.0
+        best_person_conf = 0.0
 
         for detection in detections[0, 0]:
             class_id = int(detection[1])
             confidence = float(detection[2])
+            if class_id == self.person_class_id and confidence > best_person_conf:
+                best_person_conf = confidence
             if class_id != self.person_class_id or confidence < self.confidence_threshold:
                 continue
 
@@ -511,6 +545,7 @@ class DetectorNode(Node):
                     "confidence": confidence,
                 }
 
+        self._last_dnn_best_person_conf = best_person_conf
         return best_detection
 
     def _publish_bbox(self, detection: Dict[str, float]) -> None:
