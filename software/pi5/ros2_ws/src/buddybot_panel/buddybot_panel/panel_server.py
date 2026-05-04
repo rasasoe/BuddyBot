@@ -251,6 +251,8 @@ class PanelBridge:
         self._scan_frames_received = 0
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
+        self._latest_debug_jpeg: Optional[bytes] = None
+        self._latest_debug_stamp: Optional[float] = None
         self._latest_detector_status: Optional[Dict[str, Any]] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._latest_person_bbox: Optional[Dict[str, float]] = None
@@ -400,6 +402,7 @@ class PanelBridge:
                     depth=1,
                 )
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
+                self._node.create_subscription(Image, "/vision/debug_image", self._debug_image_callback, image_qos)
             self._node.create_subscription(String, "/vision/detector_status", self._detector_status_callback, 10)
             if Float32MultiArray is not None:
                 bbox_qos: Any = 10
@@ -500,6 +503,20 @@ class PanelBridge:
             with self._lock:
                 self._latest_camera_jpeg = encoded.tobytes()
                 self._latest_camera_stamp = time.time()
+        except Exception:
+            return
+
+    def _debug_image_callback(self, msg: Image) -> None:
+        if self._cv_bridge is None or cv2 is None:
+            return
+        try:
+            frame = self._cv_bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            success, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            if not success:
+                return
+            with self._lock:
+                self._latest_debug_jpeg = encoded.tobytes()
+                self._latest_debug_stamp = time.time()
         except Exception:
             return
 
@@ -1027,6 +1044,10 @@ class PanelBridge:
 
     def get_camera_frame(self) -> Optional[bytes]:
         with self._lock:
+            if (self._latest_debug_jpeg is not None
+                    and self._latest_debug_stamp is not None
+                    and (time.time() - self._latest_debug_stamp) < 2.0):
+                return self._latest_debug_jpeg
             return self._latest_camera_jpeg
 
     def pico_connected(self) -> bool:
