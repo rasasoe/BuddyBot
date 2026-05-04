@@ -378,6 +378,48 @@ How to read it quickly:
     - checkpoint save
     - route builder
   - the saved checkpoint list is now selection-focused with only one inline action (`경로에 추가`) instead of stacked move/delete buttons on every row
+## 2026-05-04 DNN 추종 불가 수정 + 패널 검출 박스
+
+문제:
+- `추종 시작` 버튼을 눌러도 로봇이 움직이지 않음
+- 패널 "person not detected" 고정, 검출기는 "DNN 준비" 정상 표시
+- 카메라 앞에 사람이 서있는 것 실물 확인
+
+확인된 원인 2개:
+
+1. `confidence_threshold = 0.5` 과도하게 높음
+   - 실내 환경에서 MobileNet-SSD v2 COCO 검출 신뢰도가 0.3~0.49 범위에 집중됨
+   - 모든 실제 검출이 필터링되어 bbox 발행 없음 → follow_controller 무반응
+
+2. `/vision/person_bbox` QoS 불일치
+   - `detector_node`: BEST_EFFORT 발행
+   - `panel_server.py`: `depth=10` (rclpy 기본 RELIABLE) 구독
+   - ROS 2 규칙상 BEST_EFFORT publisher + RELIABLE subscriber = 연결 비호환, 무음 드롭
+   - 검출이 일어나도 패널은 영원히 "person not detected" 표시
+
+적용된 수정 (`d0a0f2c` → `9422dea`):
+- `vision.launch.py`: `confidence_threshold` 0.5 → 0.2
+- `vision.launch.py`: `publish_debug_image` False → True
+- `panel_server.py`: `/vision/person_bbox` 구독 QoS RELIABLE → BEST_EFFORT
+- `panel_server.py`: `/vision/debug_image` 구독 추가 (BEST_EFFORT QoS)
+- `panel_server.py`: `_debug_image_callback` 추가, `get_camera_frame()` 수정
+  - debug_image가 2초 이내 신선하면 우선 반환 → 패널 카메라 화면에 검출 bbox 자동 표시
+- `index.html`: camera-toolbar 4열 → 2열 그리드, 반응형 붕괴 규칙 제외
+  - 배열: [카메라닫기 | 추종시작] / [새로고침 | 추종끄기]
+
+Pi5 검증:
+```bash
+cd ~/BuddyBot && git pull origin main
+cd software/pi5/ros2_ws && source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash && cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+- 패널 카메라 화면에 초록 박스 → 검출 성공, 추종 시작 가능
+- 박스 없으면 모델 경로 확인: `ros2 run buddybot_vision detector_node --ros-args --log-level info 2>&1 | grep model_`
+
+PRD 참조: PART 3 Cycle 5 실기검증 M3(사람추종), PRD Section 2.2 `/vision/person_bbox` 토픽
+
 ## 2026-04-28 Manual Avoidance Toggle + Checkpoint Ack
 
 - New field feedback:

@@ -1026,3 +1026,57 @@ Follow-up user tracking usability/detection fix:
   - `BUDDYBOT_DETECT_ALLOW_CASCADE_FALLBACK=1`
 - Moved follow start/stop controls into the camera toolbar next to camera close/refresh so the operator can watch the camera and arm follow in the same place.
 - Corrected default `person_class_id` for SSD MobileNet v2 COCO from VOC-style `15` to COCO `1`.
+
+## 2026-05-04 DNN 추종 불가 원인 분석 및 검출 박스 패널 표시
+
+환경:
+- 기준 커밋: d0a0f2c → 9422dea
+- 패키지: `buddybot_vision`, `buddybot_panel`
+- 모델: MobileNet-SSD v2 COCO (`frozen_inference_graph.pb` + `ssd_mobilenet_v2_coco_2018_03_29.pbtxt`)
+
+증상:
+- `추종 시작` 눌러도 로봇이 전혀 움직이지 않음
+- 패널 상태판에 "person not detected" 고정 표시
+- 패널 검출기 항목은 "DNN 준비" 정상 표시 (`dnn model loaded`)
+- 카메라 앞에 사람이 서있는 것을 실물로 확인
+
+확인된 원인 1 — confidence_threshold 0.5가 너무 높음:
+- 실내 카메라(640×480, 30fps) 환경에서 MobileNet-SSD v2 COCO 검출 신뢰도가 0.3~0.49 구간에서 발생
+- 기본값 0.5 미만은 전부 필터링되어 `/vision/person_bbox` 토픽에 메시지가 한 건도 발행되지 않음
+- `follow_controller_node`는 bbox를 받지 못하니 velocity 명령을 내지 않음 → 로봇 무반응
+
+확인된 원인 2 — QoS 불일치로 패널이 bbox를 절대 받지 못함:
+- `detector_node`는 `/vision/person_bbox`를 `BEST_EFFORT, VOLATILE, depth=1` QoS로 발행
+- `panel_server.py`는 `depth=10` 정수 인자로 구독 → rclpy 기본값인 `RELIABLE` QoS 적용
+- ROS 2 규칙: BEST_EFFORT publisher + RELIABLE subscriber = **QoS 비호환, 메시지 전달 안 됨**
+- 결과: 검출이 실제로 일어나도 패널은 항상 "person not detected" 표시
+
+적용한 수정:
+- `vision.launch.py`: `confidence_threshold` 0.5 → 0.2
+- `vision.launch.py`: `publish_debug_image` False → True
+- `panel_server.py`: `/vision/person_bbox` 구독 QoS를 `BEST_EFFORT, VOLATILE, depth=1`로 변경
+- `panel_server.py`: `/vision/debug_image` 구독 추가 (동일 BEST_EFFORT QoS)
+- `panel_server.py`: `_debug_image_callback` 추가 — 검출 박스가 그려진 프레임을 JPEG로 저장
+- `panel_server.py`: `get_camera_frame()` 수정 — debug_image가 2초 이내 신선하면 우선 반환하여 패널 카메라 화면에 bbox 자동 표시
+- `index.html`: `camera-toolbar`를 4열 → 2열 그리드로 변경 (좁은 화면에서도 세로 붕괴 없음)
+- `index.html`: 버튼 배열을 [카메라닫기 | 추종시작] / [새로고침 | 추종끄기] 2×2 구조로 정리
+
+현장 검증 방법:
+```bash
+cd ~/BuddyBot && git pull origin main
+cd software/pi5/ros2_ws && source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot && bash scripts/start_presentation_mode.sh mapping
+```
+- 패널 카메라 화면에 초록 박스가 뜨면 DNN 검출 성공
+- 박스가 떠도 로봇이 안 움직이면 `follow_controller_node` 로그 확인
+- confidence 0.2에서도 박스가 전혀 안 뜨면 모델 파일 경로 문제 → 아래 확인
+
+```bash
+ros2 run buddybot_vision detector_node --ros-args --log-level info 2>&1 | grep -E "model_|Model"
+```
+
+미해결 / 후속 확인 필요:
+- Pi5에서 실제 검출 박스 표시 여부 현장 검증 대기 중
+- confidence 0.2에서도 미검출 시 HOG 단독 또는 다른 모델 검토 필요

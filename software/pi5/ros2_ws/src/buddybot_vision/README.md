@@ -68,8 +68,9 @@ All nodes use ROS parameters for configuration. See `config/default.yaml` for co
 
 **Detector:**
 - `model_config/weights`: Neural network model paths
-- `confidence_threshold`: Detection confidence threshold
+- `confidence_threshold`: Detection confidence threshold (default: **0.2** — 실내 환경에서 MobileNet-SSD v2 COCO 검출 신뢰도가 0.3~0.49 범위에 집중됨. 0.5 이상으로 올리면 실제 검출이 전부 필터링됨)
 - `detection_interval`: Process every N frames (reduces CPU load)
+- `publish_debug_image`: 검출 박스가 그려진 프레임을 `/vision/debug_image`로 발행 (기본: True)
 
 **Follow Controller:**
 - `center_x_gain`: Angular velocity gain for centering
@@ -187,9 +188,15 @@ ros2 run buddybot_vision detector_node --ros-args \
 
 ### Detection Issues
 - Verify model files exist and are readable
-- Check model paths in parameters
-- Lower confidence threshold if needed
-- Enable debug image to visualize detections
+- Check model paths in node log: `ros2 run buddybot_vision detector_node --ros-args --log-level info 2>&1 | grep model_`
+- Default `confidence_threshold` is 0.2. Do not raise above 0.4 in indoor environments — MobileNet-SSD v2 COCO detects at 0.3–0.49 range indoors
+- Enable debug image to visualize detections: `publish_debug_image:=true`
+
+### QoS Notes
+- All vision publishers use `BEST_EFFORT, VOLATILE, depth=1` QoS
+- Subscribers of `/vision/person_bbox` and `/vision/debug_image` **must** use BEST_EFFORT QoS
+- RELIABLE subscriber + BEST_EFFORT publisher = silent incompatibility in ROS 2, no messages delivered
+- `panel_server.py` was fixed (2026-05-04) to use BEST_EFFORT for `/vision/person_bbox` subscription
 
 ### Performance Issues
 - Monitor CPU usage: `top` or `htop`

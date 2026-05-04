@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
 Last updated: 2026-05-04
-Repo baseline: local work after `14bccd5` (`Add manual avoidance toggle and checkpoint ack`)
+Repo baseline: `9422dea` (`fix: lower DNN threshold to 0.2, show detection bbox on camera feed`)
 
 This is the fast resume page for a new laptop, a new Codex session, or the Pi5 field machine. Read this first, then use `AI_HANDOFF.md`, `docs/field_log.md`, and `docs/CODEX_RESUME_WORKFLOW.md` for deeper history.
 
@@ -14,7 +14,26 @@ This is the fast resume page for a new laptop, a new Codex session, or the Pi5 f
 - The minimap start button now means live LiDAR accumulation only. It should not make the robot wander automatically.
 - Checkpoint motion does not require minimap start. It does require a live pose from `/odom` or `/amcl_pose`.
 
-## Latest Field Change
+## Latest Field Change (2026-05-04)
+
+DNN 추종 불가 수정 + 패널 카메라에 검출 박스 표시.
+
+**수정 내용:**
+- `vision.launch.py`: `confidence_threshold` 0.5 → 0.2 (실내 환경 MobileNet-SSD v2 실제 검출 범위 반영)
+- `vision.launch.py`: `publish_debug_image` True 활성화 (기본값 변경)
+- `panel_server.py`: `/vision/person_bbox` 구독 QoS RELIABLE → BEST_EFFORT (detector 발행 QoS와 일치시킴)
+- `panel_server.py`: `/vision/debug_image` 구독 추가 — 검출 bbox 오버레이 프레임을 패널 카메라 화면에 자동 표시
+- `index.html`: camera-toolbar 2열 그리드로 재배열 (카메라닫기|추종시작 / 새로고침|추종끄기)
+
+**QoS 수정 배경:**
+ROS 2에서 BEST_EFFORT publisher + RELIABLE subscriber는 연결이 성립하지 않는다. `detector_node`가 BEST_EFFORT로 발행하는데 `panel_server`가 rclpy 기본값(RELIABLE)으로 구독하면 패널은 검출 결과를 절대 받지 못한다. 이 조합이 "person not detected" 고착 원인이었다.
+
+**현장 검증 필요:**
+패널 카메라 화면에 초록 박스가 뜨는지 확인. 박스가 뜨면 추종 정상 동작 기대.
+
+---
+
+## Previous Field Change
 
 Manual LiDAR avoidance can now be toggled from the manual-control UI.
 
@@ -151,11 +170,25 @@ Do not use `mpremote fs cp` while ROS is actively using the Pico serial port.
 
 ## What To Verify Next
 
-1. Pull `main` on the Pi and start presentation mode.
-2. Confirm the manual-control card shows `수동 회피 OFF`.
-3. Drive manually with manual avoidance OFF and confirm direct control feel.
-4. Toggle manual avoidance ON and confirm it changes panel state.
-5. Run:
+1. Pull `main` on the Pi and rebuild:
+
+```bash
+cd ~/BuddyBot && git pull origin main
+cd software/pi5/ros2_ws && source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot && bash scripts/start_presentation_mode.sh mapping
+```
+
+2. **추종 검증 (최우선):** 패널 카메라 화면에 초록 박스 확인.
+   - 박스 뜸 → 추종 시작 눌러 로봇 이동 확인
+   - 박스 안 뜸 → 모델 파일 경로 확인:
+     ```bash
+     ros2 run buddybot_vision detector_node --ros-args --log-level info 2>&1 | grep -E "model_config|model_weights"
+     ```
+
+3. 수동 회피 상태 확인: 패널 `수동 회피 OFF` 표시.
+4. 기본 상태 점검:
 
 ```bash
 curl -s http://127.0.0.1:8090/api/status | python3 -m json.tool
@@ -163,7 +196,7 @@ ros2 topic echo --once /buddybot/pico_status
 ros2 topic echo --once /odom
 ```
 
-6. If `/buddybot/pico_status` exists but `/odom` does not, check `encoder_odom.log` and confirm `buddybot_base` was rebuilt.
+5. `/odom` 없으면 `encoder_odom.log` 확인 및 `buddybot_base` 재빌드 필요.
 
 ## Next Coding Task
 
