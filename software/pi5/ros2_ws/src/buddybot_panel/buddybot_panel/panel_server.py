@@ -402,7 +402,18 @@ class PanelBridge:
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
             self._node.create_subscription(String, "/vision/detector_status", self._detector_status_callback, 10)
             if Float32MultiArray is not None:
-                self._node.create_subscription(Float32MultiArray, "/vision/person_bbox", self._person_bbox_callback, 10)
+                bbox_qos: Any = 10
+                if QoSProfile is not None:
+                    try:
+                        bbox_qos = QoSProfile(
+                            reliability=ReliabilityPolicy.BEST_EFFORT,
+                            durability=DurabilityPolicy.VOLATILE,
+                            history=HistoryPolicy.KEEP_LAST,
+                            depth=1,
+                        )
+                    except Exception:
+                        bbox_qos = 10
+                self._node.create_subscription(Float32MultiArray, "/vision/person_bbox", self._person_bbox_callback, bbox_qos)
 
             if SingleThreadedExecutor is not None:
                 self._executor = SingleThreadedExecutor()

@@ -27,7 +27,7 @@ def generate_launch_description():
         parameters=[
             {'model_config': 'models/mobilenet_ssd_v2_coco.pbtxt'},
             {'model_weights': 'models/mobilenet_ssd_v2_coco.pb'},
-            {'confidence_threshold': 0.5},
+            {'confidence_threshold': 0.3},
             {'detection_interval': 5},
             {'allow_hog_fallback': True},
             {'publish_debug_image': False}

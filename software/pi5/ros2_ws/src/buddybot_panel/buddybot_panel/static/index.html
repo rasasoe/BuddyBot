@@ -34,7 +34,7 @@
     .mission-actions{grid-template-columns:1fr}
     .mission-actions.compact{grid-template-columns:minmax(0,1fr) minmax(220px,280px)}
     .control-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-    .camera-toolbar{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:10px;align-self:flex-start}
+    .camera-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-self:flex-start}
     .drive-stack,.camera-inline,.manual-shell,.manual-pad,.manual-aux{display:grid;gap:12px}
     .checkpoint-grid{grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr)}
     .checkpoint-shell{padding:14px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,#fffefb 0%,#f4ecde 100%)}
@@ -86,8 +86,8 @@
     .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
     .callout strong{display:block;margin-bottom:6px}
     @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}.main > :nth-child(1),.main > :nth-child(2),.main > :nth-child(3){grid-column:auto;grid-row:auto}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media (max-width:1024px){.camera-toolbar,.control-pair,.manual-aux,.mission-actions.compact,.button-strip,.checkpoint-grid{grid-template-columns:1fr}}
-    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.camera-toolbar,.control-pair,.manual-aux,.button-strip{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
+    @media (max-width:1024px){.control-pair,.manual-aux,.mission-actions.compact,.button-strip,.checkpoint-grid{grid-template-columns:1fr}}
+    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.control-pair,.manual-aux,.button-strip{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
   </style>
 </head>
 <body>
@@ -135,8 +135,8 @@
             </div>
             <div class="camera-toolbar">
               <button class="secondary" id="camera-toggle-btn" onclick="toggleCamera()">카메라 닫기</button>
-              <button class="secondary" onclick="refreshCamera(true)">새로고침</button>
               <button class="accent" onclick="startFollowTrial()">추종 시작</button>
+              <button class="secondary" onclick="refreshCamera(true)">새로고침</button>
               <button class="secondary" onclick="setFollow(false)">추종 끄기</button>
             </div>
           </div>
