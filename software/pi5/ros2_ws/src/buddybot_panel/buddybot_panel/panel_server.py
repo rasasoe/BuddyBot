@@ -1046,7 +1046,7 @@ class PanelBridge:
         with self._lock:
             if (self._latest_debug_jpeg is not None
                     and self._latest_debug_stamp is not None
-                    and (time.time() - self._latest_debug_stamp) < 2.0):
+                    and (time.time() - self._latest_debug_stamp) < 3.0):
                 return self._latest_debug_jpeg
             return self._latest_camera_jpeg
 
