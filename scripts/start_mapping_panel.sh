@@ -95,6 +95,9 @@ DETECT_ALLOW_CASCADE_FALLBACK="${BUDDYBOT_DETECT_ALLOW_CASCADE_FALLBACK:-1}"
 DETECT_ALLOW_CASCADE_FALLBACK_PARAM="$(bool_param_value "$DETECT_ALLOW_CASCADE_FALLBACK")"
 DETECT_PUBLISH_DEBUG_IMAGE_PARAM="$(bool_param_value "${BUDDYBOT_DETECT_PUBLISH_DEBUG:-1}")"
 FOLLOW_BBOX_TIMEOUT="$(float_param_value "${BUDDYBOT_FOLLOW_BBOX_TIMEOUT:-2.0}")"
+FOLLOW_HEIGHT_GAIN="$(float_param_value "${BUDDYBOT_FOLLOW_HEIGHT_GAIN:-0.004}")"
+FOLLOW_CENTER_GAIN="$(float_param_value "${BUDDYBOT_FOLLOW_CENTER_GAIN:-0.007}")"
+FOLLOW_TARGET_HEIGHT="$(float_param_value "${BUDDYBOT_FOLLOW_TARGET_HEIGHT:-0.4}")"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
@@ -351,7 +354,7 @@ else
     start_node camera ros2 run buddybot_vision camera_node --ros-args -p width:="${CAMERA_WIDTH}" -p height:="${CAMERA_HEIGHT}" -p fps:="${CAMERA_FPS}" -p publish_rate:="${CAMERA_PUBLISH_RATE}" -p pixel_format:="${CAMERA_PIXEL_FORMAT}" -p buffer_size:="${CAMERA_BUFFER_SIZE}"
   fi
   start_node detector ros2 run buddybot_vision detector_node --ros-args -p detection_interval:="${DETECT_INTERVAL}" -p confidence_threshold:="${DETECT_CONFIDENCE}" -p hog_confidence_threshold:="${DETECT_HOG_CONFIDENCE}" -p hog_resize_width:="${DETECT_HOG_RESIZE_WIDTH}" -p allow_hog_fallback:="${DETECT_ALLOW_HOG_FALLBACK_PARAM}" -p allow_cascade_fallback:="${DETECT_ALLOW_CASCADE_FALLBACK_PARAM}" -p publish_debug_image:="${DETECT_PUBLISH_DEBUG_IMAGE_PARAM}"
-  start_node follow_controller ros2 run buddybot_vision follow_controller_node --ros-args -p image_width:="${CAMERA_WIDTH}" -p image_height:="${CAMERA_HEIGHT}" -p bbox_timeout_sec:="${FOLLOW_BBOX_TIMEOUT}"
+  start_node follow_controller ros2 run buddybot_vision follow_controller_node --ros-args -p image_width:="${CAMERA_WIDTH}" -p image_height:="${CAMERA_HEIGHT}" -p bbox_timeout_sec:="${FOLLOW_BBOX_TIMEOUT}" -p height_gain:="${FOLLOW_HEIGHT_GAIN}" -p center_x_gain:="${FOLLOW_CENTER_GAIN}" -p target_height_ratio:="${FOLLOW_TARGET_HEIGHT}"
   ensure_lidar_stream "camera startup" || true
 fi
 start_node waypoint_manager ros2 run buddybot_nav waypoint_manager_node
