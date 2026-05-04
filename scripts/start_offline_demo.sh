@@ -86,10 +86,11 @@ CAMERA_PUBLISH_RATE="$(float_param_value "${BUDDYBOT_CAMERA_PUBLISH_RATE:-15.0}"
 CAMERA_PIXEL_FORMAT="${BUDDYBOT_CAMERA_PIXEL_FORMAT:-MJPG}"
 CAMERA_BUFFER_SIZE="${BUDDYBOT_CAMERA_BUFFER_SIZE:-1}"
 DETECT_INTERVAL="${BUDDYBOT_DETECT_INTERVAL:-5}"
-DETECT_CONFIDENCE="$(float_param_value "${BUDDYBOT_DETECT_CONFIDENCE:-0.5}")"
+DETECT_CONFIDENCE="$(float_param_value "${BUDDYBOT_DETECT_CONFIDENCE:-0.2}")"
 DETECT_HOG_RESIZE_WIDTH="${BUDDYBOT_DETECT_HOG_RESIZE_WIDTH:-320}"
 DETECT_ALLOW_HOG_FALLBACK="${BUDDYBOT_DETECT_ALLOW_HOG_FALLBACK:-1}"
 DETECT_ALLOW_HOG_FALLBACK_PARAM="$(bool_param_value "$DETECT_ALLOW_HOG_FALLBACK")"
+DETECT_PUBLISH_DEBUG_IMAGE_PARAM="$(bool_param_value "${BUDDYBOT_DETECT_PUBLISH_DEBUG:-1}")"
 DISABLE_CAMERA="${BUDDYBOT_DISABLE_CAMERA:-0}"
 DISABLE_PICO="${BUDDYBOT_DISABLE_PICO:-0}"
 FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
@@ -450,7 +451,7 @@ else
   fi
   if camera_streaming 8; then
     echo "[demo] camera stream is live"
-    start_node detector ros2 run buddybot_vision detector_node --ros-args -p detection_interval:="${DETECT_INTERVAL}" -p confidence_threshold:="${DETECT_CONFIDENCE}" -p hog_resize_width:="${DETECT_HOG_RESIZE_WIDTH}" -p allow_hog_fallback:="${DETECT_ALLOW_HOG_FALLBACK_PARAM}"
+    start_node detector ros2 run buddybot_vision detector_node --ros-args -p detection_interval:="${DETECT_INTERVAL}" -p confidence_threshold:="${DETECT_CONFIDENCE}" -p hog_resize_width:="${DETECT_HOG_RESIZE_WIDTH}" -p allow_hog_fallback:="${DETECT_ALLOW_HOG_FALLBACK_PARAM}" -p publish_debug_image:="${DETECT_PUBLISH_DEBUG_IMAGE_PARAM}"
     start_node follow_controller ros2 run buddybot_vision follow_controller_node --ros-args -p image_width:="${CAMERA_WIDTH}" -p image_height:="${CAMERA_HEIGHT}"
   else
     echo "[demo] warning: /camera/image_raw is not being published yet"
