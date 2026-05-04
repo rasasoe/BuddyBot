@@ -993,3 +993,12 @@ Expected result:
 - `/buddybot/pico_status` shows encoder counts changing while the robot moves.
 - `/odom` publishes even without AMCL.
 - Checkpoint navigation should no longer stop only because pose is unavailable.
+
+Follow-up local navigation safety fix:
+- Field test reached `pose_available` and `pico_connected`, but selecting `livingroom` caused a strong in-place spin.
+- Root cause: local checkpoint navigation was treating saved waypoint `theta` as mandatory and rotating in place to match final heading.
+- Changed local checkpoint navigation so `local_align_final_yaw` defaults to `False`.
+- With the default, local checkpoint movement treats checkpoints as places, not final orientation poses:
+  - when inside distance tolerance, it finishes immediately
+  - while moving, it does not inject angular velocity just to match saved `theta`
+- If final heading alignment is needed later, launch `waypoint_manager_node` with `local_align_final_yaw:=true`.

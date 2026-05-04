@@ -74,6 +74,7 @@ class WaypointManagerNode(Node):
         self.declare_parameter('local_position_gain', 0.75)
         self.declare_parameter('local_heading_gain', 1.2)
         self.declare_parameter('prefer_local_navigation', True)
+        self.declare_parameter('local_align_final_yaw', False)
         self.declare_parameter('local_right_turn_boost', 1.18)
         self.declare_parameter('max_nav_linear_velocity', 0.3)
         self.declare_parameter('max_nav_angular_velocity', 0.6)
@@ -88,6 +89,7 @@ class WaypointManagerNode(Node):
         self.local_position_gain = float(self.get_parameter('local_position_gain').value)
         self.local_heading_gain = float(self.get_parameter('local_heading_gain').value)
         self.prefer_local_navigation = bool(self.get_parameter('prefer_local_navigation').value)
+        self.local_align_final_yaw = bool(self.get_parameter('local_align_final_yaw').value)
         self.local_right_turn_boost = float(self.get_parameter('local_right_turn_boost').value)
         self.max_nav_linear_velocity = float(self.get_parameter('max_nav_linear_velocity').value)
         self.max_nav_angular_velocity = float(self.get_parameter('max_nav_angular_velocity').value)
@@ -700,6 +702,11 @@ class WaypointManagerNode(Node):
         distance = math.hypot(dx, dy)
 
         if distance <= self.goal_tolerance:
+            if not self.local_align_final_yaw:
+                self._publish_nav_velocity(0.0, 0.0, 0.0)
+                self._finish_navigation(f"arrived:{self.current_waypoint}")
+                return
+
             yaw_error = self._normalize_angle(self.target_pose["theta"] - self.current_pose["theta"])
             if abs(yaw_error) <= self.yaw_tolerance:
                 self._publish_nav_velocity(0.0, 0.0, 0.0)
@@ -713,11 +720,13 @@ class WaypointManagerNode(Node):
         theta = self.current_pose["theta"]
         error_x = math.cos(theta) * dx + math.sin(theta) * dy
         error_y = -math.sin(theta) * dx + math.cos(theta) * dy
-        yaw_error = self._normalize_angle(self.target_pose["theta"] - theta)
 
         linear_x = self._clamp(error_x * self.local_position_gain, self.max_nav_linear_velocity)
         linear_y = self._clamp(error_y * self.local_position_gain, self.max_nav_linear_velocity)
-        angular_z = self._tune_angular_velocity(yaw_error * self.local_heading_gain)
+        angular_z = 0.0
+        if self.local_align_final_yaw:
+            yaw_error = self._normalize_angle(self.target_pose["theta"] - theta)
+            angular_z = self._tune_angular_velocity(yaw_error * self.local_heading_gain)
 
         self._publish_nav_velocity(linear_x, linear_y, angular_z)
 
