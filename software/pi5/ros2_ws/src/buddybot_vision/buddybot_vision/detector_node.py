@@ -68,7 +68,8 @@ class DetectorNode(Node):
         self.declare_parameter("mean_values", [127.5, 127.5, 127.5])
         self.declare_parameter("scale_factor", 0.007843)
         self.declare_parameter("publish_debug_image", False)
-        self.declare_parameter("person_class_id", 15)
+        # TensorFlow SSD MobileNet v2 COCO uses class id 1 for "person".
+        self.declare_parameter("person_class_id", 1)
         self.declare_parameter("allow_hog_fallback", True)
         self.declare_parameter("hog_confidence_threshold", 0.12)
         self.declare_parameter("hog_resize_width", 320)

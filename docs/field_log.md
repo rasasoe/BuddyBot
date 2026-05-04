@@ -1025,3 +1025,4 @@ Follow-up user tracking usability/detection fix:
   - `BUDDYBOT_DETECT_HOG_CONFIDENCE=0.08`
   - `BUDDYBOT_DETECT_ALLOW_CASCADE_FALLBACK=1`
 - Moved follow start/stop controls into the camera toolbar next to camera close/refresh so the operator can watch the camera and arm follow in the same place.
+- Corrected default `person_class_id` for SSD MobileNet v2 COCO from VOC-style `15` to COCO `1`.
