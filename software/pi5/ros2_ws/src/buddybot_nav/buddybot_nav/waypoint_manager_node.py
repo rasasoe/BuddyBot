@@ -68,16 +68,18 @@ class WaypointManagerNode(Node):
         # Declare parameters
         self.declare_parameter('waypoint_config', 'config/waypoints.yaml')
         self.declare_parameter('navigation_timeout', 300.0)  # seconds
-        self.declare_parameter('goal_tolerance', 0.5)        # meters
+        self.declare_parameter('goal_tolerance', 0.18)       # meters
         self.declare_parameter('yaw_tolerance', 0.35)        # rad
         self.declare_parameter('local_nav_rate', 10.0)
-        self.declare_parameter('local_position_gain', 0.75)
-        self.declare_parameter('local_heading_gain', 1.2)
+        self.declare_parameter('local_position_gain', 0.45)
+        self.declare_parameter('local_heading_gain', 0.45)
         self.declare_parameter('prefer_local_navigation', True)
         self.declare_parameter('local_align_final_yaw', False)
+        self.declare_parameter('local_strafe_enabled', False)
+        self.declare_parameter('local_lateral_heading_gain', 0.35)
         self.declare_parameter('local_right_turn_boost', 1.18)
-        self.declare_parameter('max_nav_linear_velocity', 0.3)
-        self.declare_parameter('max_nav_angular_velocity', 0.6)
+        self.declare_parameter('max_nav_linear_velocity', 0.16)
+        self.declare_parameter('max_nav_angular_velocity', 0.18)
 
         # Get parameters
         waypoint_config = self.get_parameter('waypoint_config').value
@@ -90,6 +92,8 @@ class WaypointManagerNode(Node):
         self.local_heading_gain = float(self.get_parameter('local_heading_gain').value)
         self.prefer_local_navigation = bool(self.get_parameter('prefer_local_navigation').value)
         self.local_align_final_yaw = bool(self.get_parameter('local_align_final_yaw').value)
+        self.local_strafe_enabled = bool(self.get_parameter('local_strafe_enabled').value)
+        self.local_lateral_heading_gain = float(self.get_parameter('local_lateral_heading_gain').value)
         self.local_right_turn_boost = float(self.get_parameter('local_right_turn_boost').value)
         self.max_nav_linear_velocity = float(self.get_parameter('max_nav_linear_velocity').value)
         self.max_nav_angular_velocity = float(self.get_parameter('max_nav_angular_velocity').value)
@@ -722,8 +726,13 @@ class WaypointManagerNode(Node):
         error_y = -math.sin(theta) * dx + math.cos(theta) * dy
 
         linear_x = self._clamp(error_x * self.local_position_gain, self.max_nav_linear_velocity)
-        linear_y = self._clamp(error_y * self.local_position_gain, self.max_nav_linear_velocity)
+        linear_y = 0.0
         angular_z = 0.0
+        if self.local_strafe_enabled:
+            linear_y = self._clamp(error_y * self.local_position_gain, self.max_nav_linear_velocity)
+        elif abs(error_y) > self.goal_tolerance:
+            angular_z = self._tune_angular_velocity(error_y * self.local_lateral_heading_gain)
+
         if self.local_align_final_yaw:
             yaw_error = self._normalize_angle(self.target_pose["theta"] - theta)
             angular_z = self._tune_angular_velocity(yaw_error * self.local_heading_gain)

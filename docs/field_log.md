@@ -1002,3 +1002,16 @@ Follow-up local navigation safety fix:
   - when inside distance tolerance, it finishes immediately
   - while moving, it does not inject angular velocity just to match saved `theta`
 - If final heading alignment is needed later, launch `waypoint_manager_node` with `local_align_final_yaw:=true`.
+
+Follow-up conservative local checkpoint tuning:
+- Field test showed close checkpoints were immediately considered arrived and farther checkpoints moved without spinning but traced triangular/unstable paths.
+- Interpretation: encoder odom is now alive, but not yet calibrated enough for aggressive holonomic x/y local navigation.
+- Changed local checkpoint defaults for stability:
+  - `goal_tolerance` from `0.5` to `0.18`
+  - `max_nav_linear_velocity` from `0.3` to `0.16`
+  - `max_nav_angular_velocity` from `0.6` to `0.18`
+  - `local_position_gain` from `0.75` to `0.45`
+  - `local_heading_gain` from `1.2` to `0.45`
+  - added `local_strafe_enabled`, default `False`
+  - added gentle lateral heading correction instead of direct strafe by default
+- Goal: make checkpoint movement behave like cautious short-distance dead reckoning until encoder signs/scale and odom frame are field-calibrated.
