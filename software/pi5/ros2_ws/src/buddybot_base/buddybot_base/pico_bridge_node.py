@@ -337,6 +337,9 @@ class PicoBridgeNode(Node):
         try:
             status_msg = Status()
             status_msg.battery_voltage = float(params.get('battery_voltage', 0.0))
+            status_msg.left_encoder = int(params.get('left_encoder', 0))
+            status_msg.right_encoder = int(params.get('right_encoder', 0))
+            status_msg.back_encoder = int(params.get('back_encoder', 0))
             status_msg.emergency_stop = params.get('estop', False)
             status_msg.mode = params.get('mode', 'UNKNOWN')
 

@@ -21,9 +21,17 @@ class UARTProtocol:
     def send_ack(self, command_type):
         self._send_message("ACK,%s" % command_type)
 
-    def send_status(self, estop, timeout, mode):
+    def send_status(self, estop, timeout, mode, left_encoder=0, right_encoder=0, back_encoder=0):
         self._send_message(
-            "STAT,estop=%d,timeout=%d,mode=%s" % (1 if estop else 0, 1 if timeout else 0, mode)
+            "STAT,estop=%d,timeout=%d,mode=%s,left=%d,right=%d,back=%d"
+            % (
+                1 if estop else 0,
+                1 if timeout else 0,
+                mode,
+                int(left_encoder),
+                int(right_encoder),
+                int(back_encoder),
+            )
         )
 
     def send_rpm(self, m0_rpm, m1_rpm, m2_rpm):

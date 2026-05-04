@@ -112,6 +112,7 @@ def control_loop(pid_controllers, applied_outputs):
         dt = CONTROL_LOOP_PERIOD_MS / 1000.0
         for wheel_name in ('left', 'right', 'back'):
             count = encoders[wheel_name].get_count()
+            system_state.encoder_counts[wheel_name] += count
             rev_per_sec = (count / OUTPUT_CPR) / dt if dt > 0 else 0.0
             current_rpm = rev_per_sec * 60.0
             measured_drive = max(-2.0, min(2.0, current_rpm / MAX_RPM_EST))
@@ -138,6 +139,9 @@ def control_loop(pid_controllers, applied_outputs):
             safety_system.is_emergency_stop_active(),
             timeout,
             system_state.get_mode(),
+            system_state.encoder_counts["left"],
+            system_state.encoder_counts["right"],
+            system_state.encoder_counts["back"],
         )
         uart_protocol.send_rpm(0.0, 0.0, 0.0)  # TODO: wire true wheel RPM telemetry
 

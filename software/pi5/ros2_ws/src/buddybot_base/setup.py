@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'pico_bridge_node = buddybot_base.pico_bridge_node:main',
+            'encoder_odom_node = buddybot_base.encoder_odom_node:main',
         ],
     },
 )

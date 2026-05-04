@@ -327,6 +327,7 @@ else
     start_node pico_bridge ros2 run buddybot_base pico_bridge_node
   fi
 fi
+start_node encoder_odom ros2 run buddybot_base encoder_odom_node
 start_node command_mux ros2 run buddybot_system command_mux_node
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node

@@ -957,3 +957,39 @@ Handoff documentation pass:
   - then retry local checkpoint navigation
 - Pi operator note:
   - use `python3 -m json.tool`, not `python -m json.tool`, on the Pi desktop image
+
+## 2026-05-04
+
+Development resumed with `BuddyBot` as the main repo and `BuddyBot-ai` / `AMR` as references.
+
+Implemented the next handoff task: encoder odometry from Pico feedback.
+
+Changes:
+- Pico `STAT` telemetry now includes cumulative left/right/back encoder counts.
+- Pi `pico_bridge_node` parses encoder counts into `buddybot_msgs/Status`.
+- Added `buddybot_base.encoder_odom_node`.
+- `encoder_odom_node` subscribes to `/buddybot/pico_status`, integrates encoder deltas, publishes `/odom`, and broadcasts `odom -> base_link`.
+- `scripts/start_mapping_panel.sh` starts `encoder_odom_node` after `pico_bridge`.
+- `buddybot_base` now declares `nav_msgs` and `tf2_ros` dependencies and exposes `encoder_odom_node` as a console script.
+
+Verification:
+- Local Python syntax check passed for the changed Pi-side Python files.
+- Full ROS build was not run in this Windows workspace.
+
+Pi field-test steps:
+1. Pull this change on the Pi.
+2. Recopy Pico firmware files, including `main.py` and `uart_protocol.py`.
+3. Rebuild `buddybot_base` or the full selected package set.
+4. Run `bash scripts/start_presentation_mode.sh mapping`.
+5. Check:
+
+```bash
+ros2 topic echo --once /buddybot/pico_status
+ros2 topic echo --once /odom
+tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/encoder_odom.log
+```
+
+Expected result:
+- `/buddybot/pico_status` shows encoder counts changing while the robot moves.
+- `/odom` publishes even without AMCL.
+- Checkpoint navigation should no longer stop only because pose is unavailable.

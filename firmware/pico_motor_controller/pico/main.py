@@ -60,6 +60,7 @@ def control_loop(pid_controllers):
         dt = CONTROL_LOOP_PERIOD_MS / 1000.0
         for wheel_name in ('left', 'right', 'back'):
             count = encoders[wheel_name].get_count()
+            system_state.encoder_counts[wheel_name] += count
             current_vel = count / dt
             encoders[wheel_name].reset()
             error = system_state.wheel_targets[wheel_name] - current_vel
@@ -74,6 +75,9 @@ def control_loop(pid_controllers):
             safety_system.is_emergency_stop_active(),
             timeout,
             system_state.get_mode(),
+            system_state.encoder_counts["left"],
+            system_state.encoder_counts["right"],
+            system_state.encoder_counts["back"],
         )
         uart_protocol.send_rpm(0.0, 0.0, 0.0)  # TODO: compute true RPM from encoder counts
 

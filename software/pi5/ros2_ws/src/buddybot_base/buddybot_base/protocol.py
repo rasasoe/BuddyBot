@@ -38,11 +38,17 @@ class UARTProtocol:
 
         if msg_type == UARTProtocol.MSG_STATUS:
             params = UARTProtocol._parse_kv(parts[1:])
-            return UARTProtocol.MSG_STATUS, {
-                'estop': params.get('estop', '0') == '1',
-                'timeout': params.get('timeout', '0') == '1',
-                'mode': params.get('mode', 'UNKNOWN'),
-            }
+            try:
+                return UARTProtocol.MSG_STATUS, {
+                    'estop': params.get('estop', '0') == '1',
+                    'timeout': params.get('timeout', '0') == '1',
+                    'mode': params.get('mode', 'UNKNOWN'),
+                    'left_encoder': int(params.get('left', params.get('left_encoder', 0))),
+                    'right_encoder': int(params.get('right', params.get('right_encoder', 0))),
+                    'back_encoder': int(params.get('back', params.get('back_encoder', 0))),
+                }
+            except ValueError:
+                return None
 
         if msg_type == UARTProtocol.MSG_RPM:
             params = UARTProtocol._parse_kv(parts[1:])

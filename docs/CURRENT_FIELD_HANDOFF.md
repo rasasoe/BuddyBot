@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
-Last updated: 2026-04-29
-Repo baseline: `main` after `14bccd5` (`Add manual avoidance toggle and checkpoint ack`)
+Last updated: 2026-05-04
+Repo baseline: local work after `14bccd5` (`Add manual avoidance toggle and checkpoint ack`)
 
 This is the fast resume page for a new laptop, a new Codex session, or the Pi5 field machine. Read this first, then use `AI_HANDOFF.md`, `docs/field_log.md`, and `docs/CODEX_RESUME_WORKFLOW.md` for deeper history.
 
@@ -33,7 +33,7 @@ Checkpoint and route requests now wait briefly for `waypoint_manager` acknowledg
 
 ## Current Known Blocker
 
-Checkpoint move currently stops at:
+Checkpoint move previously stopped at:
 
 ```text
 pose가 잡힌 뒤 다시 실행하세요
@@ -52,13 +52,21 @@ Observed gap:
 
 - No current Python node in `software/pi5/ros2_ws/src` publishes `nav_msgs/Odometry` on `/odom`.
 
-Most likely next implementation:
+Local implementation now added:
 
-- Add an encoder odometry publisher in `buddybot_base`.
-- Use `/buddybot/pico_status` encoder counts from the Pico.
-- Publish `nav_msgs/Odometry` on `/odom`.
-- Also publish `odom -> base_link` TF if the navigation stack needs it.
-- Keep it conservative: odom only needs to be good enough for short local checkpoint moves in the current demo area.
+- Pico firmware now includes cumulative left/right/back encoder counts in `STAT`.
+- `pico_bridge_node` parses those counts into `buddybot_msgs/Status`.
+- New `buddybot_base encoder_odom_node` subscribes to `/buddybot/pico_status`.
+- It publishes `nav_msgs/Odometry` on `/odom`.
+- It also publishes `odom -> base_link` TF by default.
+- `scripts/start_mapping_panel.sh` starts `encoder_odom_node` after `pico_bridge`.
+
+Still required on the Pi:
+
+- Recopy Pico firmware files before testing encoder odom.
+- Rebuild `buddybot_base` so the new console script and dependencies are installed.
+- Verify `/buddybot/pico_status` has changing encoder counts while driving.
+- Verify `/odom` publishes and checkpoint navigation leaves `pose_unavailable`.
 
 ## Pi5 Field Commands
 
@@ -79,7 +87,7 @@ ros2 topic echo --once /odom
 ros2 topic echo --once /amcl_pose
 ```
 
-If both commands hang or show no message, checkpoint navigation cannot start yet because pose is missing.
+If both commands hang or show no message after rebuilding and recopying Pico firmware, checkpoint navigation cannot start yet because pose is still missing.
 
 Check whether the Pico bridge is publishing encoder status:
 
@@ -124,7 +132,7 @@ bash scripts/start_presentation_mode.sh mapping
 
 ## Pico Firmware Reminder
 
-Most recent changes after `14bccd5` do not require Pico firmware recopy.
+The 2026-05-04 encoder odometry change requires Pico firmware recopy because `STAT` now carries encoder counts.
 
 If the Pi has not received the known good Pico baseline yet, copy these before running ROS:
 
@@ -155,20 +163,19 @@ ros2 topic echo --once /buddybot/pico_status
 ros2 topic echo --once /odom
 ```
 
-6. If `/buddybot/pico_status` exists but `/odom` does not, implement the encoder odometry publisher next.
+6. If `/buddybot/pico_status` exists but `/odom` does not, check `encoder_odom.log` and confirm `buddybot_base` was rebuilt.
 
 ## Next Coding Task
 
-Implement `/odom` from Pico encoder feedback.
+Field-test `/odom` from Pico encoder feedback.
 
 Suggested scope:
 
-- New node in `software/pi5/ros2_ws/src/buddybot_base/buddybot_base/`
-- Subscribe to `/buddybot/pico_status`
-- Track `left_encoder`, `right_encoder`, and `back_encoder` deltas
-- Use the current Pico kinematics baseline documented in `AI_HANDOFF.md`
-- Publish `/odom`
-- Add the node to `setup.py`
-- Start it from `scripts/start_mapping_panel.sh`
-- Update this document and `docs/field_log.md` after field validation
-
+- Confirm encoder count signs and scale on hardware.
+- Tune `encoder_odom_node` parameters if odom direction is inverted:
+  - `left_encoder_sign`
+  - `right_encoder_sign`
+  - `back_encoder_sign`
+  - `rotation_radius_m`
+- Retry short local checkpoint movement.
+- Update this document and `docs/field_log.md` after field validation.
