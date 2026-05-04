@@ -43,11 +43,12 @@ class FollowControllerNode(Node):
         self.declare_parameter('image_height', 240)
         self.declare_parameter('center_x_gain', 0.008)  # Angular velocity gain for center offset
         self.declare_parameter('height_gain', 0.012)    # Linear velocity gain for box height
-        self.declare_parameter('target_height_ratio', 0.55)  # Target box height as fraction of image
+        self.declare_parameter('target_height_ratio', 0.80)  # Target box height as fraction of image
         self.declare_parameter('max_linear_velocity', 0.75)  # normalized 0-1 (pico maps directly to PWM)
         self.declare_parameter('max_angular_velocity', 0.80)  # normalized 0-1
+        self.declare_parameter('min_linear_velocity', 0.40)  # minimum duty to overcome gearbox stiction
         self.declare_parameter('deadzone_center', 15)        # pixels, ignore small center offsets
-        self.declare_parameter('deadzone_height', 5)         # pixels, ignore small height changes
+        self.declare_parameter('deadzone_height', 8)         # pixels, ignore small height changes
         self.declare_parameter('follow_enabled_topic', '/follow/enabled')
         self.declare_parameter('bbox_timeout_sec', 0.8)
         self.declare_parameter('min_detection_confidence', 0.15)
@@ -60,6 +61,7 @@ class FollowControllerNode(Node):
         self.target_height_ratio = self.get_parameter('target_height_ratio').value
         self.max_linear_vel = self.get_parameter('max_linear_velocity').value
         self.max_angular_vel = self.get_parameter('max_angular_velocity').value
+        self.min_linear_vel = float(self.get_parameter('min_linear_velocity').value)
         self.deadzone_center = self.get_parameter('deadzone_center').value
         self.deadzone_height = self.get_parameter('deadzone_height').value
         self.follow_enabled_topic = self.get_parameter('follow_enabled_topic').value
@@ -108,6 +110,7 @@ class FollowControllerNode(Node):
         self.get_logger().info(f"  Height gain: {self.height_gain}")
         self.get_logger().info(f"  Target height ratio: {self.target_height_ratio} ({self.target_height:.0f}px)")
         self.get_logger().info(f"  Max velocities: linear={self.max_linear_vel}, angular={self.max_angular_vel}")
+        self.get_logger().info(f"  Min linear velocity: {self.min_linear_vel}")
         self.get_logger().info(f"  Deadzones: center={self.deadzone_center}px, height={self.deadzone_height}px")
         self.get_logger().info(f"  Follow enable topic: {self.follow_enabled_topic}")
         self.get_logger().info(f"  BBox timeout: {self.bbox_timeout_sec:.2f}s")
@@ -208,6 +211,11 @@ class FollowControllerNode(Node):
             # Linear velocity proportional to height error
             # Negative height_error means person is far, so move forward (positive vx)
             linear_vel = -height_error * self.height_gain
+
+            # Enforce minimum duty cycle to overcome gearbox stiction
+            if abs(linear_vel) > 1e-4:
+                sign = 1.0 if linear_vel > 0 else -1.0
+                linear_vel = sign * max(abs(linear_vel), self.min_linear_vel)
 
             # Limit linear velocity
             linear_vel = max(-self.max_linear_vel, min(self.max_linear_vel, linear_vel))
