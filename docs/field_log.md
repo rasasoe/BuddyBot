@@ -1104,3 +1104,12 @@ Follow-up adjustment:
   - follow `center_x_gain`: `0.008` -> `0.0064`
   - follow `max_angular_velocity`: `0.80` -> `0.64`
   - manual rotate profile: `offset=0.12,gain=0.14` -> `offset=0.096,gain=0.112`
+
+Follow-up linear speed adjustment:
+- Field feedback: follow starts moving now, but the robot advances faster than the camera/detector loop can track.
+- Kept turn-rate tuning from the 80% baseline adjustment.
+- Reduced follow forward/backward aggression:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN`: `0.012` -> `0.007`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR`: `0.75` -> `0.45`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR`: `0.40` -> `0.28`
+- Goal: keep enough duty to overcome stiction while giving the camera/detector loop time to reacquire the person between corrections.

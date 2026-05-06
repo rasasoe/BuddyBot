@@ -42,11 +42,11 @@ class FollowControllerNode(Node):
         self.declare_parameter('image_width', 320)
         self.declare_parameter('image_height', 240)
         self.declare_parameter('center_x_gain', 0.0064)  # Angular velocity gain for center offset
-        self.declare_parameter('height_gain', 0.012)    # Linear velocity gain for box height
+        self.declare_parameter('height_gain', 0.007)    # Linear velocity gain for box height
         self.declare_parameter('target_height_ratio', 0.80)  # Target box height as fraction of image
-        self.declare_parameter('max_linear_velocity', 0.75)  # normalized 0-1 (pico maps directly to PWM)
+        self.declare_parameter('max_linear_velocity', 0.45)  # normalized 0-1 (pico maps directly to PWM)
         self.declare_parameter('max_angular_velocity', 0.64)  # normalized 0-1
-        self.declare_parameter('min_linear_velocity', 0.40)  # minimum duty to overcome gearbox stiction
+        self.declare_parameter('min_linear_velocity', 0.28)  # minimum duty to overcome gearbox stiction
         self.declare_parameter('deadzone_center', 15)        # pixels, ignore small center offsets
         self.declare_parameter('deadzone_height', 8)         # pixels, ignore small height changes
         self.declare_parameter('follow_enabled_topic', '/follow/enabled')
