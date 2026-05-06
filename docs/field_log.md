@@ -1080,3 +1080,20 @@ ros2 run buddybot_vision detector_node --ros-args --log-level info 2>&1 | grep -
 미해결 / 후속 확인 필요:
 - Pi5에서 실제 검출 박스 표시 여부 현장 검증 대기 중
 - confidence 0.2에서도 미검출 시 HOG 단독 또는 다른 모델 검토 필요
+
+## 2026-05-06 Follow/Manual Turn Rate Tuning
+
+Field feedback:
+- Follow mode appears to track, but left/right correction rotates faster than the camera feedback cadence.
+- Manual left/right rotation also feels too fast compared with forward/backward speed.
+
+Changes:
+- Follow angular control softened:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN` default `0.008` -> `0.004`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR` default `0.80` -> `0.35`
+- Manual rotate speed profile softened:
+  - `rotate_left/right` profile from `offset=0.12, gain=0.14` to `offset=0.06, gain=0.07`
+
+Expected result:
+- Follow should turn more slowly and allow camera frames to catch up.
+- Manual rotation should feel closer to forward/backward sensitivity instead of snapping around.
