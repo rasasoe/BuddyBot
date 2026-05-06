@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
 Last updated: 2026-05-06
-Repo baseline: `3029875` (`fix(pico): correct right motor direction sign (right=-1)`)
+Repo baseline: `ef60ade` (`Smooth follow commands and restore strafe speed`)
 
 ## 2026-05-06 Fast Resume
 
@@ -22,6 +22,29 @@ Latest known-good direction:
   - `/cmd_vel_follow`
   - `/cmd_vel_final`
 
+Latest follow/manual motion baseline:
+- Follow rotation is the 80% baseline, not the earlier very slow turn profile:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0064`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.64`
+- Follow forward/backward is intentionally slower than the early high-power profile:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.007`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.45`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.18`
+- Follow now publishes a smoothed 10Hz command stream:
+  - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.45`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.80`
+- Manual rotation profile:
+  - `offset=0.096,gain=0.112`
+- Manual strafe profile was restored because lateral movement felt too weak:
+  - frontend `offset=0.26,gain=0.14`
+  - backend `BUDDYBOT_MANUAL_STRAFE_LIMIT=0.46`
+
+Why this matters:
+- Previous follow behavior could pulse `forward -> stop -> forward` because follow commands were only published when bbox messages arrived.
+- `command_mux_node` treats sources as stale after `0.5s`, so slow detector cadence could drop follow to idle between frames.
+- `ef60ade` fixes that by letting bbox updates set the target velocity while the follow controller keeps publishing ramped commands at 10Hz.
+
 Latest motion/Pico note:
 - Replacement Pico was used after USB-C pad damage.
 - Current firmware baseline uses `MOTOR_DIRECTION_SIGNS["right"] = -1`.
@@ -40,12 +63,26 @@ cd ~/BuddyBot
 bash scripts/start_presentation_mode.sh mapping
 ```
 
+Fast rebuild after the latest follow/panel-only change:
+
+```bash
+cd ~/BuddyBot
+git pull origin main
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
 If follow does not move, diagnose in this order:
 1. Green bbox appears on panel camera.
 2. `/vision/person_bbox` publishes.
 3. `/cmd_vel_follow` publishes nonzero values after follow is enabled.
 4. `/cmd_vel_final` selects follow and publishes nonzero values.
 5. Pico status stays fresh and no safety/estop is active.
+6. If `/cmd_vel_follow` pulses or drops out, inspect `follow_controller.log` and check that the latest build includes `command_rate_hz` and accel-limit logs.
 
 This is the fast resume page for a new laptop, a new Codex session, or the Pi5 field machine. Read this first, then use `AI_HANDOFF.md`, `docs/field_log.md`, and `docs/CODEX_RESUME_WORKFLOW.md` for deeper history.
 
@@ -55,10 +92,44 @@ This is the fast resume page for a new laptop, a new Codex session, or the Pi5 f
 - Keep the current Pico motor mapping, wheel geometry, ramp limiting, and manual trim as the locked baseline unless a new single-wheel test proves otherwise.
 - The panel manual pad is camera-first: front camera, manual arrows, then quick commands.
 - Manual rotation speed was raised after field feedback, and right-turn commands receive a small boost to better match left-turn feel.
+- Manual strafe was restored upward after the follow-speed tuning made lateral movement feel too weak from the panel.
 - The minimap start button now means live LiDAR accumulation only. It should not make the robot wander automatically.
 - Checkpoint motion does not require minimap start. It does require a live pose from `/odom` or `/amcl_pose`.
 
-## Latest Field Change (2026-05-04)
+## Latest Field Change (2026-05-06)
+
+Follow/manual motion tuning after live Pi5 tests:
+
+Field sequence:
+- Follow initially did not move because detection was missing or not reaching the panel.
+- MobileNet-SSD setup, COCO person id, compatible BEST_EFFORT QoS, and debug-image camera overlay made detection visible.
+- Follow then began moving, but rotation was too fast for camera cadence.
+- First turn-rate reduction was too slow, so turn rates were restored to about 80% of the original aggressive baseline.
+- Forward/backward follow motion was then reduced because the robot advanced faster than the camera/detector loop.
+- Latest feedback showed stop/start pulsing and lurching, so follow command publication was changed to a smoothed 10Hz stream.
+
+Current code expectation:
+- `detector_node` publishes bbox/debug data.
+- `follow_controller_node` stores bbox-derived target velocity.
+- A command timer publishes ramped `/cmd_vel_follow` at 10Hz.
+- `command_mux_node` should keep selecting follow while the ramped command is active.
+- If bbox goes stale, follow ramps to zero instead of abruptly snapping to zero.
+
+Recommended next field test:
+1. Pull `main`.
+2. Rebuild `buddybot_vision buddybot_panel`.
+3. Start presentation mode.
+4. Confirm green bbox on camera.
+5. Press follow start from the camera toolbar.
+6. Watch `/cmd_vel_follow`, `/cmd_vel_final`, and physical motion.
+
+Primary tuning knobs, in order:
+- Still lurching: lower `BUDDYBOT_FOLLOW_LINEAR_ACCEL`.
+- Smooth but too slow forward: raise `BUDDYBOT_FOLLOW_MAX_LINEAR` slightly.
+- Turns too fast: lower `BUDDYBOT_FOLLOW_CENTER_GAIN` slightly.
+- Turns too weak: raise `BUDDYBOT_FOLLOW_CENTER_GAIN` slightly, but keep `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.64` unless field data clearly says otherwise.
+
+## Previous Field Change (2026-05-04)
 
 DNN 추종 불가 수정 + 패널 카메라에 검출 박스 표시.
 
@@ -94,7 +165,15 @@ Checkpoint and route requests now wait briefly for `waypoint_manager` acknowledg
 - If the request is published but not acknowledged, the panel returns a visible error instead of silently pretending success.
 - Command QoS between panel and waypoint manager is now reliable + volatile to avoid the previous command-topic mismatch.
 
-## Current Known Blocker
+## Current Known Navigation Blocker
+
+Current state:
+- `/odom` now exists through `buddybot_base.encoder_odom_node`.
+- The previous `pose_unavailable` blocker was cleared in field testing: panel status showed `pose_available: true` and `pico_connected: true`.
+- Checkpoint driving is still deprioritized because local encoder odom is not calibrated enough yet. Field tests showed strong spinning before final-yaw alignment was disabled, then triangular/unstable movement on farther goals.
+- Treat encoder odom as good enough for pose availability and short diagnostic tests, not yet good enough for reliable route driving.
+
+Historical path to this state:
 
 Checkpoint move previously stopped at:
 
@@ -124,12 +203,13 @@ Local implementation now added:
 - It also publishes `odom -> base_link` TF by default.
 - `scripts/start_mapping_panel.sh` starts `encoder_odom_node` after `pico_bridge`.
 
-Still required on the Pi:
+If returning to checkpoint/local navigation on the Pi:
 
-- Recopy Pico firmware files before testing encoder odom.
-- Rebuild `buddybot_base` so the new console script and dependencies are installed.
+- Keep the current Pico firmware baseline unless a new firmware change is made.
+- Rebuild `buddybot_base` if encoder odom code or dependencies changed.
 - Verify `/buddybot/pico_status` has changing encoder counts while driving.
-- Verify `/odom` publishes and checkpoint navigation leaves `pose_unavailable`.
+- Verify `/odom` publishes and has the expected sign/scale while manually driving.
+- Tune encoder signs/scale and local navigation gains before trusting checkpoint movement again.
 
 ## Pi5 Field Commands
 

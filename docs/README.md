@@ -49,3 +49,13 @@ BuddyBot/
 ## 지원
 
 특정 컴포넌트에 대한 질문은 관련 문서 섹션을 참조하거나 소프트웨어 디렉토리의 ROS 2 패키지 README를 확인하세요.
+## Current Field Handoff
+
+For the latest Pi5/BuddyBot field state, start here:
+
+1. [CURRENT_FIELD_HANDOFF.md](CURRENT_FIELD_HANDOFF.md)
+2. [../AI_HANDOFF.md](../AI_HANDOFF.md)
+3. [field_log.md](field_log.md)
+4. [CODEX_RESUME_WORKFLOW.md](CODEX_RESUME_WORKFLOW.md)
+
+As of 2026-05-06, the current priority is user-following mode. Checkpoint/local navigation has encoder `/odom`, but it is not calibrated enough for reliable route driving yet. The current follow baseline is `ef60ade`, with 10Hz smoothed follow commands and restored manual strafe speed.

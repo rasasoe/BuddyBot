@@ -2,7 +2,7 @@
 
 ## 2026-05-06 Resume Snapshot
 
-Current repo baseline: `3029875` (`fix(pico): correct right motor direction sign (right=-1)`).
+Current repo baseline: `ef60ade` (`Smooth follow commands and restore strafe speed`).
 
 Current practical priority:
 - Focus on user-following mode first.
@@ -17,11 +17,23 @@ Latest follow-mode state:
 - DNN threshold is lowered for indoor detections.
 - Detector has HOG/cascade fallback and diagnostic logging.
 - Panel subscribes to bbox/debug image with compatible BEST_EFFORT QoS and shows detection boxes on the camera feed when available.
-- Follow controller was tuned to overcome motor stiction:
-  - higher gains and velocity caps
-  - minimum linear velocity
-  - longer bbox timeout to reduce stop-start jitter
+- Follow controller is now tuned for camera-cadence tracking rather than raw speed:
+  - `center_x_gain=0.0064`
+  - `max_angular_velocity=0.64`
+  - `height_gain=0.007`
+  - `max_linear_velocity=0.45`
+  - `min_linear_velocity=0.18`
+  - `bbox_timeout_sec=2.0` from presentation mode
+  - `command_rate_hz=10.0`
+  - `linear_accel_limit=0.45/s`
+  - `angular_accel_limit=0.80/s`
+- Important behavior change: bbox callbacks now update a target command, and a 10Hz command timer ramps current velocity toward that target. This avoids follow mode pulsing `forward -> stop -> forward` when detector updates are slower than command_mux timeout.
 - Camera toolbar now has follow start/stop next to camera controls.
+- Manual rotation is about 80% of the original aggressive baseline:
+  - panel rotate profile `offset=0.096,gain=0.112`
+- Manual strafe was restored after it felt too weak:
+  - panel strafe profile `offset=0.26,gain=0.14`
+  - backend `BUDDYBOT_MANUAL_STRAFE_LIMIT=0.46`
 
 Latest Pico/motion state:
 - A replacement Pico was brought back up and BuddyBot firmware was copied.
@@ -54,7 +66,23 @@ tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/detector.log
 tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/follow_controller.log
 ```
 
-Do not reopen checkpoint odom/local navigation until follow mode is field-tested again.
+Do not reopen checkpoint odom/local navigation until follow mode is field-tested again. Current checkpoint/local nav has live `/odom`, but encoder scale/sign/frame calibration is still not trustworthy enough for route driving.
+
+## 2026-05-06 Follow Tuning Timeline
+
+Recent commits, newest last:
+
+- `0ebe8f6` softened follow/manual turn rates after the camera could not keep up.
+- `dbade25` restored turn rates to about 80% of the original baseline because the first reduction was too slow.
+- `ffbdbb4` reduced follow forward/backward aggression after the robot advanced faster than the camera loop.
+- `ef60ade` changed follow to a smoothed 10Hz command stream and restored manual strafe speed.
+
+Current field expectation:
+- Person box should appear first on the panel camera.
+- Press follow start from the camera toolbar.
+- The robot should start more gradually, keep command output alive between detector frames, and stop/ramp down when bbox becomes stale.
+- If it still lurches, tune `BUDDYBOT_FOLLOW_LINEAR_ACCEL` downward first.
+- If it follows too lazily but smoothly, tune `BUDDYBOT_FOLLOW_MAX_LINEAR` upward slightly before touching angular values.
 
 ## Start Here First
 
@@ -64,7 +92,7 @@ For the latest cross-environment resume state, read:
 - `docs/CODEX_RESUME_WORKFLOW.md`
 - latest entries in `docs/field_log.md`
 
-The most recent field blocker is checkpoint navigation waiting for pose. The code subscribes to `/odom` and `/amcl_pose`, but no repo node currently appears to publish `/odom`; the likely next task is adding an encoder odometry publisher from `/buddybot/pico_status`.
+The older checkpoint blocker was missing pose. That is no longer the main blocker: `buddybot_base.encoder_odom_node` now publishes `/odom` from Pico encoder status. The current navigation risk is calibration quality, not topic absence. Field tests showed checkpoint motion can spin or trace unstable triangular paths, so keep checkpoint/local navigation deprioritized until follow mode is field-tested again.
 
 ## Current State
 

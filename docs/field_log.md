@@ -1125,3 +1125,43 @@ Follow smoothing and strafe recovery:
 - Restored manual strafe feel:
   - panel strafe profile: `offset=0.16,gain=0.10` -> `offset=0.26,gain=0.14`
   - backend `BUDDYBOT_MANUAL_STRAFE_LIMIT`: `0.34` -> `0.46`
+
+Documentation rollup after follow/manual tuning:
+- Updated `AI_HANDOFF.md` and `docs/CURRENT_FIELD_HANDOFF.md` to make `ef60ade` the current resume baseline.
+- Updated `docs/CODEX_RESUME_WORKFLOW.md` so a new laptop/session starts from the current follow-first priority instead of the older missing-odom blocker.
+- Current practical priority remains user-following mode:
+  - checkpoint/local navigation has `/odom`, but encoder odom is not field-calibrated enough for reliable route driving
+  - follow mode is the best next demo path because detection, command mux, Pico bridge, and safety behavior can be tested directly from the camera panel
+- Current follow defaults to remember:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0064`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.64`
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.007`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.45`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.18`
+  - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.45`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.80`
+- Current manual defaults to remember:
+  - rotate profile: `offset=0.096,gain=0.112`
+  - strafe profile: `offset=0.26,gain=0.14`
+  - backend strafe limit: `0.46`
+- Next Pi5 command for this slice:
+
+```bash
+cd ~/BuddyBot && git pull origin main
+cd ~/BuddyBot/software/pi5/ros2_ws && source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot && bash scripts/start_presentation_mode.sh mapping
+```
+
+- Next field checks:
+  - panel camera shows green bbox
+  - `/vision/person_bbox` publishes with BEST_EFFORT-compatible subscribers
+  - `/cmd_vel_follow` stays alive at the smoothed command rate while follow is enabled
+  - `/cmd_vel_final` selects follow and does not flip idle between detector frames
+  - physical motion starts gradually instead of stop/start/lurch
+- Next tuning order:
+  - still lurching: lower `BUDDYBOT_FOLLOW_LINEAR_ACCEL`
+  - smooth but too slow: raise `BUDDYBOT_FOLLOW_MAX_LINEAR` slightly
+  - turn correction wrong: adjust `BUDDYBOT_FOLLOW_CENTER_GAIN` before changing `BUDDYBOT_FOLLOW_MAX_ANGULAR`

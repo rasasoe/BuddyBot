@@ -1,6 +1,40 @@
 # BuddyBot Codex Resume Workflow
 
-## 2026-04-29 Fast Resume Pointer
+## 2026-05-06 Fast Resume Pointer
+
+Start new workspaces with `docs/CURRENT_FIELD_HANDOFF.md`.
+
+Latest field priority:
+- Use `BuddyBot` as the main repo.
+- `BuddyBot-ai` and `AMR` are references only unless scope explicitly changes.
+- Work user-following mode first.
+- Checkpoint/local navigation now has `/odom`, but encoder odom is not calibrated enough for reliable route driving.
+
+Latest code baseline:
+- `ef60ade` (`Smooth follow commands and restore strafe speed`)
+- Follow uses MobileNet-SSD v2 COCO when model files are present.
+- Follow commands are smoothed at 10Hz so detector cadence does not cause `forward -> stop -> forward` pulsing.
+- Manual strafe speed was restored upward after field feedback.
+
+Fast Pi5 pull/build/run for the current follow/panel slice:
+
+```bash
+cd ~/BuddyBot
+git pull origin main
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+Read next:
+- `AI_HANDOFF.md`
+- latest dated section in `docs/field_log.md`
+- this file if the next session needs the operating workflow.
+
+## 2026-04-29 Historical Resume Pointer
 
 Start new workspaces with `docs/CURRENT_FIELD_HANDOFF.md`.
 

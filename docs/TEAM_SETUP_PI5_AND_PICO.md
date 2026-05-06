@@ -16,12 +16,16 @@
 
 ## Pi 5 install
 
+Ubuntu 24.04 uses PEP 668 externally-managed Python. Prefer apt packages and `pipx` for command-line tools such as `mpremote`; avoid `python3 -m pip install --user ...` on the Pi system Python.
+
 ```bash
 git clone https://github.com/rasasoe/BuddyBot.git
 cd BuddyBot
 sudo apt update
-sudo apt install python3-serial
-python3 -m pip install fastapi uvicorn requests pyyaml
+sudo apt install -y pipx python3-venv python3-serial python3-pip psmisc ros-jazzy-nav-msgs ros-jazzy-tf2-ros
+python3 -m pipx ensurepath || true
+export PATH="$HOME/.local/bin:$PATH"
+pipx install mpremote || true
 cd software/pi5/ros2_ws
 colcon build
 source install/setup.bash
