@@ -1097,3 +1097,10 @@ Changes:
 Expected result:
 - Follow should turn more slowly and allow camera frames to catch up.
 - Manual rotation should feel closer to forward/backward sensitivity instead of snapping around.
+
+Follow-up adjustment:
+- The first reduction was too slow in the field.
+- Set turn rates to about 80% of the original aggressive baseline instead:
+  - follow `center_x_gain`: `0.008` -> `0.0064`
+  - follow `max_angular_velocity`: `0.80` -> `0.64`
+  - manual rotate profile: `offset=0.12,gain=0.14` -> `offset=0.096,gain=0.112`
