@@ -1113,3 +1113,15 @@ Follow-up linear speed adjustment:
   - `BUDDYBOT_FOLLOW_MAX_LINEAR`: `0.75` -> `0.45`
   - `BUDDYBOT_FOLLOW_MIN_LINEAR`: `0.40` -> `0.28`
 - Goal: keep enough duty to overcome stiction while giving the camera/detector loop time to reacquire the person between corrections.
+
+Follow smoothing and strafe recovery:
+- Field feedback: follow motion pulses forward/stop/forward and can then lurch when detection catches up.
+- Likely cause: follow commands were only published on bbox updates, while command_mux drops a source stale after 0.5s.
+- Changed follow controller to keep a 10Hz smoothed command stream:
+  - bbox updates now set a target command
+  - command timer ramps current command toward target
+  - default accel limits: linear `0.45/s`, angular `0.80/s`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR`: `0.28` -> `0.18` because ramping now handles the start instead of a hard duty jump
+- Restored manual strafe feel:
+  - panel strafe profile: `offset=0.16,gain=0.10` -> `offset=0.26,gain=0.14`
+  - backend `BUDDYBOT_MANUAL_STRAFE_LIMIT`: `0.34` -> `0.46`

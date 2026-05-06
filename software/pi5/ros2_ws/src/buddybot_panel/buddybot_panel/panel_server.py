@@ -201,7 +201,7 @@ class PanelBridge:
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
         self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))
         self._manual_linear_limit = float(os.getenv("BUDDYBOT_MANUAL_LINEAR_LIMIT", "0.52"))
-        self._manual_strafe_limit = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LIMIT", "0.34"))
+        self._manual_strafe_limit = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LIMIT", "0.46"))
         self._manual_angular_limit = float(os.getenv("BUDDYBOT_MANUAL_ANGULAR_LIMIT", "0.28"))
         self._manual_right_turn_boost = float(os.getenv("BUDDYBOT_MANUAL_RIGHT_TURN_BOOST", "1.10"))
         self._manual_right_angular_limit = float(
