@@ -1,7 +1,51 @@
 # BuddyBot Current Field Handoff
 
-Last updated: 2026-05-04
-Repo baseline: `9422dea` (`fix: lower DNN threshold to 0.2, show detection bbox on camera feed`)
+Last updated: 2026-05-06
+Repo baseline: `3029875` (`fix(pico): correct right motor direction sign (right=-1)`)
+
+## 2026-05-06 Fast Resume
+
+Use `BuddyBot` as the main repo. `BuddyBot-ai` and `AMR` are references only unless the user explicitly switches scope.
+
+Current field priority:
+- User-following mode first.
+- Checkpoint/local navigation is deprioritized because encoder odom exists but is not calibrated enough for reliable route driving yet.
+
+Latest known-good direction:
+- MobileNet-SSD v2 COCO is the preferred detector path.
+- Expected model files on the Pi:
+  - `~/BuddyBot/models/mobilenet_ssd_v2_coco.pb`
+  - `~/BuddyBot/models/mobilenet_ssd_v2_coco.pbtxt`
+- If detector is working, the panel camera should show a green detection box.
+- Then press follow start from the camera toolbar and watch:
+  - `/vision/person_bbox`
+  - `/cmd_vel_follow`
+  - `/cmd_vel_final`
+
+Latest motion/Pico note:
+- Replacement Pico was used after USB-C pad damage.
+- Current firmware baseline uses `MOTOR_DIRECTION_SIGNS["right"] = -1`.
+- If firmware is recopied, copy the full Pico firmware set, not only `main.py`.
+
+Pi5 standard restart:
+
+```bash
+cd ~/BuddyBot
+git pull origin main
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_msgs buddybot_base buddybot_system buddybot_nav buddybot_panel buddybot_voice buddybot_vision
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+If follow does not move, diagnose in this order:
+1. Green bbox appears on panel camera.
+2. `/vision/person_bbox` publishes.
+3. `/cmd_vel_follow` publishes nonzero values after follow is enabled.
+4. `/cmd_vel_final` selects follow and publishes nonzero values.
+5. Pico status stays fresh and no safety/estop is active.
 
 This is the fast resume page for a new laptop, a new Codex session, or the Pi5 field machine. Read this first, then use `AI_HANDOFF.md`, `docs/field_log.md`, and `docs/CODEX_RESUME_WORKFLOW.md` for deeper history.
 

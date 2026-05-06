@@ -1,5 +1,61 @@
 # BuddyBot AI Handoff
 
+## 2026-05-06 Resume Snapshot
+
+Current repo baseline: `3029875` (`fix(pico): correct right motor direction sign (right=-1)`).
+
+Current practical priority:
+- Focus on user-following mode first.
+- Checkpoint/local navigation has `/odom` now, but encoder odom is not field-calibrated enough for reliable checkpoint driving; it previously traced triangular/unstable paths.
+- Follow mode is the more promising demo path because it depends mostly on camera detection, follow controller, command mux, Pico bridge, and manual-safe stopping.
+
+Latest follow-mode state:
+- MobileNet-SSD v2 COCO model path is expected at:
+  - `~/BuddyBot/models/mobilenet_ssd_v2_coco.pb`
+  - `~/BuddyBot/models/mobilenet_ssd_v2_coco.pbtxt`
+- `detector_node` default `person_class_id` is corrected to COCO person id `1`.
+- DNN threshold is lowered for indoor detections.
+- Detector has HOG/cascade fallback and diagnostic logging.
+- Panel subscribes to bbox/debug image with compatible BEST_EFFORT QoS and shows detection boxes on the camera feed when available.
+- Follow controller was tuned to overcome motor stiction:
+  - higher gains and velocity caps
+  - minimum linear velocity
+  - longer bbox timeout to reduce stop-start jitter
+- Camera toolbar now has follow start/stop next to camera controls.
+
+Latest Pico/motion state:
+- A replacement Pico was brought back up and BuddyBot firmware was copied.
+- `MOTOR_DIRECTION_SIGNS["right"] = -1` is the latest field-corrected baseline.
+- If Pico firmware is recopied, include all firmware modules, especially `config.py`, `uart_protocol.py`, and `main.py`.
+
+Recommended Pi5 resume command after pulling latest:
+
+```bash
+cd ~/BuddyBot
+git pull origin main
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_msgs buddybot_base buddybot_system buddybot_nav buddybot_panel buddybot_voice buddybot_vision
+source install/setup.bash
+cd ~/BuddyBot
+bash scripts/start_presentation_mode.sh mapping
+```
+
+High-signal follow checks:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/BuddyBot/software/pi5/ros2_ws/install/setup.bash
+ros2 topic echo /vision/detector_status
+ros2 topic echo /vision/person_bbox
+ros2 topic echo /cmd_vel_follow
+ros2 topic echo /cmd_vel_final
+tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/detector.log
+tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/follow_controller.log
+```
+
+Do not reopen checkpoint odom/local navigation until follow mode is field-tested again.
+
 ## Start Here First
 
 For the latest cross-environment resume state, read:
