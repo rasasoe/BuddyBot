@@ -24,7 +24,7 @@ Latest follow-mode state:
   - `center_x_gain=0.0012`
   - `max_angular_velocity=0.10`
   - `height_gain=0.0035`
-  - `target_height_ratio=0.75`
+  - `target_height_ratio=0.60`
   - `max_linear_velocity=0.16`
   - `min_linear_velocity=0.10`
   - `deadzone_center=50`
@@ -34,7 +34,7 @@ Latest follow-mode state:
   - `allow_reverse=false`
   - `visible_forward_velocity=0.08`
   - `visible_forward_center_deadzone=120`
-  - `use_lidar_distance=true`
+  - `use_lidar_distance=false`
   - `target_distance_m=0.95`
   - `distance_deadzone_m=0.18`
   - `min_follow_distance_m=0.45`
@@ -48,7 +48,7 @@ Latest follow-mode state:
 - Detector appends source image age to `/vision/person_bbox`; follow reports it in `/follow/status`.
 - Source-age rejection is disabled by default after field feedback showed it could block all motion on the Pi5 DNN path.
 - If C920/MobileNet returns a saturated/full-frame person bbox, follow no longer relies only on bbox height. It creeps forward slowly while the person is visible and roughly centered, with LiDAR avoidance responsible for stopping if the person is actually too close.
-- Follow now prefers LiDAR `/scan` for forward distance while using the camera bbox for bearing/turning. This is the intended fix for the saturated-bbox problem.
+- LiDAR distance control exists but is disabled by default after corridor screenshots showed centered forward motion could be falsely blocked. Default follow distance is camera-height based, with LiDAR still active as a separate avoidance/safety override.
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
 - Detector preprocessing now matches the old TensorFlow SSD path:
   - `scale_factor=1.0`

@@ -33,7 +33,7 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
 - Follow forward is intentionally slower than the early high-power profile:
   - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.0035`
-  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.75`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.60`
   - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.16`
   - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.10`
 - Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
@@ -42,12 +42,13 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.08`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
   - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
-- Follow distance now prefers LiDAR over bbox height:
-  - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=1`
+- Follow distance defaults back to camera bbox height, because corridor screenshots showed LiDAR distance gating could falsely block centered forward motion:
+  - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=0`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=20`
   - `BUDDYBOT_FOLLOW_TARGET_DISTANCE=0.95`
   - `BUDDYBOT_FOLLOW_DISTANCE_DEADZONE=0.18`
   - `BUDDYBOT_FOLLOW_MIN_DISTANCE=0.45`
-  - Camera bbox is used for bearing/turning; LiDAR `/scan` is used for forward distance when fresh.
+  - LiDAR distance control can still be enabled for experiments, but default safety stays in `lidar_avoidance_node`.
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
   - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.12`

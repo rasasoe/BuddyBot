@@ -1314,3 +1314,11 @@ Camera bbox vs LiDAR distance correction:
   - `BUDDYBOT_FOLLOW_LIDAR_GAIN=0.24`
   - `BUDDYBOT_FOLLOW_LIDAR_SECTOR=18`
 - Height-based distance and visible-forward creep remain as fallback when no fresh LiDAR distance is available.
+
+Field correction after screenshots:
+- Centered/far person did not move, while side-offset person caused some movement. This indicates LiDAR distance gating can falsely block centered forward motion in the corridor.
+- Default follow distance is returned to the camera-height path that matched the old standalone follower:
+  - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=0`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.60`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=20`
+- LiDAR remains active through the separate `lidar_avoidance_node` safety override, but it is no longer the default forward-distance controller.
