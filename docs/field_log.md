@@ -1165,3 +1165,41 @@ cd ~/BuddyBot && bash scripts/start_presentation_mode.sh mapping
   - still lurching: lower `BUDDYBOT_FOLLOW_LINEAR_ACCEL`
   - smooth but too slow: raise `BUDDYBOT_FOLLOW_MAX_LINEAR` slightly
   - turn correction wrong: adjust `BUDDYBOT_FOLLOW_CENTER_GAIN` before changing `BUDDYBOT_FOLLOW_MAX_ANGULAR`
+
+## 2026-05-11 User Follow Completion Pass
+
+Context:
+- Work resumed after about one week away from the robot.
+- Current priority remains completing user-following mode before returning to checkpoint/local navigation.
+- The previous baseline already smoothed `/cmd_vel_follow` at 10Hz, but the controller still reacted directly to raw bbox jumps and did not expose enough follow-controller internals in the panel/debug bundle.
+
+Changes:
+- Added bbox low-pass filtering inside `follow_controller_node`.
+  - New default `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.45`.
+  - New default `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`.
+  - Goal: reduce target velocity wobble from frame-to-frame bbox jitter while resetting quickly after a real detection gap.
+- Added `/follow/status` JSON diagnostics from `follow_controller_node`.
+  - Includes state, bbox age, raw bbox, filtered bbox, target command, current ramped command, and active tuning params.
+- Panel now subscribes to `/follow/status`.
+  - `/api/status` includes `follow_status`.
+  - `sensor_fusion` includes `follow_controller_state` and `follow_controller_live`.
+  - Follow note in the camera/control panel shows controller state and current command.
+- Debug bundle now records `/follow/status` into `follow_status.log`.
+
+Expected next Pi5 test:
+
+```bash
+cd ~/BuddyBot && git pull origin main
+cd ~/BuddyBot/software/pi5/ros2_ws && source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot && bash scripts/start_presentation_mode.sh mapping
+```
+
+Field verification:
+- Open the panel and confirm the camera shows a green bbox.
+- Press follow start.
+- Watch the follow note for `follow_controller=tracking` and nonzero `cmd=...`.
+- If motion still jitters but commands are smooth, suspect detector bbox jitter or motor/Pico response.
+- If `/follow/status` is live but `/cmd_vel_final` is idle, inspect command mux status.
+- If `/follow/status` is not live, verify `buddybot_vision` was rebuilt and `follow_controller_node` restarted.

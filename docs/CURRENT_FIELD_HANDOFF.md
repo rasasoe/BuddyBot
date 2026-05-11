@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
-Last updated: 2026-05-06
-Repo baseline: `ef60ade` (`Smooth follow commands and restore strafe speed`)
+Last updated: 2026-05-11
+Repo baseline: current `main` (`Improve follow smoothing diagnostics`)
 
 ## 2026-05-06 Fast Resume
 
@@ -34,6 +34,10 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
   - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.45`
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.80`
+- Follow bbox input is now filtered before velocity is computed:
+  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.45`
+  - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
+- Follow controller publishes `/follow/status` for panel/debug diagnostics.
 - Manual rotation profile:
   - `offset=0.096,gain=0.112`
 - Manual strafe profile was restored because lateral movement felt too weak:
@@ -83,6 +87,7 @@ If follow does not move, diagnose in this order:
 4. `/cmd_vel_final` selects follow and publishes nonzero values.
 5. Pico status stays fresh and no safety/estop is active.
 6. If `/cmd_vel_follow` pulses or drops out, inspect `follow_controller.log` and check that the latest build includes `command_rate_hz` and accel-limit logs.
+7. If panel state is unclear, inspect `/follow/status` or `follow_status.log` from the debug bundle.
 
 This is the fast resume page for a new laptop, a new Codex session, or the Pi5 field machine. Read this first, then use `AI_HANDOFF.md`, `docs/field_log.md`, and `docs/CODEX_RESUME_WORKFLOW.md` for deeper history.
 

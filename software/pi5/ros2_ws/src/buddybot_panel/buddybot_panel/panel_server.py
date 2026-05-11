@@ -254,6 +254,7 @@ class PanelBridge:
         self._latest_debug_jpeg: Optional[bytes] = None
         self._latest_debug_stamp: Optional[float] = None
         self._latest_detector_status: Optional[Dict[str, Any]] = None
+        self._latest_follow_status: Optional[Dict[str, Any]] = None
         self._latest_pico_status: Optional[Dict[str, Any]] = None
         self._latest_person_bbox: Optional[Dict[str, float]] = None
         self._latest_person_stamp: Optional[float] = None
@@ -404,6 +405,7 @@ class PanelBridge:
                 self._node.create_subscription(Image, "/camera/image_raw", self._camera_callback, image_qos)
                 self._node.create_subscription(Image, "/vision/debug_image", self._debug_image_callback, image_qos)
             self._node.create_subscription(String, "/vision/detector_status", self._detector_status_callback, 10)
+            self._node.create_subscription(String, "/follow/status", self._follow_status_callback, 10)
             if Float32MultiArray is not None:
                 bbox_qos: Any = 10
                 if QoSProfile is not None:
@@ -538,6 +540,24 @@ class PanelBridge:
 
         with self._lock:
             self._latest_detector_status = payload
+
+    def _follow_status_callback(self, msg: String) -> None:
+        payload: Dict[str, Any]
+        try:
+            parsed = json.loads(msg.data)
+            if isinstance(parsed, dict):
+                payload = dict(parsed)
+            else:
+                payload = {"details": str(parsed)}
+        except Exception:
+            payload = {"details": msg.data}
+
+        payload.setdefault("state", "unknown")
+        payload.setdefault("enabled", False)
+        payload["stamp"] = time.time()
+
+        with self._lock:
+            self._latest_follow_status = payload
 
     def _person_bbox_callback(self, msg: Float32MultiArray) -> None:
         try:
@@ -954,6 +974,7 @@ class PanelBridge:
             "camera_available": self.camera_available(),
             "camera_age_sec": self.camera_age_sec(),
             "detector_status": self.detector_status(),
+            "follow_status": self.follow_status(),
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
@@ -1042,6 +1063,28 @@ class PanelBridge:
             detector["reason"] = "stale_status"
         return detector
 
+    def follow_status(self, stale_after_sec: float = 4.0) -> Dict[str, Any]:
+        with self._lock:
+            follow = dict(self._latest_follow_status) if self._latest_follow_status is not None else None
+
+        if follow is None:
+            return {
+                "state": "waiting",
+                "enabled": self.follow_enabled,
+                "live": False,
+                "age_sec": None,
+                "details": "Follow controller status topic has not published yet.",
+            }
+
+        stamp = float(follow.pop("stamp", 0.0))
+        age_sec = round(max(0.0, time.time() - stamp), 2) if stamp else None
+        live = age_sec is not None and age_sec <= stale_after_sec
+        follow["age_sec"] = age_sec
+        follow["live"] = live
+        if not live:
+            follow["state"] = "stale_status"
+        return follow
+
     def get_camera_frame(self) -> Optional[bytes]:
         with self._lock:
             if (self._latest_debug_jpeg is not None
@@ -1117,6 +1160,7 @@ class PanelBridge:
         person_live = self.person_detected()
         detector = self.detector_status()
         detector_ready = bool(detector.get("ready", False))
+        follow = self.follow_status()
         pico_live = self.pico_connected()
         safety_clear = not self.safety_active()
 
@@ -1170,6 +1214,8 @@ class PanelBridge:
             "operator_ready": not blockers,
             "detector_backend": detector.get("backend", "waiting"),
             "detector_reason": detector.get("reason", "waiting_for_detector"),
+            "follow_controller_state": follow.get("state", "waiting"),
+            "follow_controller_live": bool(follow.get("live", False)),
             "blockers": blockers,
             "follow_blockers": follow_blockers,
             "nav_blockers": nav_blockers,

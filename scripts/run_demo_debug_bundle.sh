@@ -94,6 +94,7 @@ cleanup() {
   echo "[debug]   $BUNDLE_DIR/system_snapshot.log"
   echo "[debug]   $BUNDLE_DIR/cmd_vel_manual.log"
   echo "[debug]   $BUNDLE_DIR/cmd_vel_final.log"
+  echo "[debug]   $BUNDLE_DIR/follow_status.log"
   echo "[debug]   $BUNDLE_DIR/pico_status.log"
   echo "[debug]   $BUNDLE_DIR/command_mux.tail.log"
   echo "[debug]   $BUNDLE_DIR/pico_bridge.tail.log"
@@ -130,6 +131,7 @@ start_topic_capture pico_safety /buddybot/pico_safety_event std_msgs/msg/String
 start_topic_capture scan /scan sensor_msgs/msg/LaserScan --qos-reliability best_effort
 start_topic_capture camera_image /camera/image_raw sensor_msgs/msg/Image --qos-reliability best_effort
 start_topic_capture detector_status /vision/detector_status std_msgs/msg/String
+start_topic_capture follow_status /follow/status std_msgs/msg/String
 start_topic_capture navigation_status /nav/navigation_status std_msgs/msg/String
 start_topic_capture command_status /system/command_status std_msgs/msg/String
 start_topic_capture safety_status /system/safety_status std_msgs/msg/String

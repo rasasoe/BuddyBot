@@ -2,7 +2,7 @@
 
 ## 2026-05-06 Resume Snapshot
 
-Current repo baseline: `ef60ade` (`Smooth follow commands and restore strafe speed`).
+Current repo baseline: current `main` (`Improve follow smoothing diagnostics`).
 
 Current practical priority:
 - Focus on user-following mode first.
@@ -28,6 +28,10 @@ Latest follow-mode state:
   - `linear_accel_limit=0.45/s`
   - `angular_accel_limit=0.80/s`
 - Important behavior change: bbox callbacks now update a target command, and a 10Hz command timer ramps current velocity toward that target. This avoids follow mode pulsing `forward -> stop -> forward` when detector updates are slower than command_mux timeout.
+- BBox input is now low-pass filtered before velocity is computed:
+  - `bbox_smoothing_alpha=0.45`
+  - `bbox_filter_reset_sec=0.9`
+- `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
 - Camera toolbar now has follow start/stop next to camera controls.
 - Manual rotation is about 80% of the original aggressive baseline:
   - panel rotate profile `offset=0.096,gain=0.112`
@@ -60,6 +64,7 @@ source /opt/ros/jazzy/setup.bash
 source ~/BuddyBot/software/pi5/ros2_ws/install/setup.bash
 ros2 topic echo /vision/detector_status
 ros2 topic echo /vision/person_bbox
+ros2 topic echo /follow/status
 ros2 topic echo /cmd_vel_follow
 ros2 topic echo /cmd_vel_final
 tail -n 120 ~/BuddyBot/software/pi5/ros2_ws/log/mapping_panel/detector.log
