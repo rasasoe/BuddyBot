@@ -25,6 +25,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, Float32MultiArray, String
 
 
@@ -62,6 +63,16 @@ class FollowControllerNode(Node):
         self.declare_parameter('allow_reverse', False)
         self.declare_parameter('visible_forward_velocity', 0.08)
         self.declare_parameter('visible_forward_center_deadzone', 120)
+        self.declare_parameter('use_lidar_distance', True)
+        self.declare_parameter('scan_topic', '/scan')
+        self.declare_parameter('scan_forward_center_deg', 180.0)
+        self.declare_parameter('camera_horizontal_fov_deg', 70.0)
+        self.declare_parameter('person_lidar_sector_deg', 18.0)
+        self.declare_parameter('target_distance_m', 0.95)
+        self.declare_parameter('distance_deadzone_m', 0.18)
+        self.declare_parameter('min_follow_distance_m', 0.45)
+        self.declare_parameter('lidar_distance_gain', 0.24)
+        self.declare_parameter('scan_timeout_sec', 0.8)
         self.declare_parameter('status_topic', '/follow/status')
         self.declare_parameter('status_rate_hz', 2.0)
 
@@ -88,6 +99,16 @@ class FollowControllerNode(Node):
         self.allow_reverse = bool(self.get_parameter('allow_reverse').value)
         self.visible_forward_velocity = max(0.0, float(self.get_parameter('visible_forward_velocity').value))
         self.visible_forward_center_deadzone = max(0.0, float(self.get_parameter('visible_forward_center_deadzone').value))
+        self.use_lidar_distance = bool(self.get_parameter('use_lidar_distance').value)
+        self.scan_topic = str(self.get_parameter('scan_topic').value)
+        self.scan_forward_center_deg = float(self.get_parameter('scan_forward_center_deg').value)
+        self.camera_horizontal_fov_deg = max(1.0, float(self.get_parameter('camera_horizontal_fov_deg').value))
+        self.person_lidar_sector_deg = max(1.0, float(self.get_parameter('person_lidar_sector_deg').value))
+        self.target_distance_m = max(0.05, float(self.get_parameter('target_distance_m').value))
+        self.distance_deadzone_m = max(0.0, float(self.get_parameter('distance_deadzone_m').value))
+        self.min_follow_distance_m = max(0.0, float(self.get_parameter('min_follow_distance_m').value))
+        self.lidar_distance_gain = max(0.0, float(self.get_parameter('lidar_distance_gain').value))
+        self.scan_timeout_sec = max(0.0, float(self.get_parameter('scan_timeout_sec').value))
         self.status_topic = str(self.get_parameter('status_topic').value)
         self.status_rate_hz = max(0.2, float(self.get_parameter('status_rate_hz').value))
 
@@ -114,6 +135,8 @@ class FollowControllerNode(Node):
         # Subscriber for person bounding box
         self.bbox_subscriber = self.create_subscription(
             Float32MultiArray, '/vision/person_bbox', self.bbox_callback, bbox_qos)
+        self.scan_subscriber = self.create_subscription(
+            LaserScan, self.scan_topic, self.scan_callback, bbox_qos)
         self.follow_enabled_subscriber = self.create_subscription(
             Bool, self.follow_enabled_topic, self.follow_enabled_callback, command_qos)
         self.command_timer = self.create_timer(1.0 / self.command_rate_hz, self.command_timer_callback)
@@ -128,6 +151,9 @@ class FollowControllerNode(Node):
         self.last_source_image_age_sec = None
         self.last_reject_reason = "waiting_for_bbox"
         self.last_control_reason = "waiting_for_bbox"
+        self.latest_scan = None
+        self.last_scan_time = None
+        self.last_lidar_distance_m = None
         self.target_twist = Twist()
         self.current_twist = Twist()
         self.following_active = False
@@ -160,7 +186,17 @@ class FollowControllerNode(Node):
             f"  Visible forward: velocity={self.visible_forward_velocity}, "
             f"center_deadzone={self.visible_forward_center_deadzone}px"
         )
+        self.get_logger().info(
+            f"  LiDAR distance: enabled={self.use_lidar_distance} topic={self.scan_topic} "
+            f"target={self.target_distance_m:.2f}m deadzone={self.distance_deadzone_m:.2f}m "
+            f"min={self.min_follow_distance_m:.2f}m sector={self.person_lidar_sector_deg:.1f}deg"
+        )
         self.get_logger().info(f"  Status topic: {self.status_topic} at {self.status_rate_hz:.1f}Hz")
+
+    def scan_callback(self, msg: LaserScan):
+        """Store the freshest LiDAR scan for camera-bearing distance control."""
+        self.latest_scan = msg
+        self.last_scan_time = self.get_clock().now()
 
     def follow_enabled_callback(self, msg: Bool):
         """Enable or disable following based on external control."""
@@ -311,12 +347,38 @@ class FollowControllerNode(Node):
             angular_vel = max(-self.max_angular_vel, min(self.max_angular_vel, angular_vel))
             twist.angular.z = angular_vel
 
-        # Calculate height error (negative = too far, positive = too close)
-        height_error = bbox_height - self.target_height
+        lidar_distance = self._person_lidar_distance(center_offset)
         linear_reason = "height_deadzone"
+        used_lidar_distance = lidar_distance is not None
+
+        if used_lidar_distance:
+            self.last_lidar_distance_m = lidar_distance
+            if abs(center_offset) > self.visible_forward_center_deadzone:
+                linear_reason = f"lidar_wait_center:{lidar_distance:.2f}m"
+            elif lidar_distance <= self.min_follow_distance_m:
+                linear_reason = f"lidar_too_close:{lidar_distance:.2f}m"
+            else:
+                distance_error = lidar_distance - self.target_distance_m
+                if abs(distance_error) <= self.distance_deadzone_m:
+                    linear_reason = f"lidar_distance_hold:{lidar_distance:.2f}m"
+                else:
+                    linear_vel = distance_error * self.lidar_distance_gain
+                    linear_reason = "lidar_forward" if linear_vel > 0.0 else "lidar_reverse"
+                    if abs(linear_vel) > 1e-4:
+                        sign = 1.0 if linear_vel > 0 else -1.0
+                        linear_vel = sign * max(abs(linear_vel), self.min_linear_vel)
+                    linear_vel = max(-self.max_linear_vel, min(self.max_linear_vel, linear_vel))
+                    if not self.allow_reverse and linear_vel < 0.0:
+                        linear_vel = 0.0
+                        linear_reason = f"lidar_reverse_blocked:{lidar_distance:.2f}m"
+                    twist.linear.x = linear_vel
+
+        # Calculate height error (negative = too far, positive = too close).
+        # Use this only as a fallback when LiDAR cannot provide a fresh distance.
+        height_error = bbox_height - self.target_height
 
         # Apply deadzone for height control
-        if abs(height_error) > self.deadzone_height:
+        if not used_lidar_distance and abs(height_error) > self.deadzone_height:
             # Linear velocity proportional to height error
             # Negative height_error means person is far, so move forward (positive vx)
             linear_vel = -height_error * self.height_gain
@@ -336,7 +398,8 @@ class FollowControllerNode(Node):
             twist.linear.x = linear_vel
 
         if (
-            self.visible_forward_velocity > 0.0
+            not used_lidar_distance
+            and self.visible_forward_velocity > 0.0
             and twist.linear.x <= 1e-4
             and abs(center_offset) <= self.visible_forward_center_deadzone
         ):
@@ -345,9 +408,49 @@ class FollowControllerNode(Node):
 
         self.last_control_reason = (
             f"{linear_reason},height={bbox_height:.0f}/{self.target_height:.0f},"
-            f"offset={center_offset:.0f}"
+            f"offset={center_offset:.0f},lidar={self._format_optional_float(lidar_distance)}"
         )
         return twist
+
+    def _person_lidar_distance(self, center_offset: float) -> float | None:
+        if not self.use_lidar_distance or self.latest_scan is None or self.last_scan_time is None:
+            return None
+
+        scan_age = (self.get_clock().now() - self.last_scan_time).nanoseconds / 1e9
+        if self.scan_timeout_sec > 0.0 and scan_age > self.scan_timeout_sec:
+            return None
+
+        msg = self.latest_scan
+        bearing_ratio = center_offset / max(1.0, self.image_width / 2.0)
+        bearing_deg = max(-1.0, min(1.0, bearing_ratio)) * (self.camera_horizontal_fov_deg / 2.0)
+        center_deg = self.scan_forward_center_deg + bearing_deg
+        half_sector = self.person_lidar_sector_deg / 2.0
+        return self._scan_sector_min(msg, center_deg, -half_sector, half_sector)
+
+    def _scan_sector_min(self, msg: LaserScan, center_deg: float, start_offset_deg: float, end_offset_deg: float) -> float | None:
+        center_rad = math.radians(center_deg)
+        start_rad = math.radians(min(start_offset_deg, end_offset_deg))
+        end_rad = math.radians(max(start_offset_deg, end_offset_deg))
+        values = []
+
+        angle = float(msg.angle_min)
+        for raw_distance in msg.ranges:
+            distance = float(raw_distance)
+            relative_angle = math.atan2(math.sin(angle - center_rad), math.cos(angle - center_rad))
+            if start_rad <= relative_angle <= end_rad:
+                if math.isfinite(distance) and msg.range_min < distance < msg.range_max:
+                    values.append(distance)
+            angle += float(msg.angle_increment)
+
+        if not values:
+            return None
+        return min(values)
+
+    @staticmethod
+    def _format_optional_float(value: float | None) -> str:
+        if value is None:
+            return "none"
+        return f"{value:.2f}"
 
     def _smooth_bbox(self, raw_bbox: dict, previous_age: float | None) -> dict:
         if (
@@ -437,6 +540,7 @@ class FollowControllerNode(Node):
             "target_cmd": self._twist_payload(self.target_twist),
             "current_cmd": self._twist_payload(self.current_twist),
             "control_reason": self.last_control_reason,
+            "lidar_distance_m": round(float(self.last_lidar_distance_m), 3) if self.last_lidar_distance_m is not None else None,
             "params": {
                 "center_x_gain": self.center_x_gain,
                 "height_gain": self.height_gain,
@@ -453,6 +557,11 @@ class FollowControllerNode(Node):
                 "allow_reverse": self.allow_reverse,
                 "visible_forward_velocity": self.visible_forward_velocity,
                 "visible_forward_center_deadzone": self.visible_forward_center_deadzone,
+                "use_lidar_distance": self.use_lidar_distance,
+                "target_distance_m": self.target_distance_m,
+                "distance_deadzone_m": self.distance_deadzone_m,
+                "min_follow_distance_m": self.min_follow_distance_m,
+                "lidar_distance_gain": self.lidar_distance_gain,
             },
         }
 

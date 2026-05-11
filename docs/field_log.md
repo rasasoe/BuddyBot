@@ -1302,3 +1302,15 @@ Follow saturated-bbox correction:
 - When a person is visible and roughly centered, follow now commands a very slow forward crawl even if bbox height is saturated.
 - `/follow/status` now exposes `control_reason`, and the panel follow note shows that reason beside the current command.
 - LiDAR avoidance remains the layer that should stop/escape if the user is actually too close in front of the robot.
+
+Camera bbox vs LiDAR distance correction:
+- User compared the old standalone Tkinter follower, which worked without LiDAR at `160x120`.
+- Key finding: the old controller's bbox-height distance heuristic happened to match its camera/model geometry. In the ROS stack, C920/MobileNet can keep the person bbox nearly full-frame even when the user steps away, so bbox height is no longer a reliable distance signal.
+- Follow controller now uses camera bbox mainly for bearing/turning and uses LiDAR `/scan` for forward distance when available.
+  - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=1`
+  - `BUDDYBOT_FOLLOW_TARGET_DISTANCE=0.95`
+  - `BUDDYBOT_FOLLOW_DISTANCE_DEADZONE=0.18`
+  - `BUDDYBOT_FOLLOW_MIN_DISTANCE=0.45`
+  - `BUDDYBOT_FOLLOW_LIDAR_GAIN=0.24`
+  - `BUDDYBOT_FOLLOW_LIDAR_SECTOR=18`
+- Height-based distance and visible-forward creep remain as fallback when no fresh LiDAR distance is available.
