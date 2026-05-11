@@ -1279,3 +1279,9 @@ Expected behavior:
 - If the camera/detector loop falls behind, follow should ramp to stop instead of continuing to turn on old bbox data.
 - If the person is too close, follow should stop rather than reverse away from the user.
 - This profile may feel deliberately slow; raise `BUDDYBOT_FOLLOW_MAX_LINEAR` only after confirming the camera view and robot motion stay in sync.
+
+Follow hotfix after field feedback:
+- User reported that the robot only detected the person and did not move.
+- The stale-image gate was too strict for Pi5 DNN latency, so source-age rejection is disabled by default while still reporting image age in `/follow/status`.
+- `BUDDYBOT_FOLLOW_BBOX_TIMEOUT` was relaxed from `0.6` to `1.6` so slow but valid detector updates can keep a command alive.
+- `BUDDYBOT_FOLLOW_TARGET_HEIGHT` was nudged from `0.50` to `0.55` so the robot is less likely to treat a normal starting distance as already close enough.

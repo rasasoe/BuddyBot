@@ -23,13 +23,13 @@ Latest follow-mode state:
   - `center_x_gain=0.0012`
   - `max_angular_velocity=0.10`
   - `height_gain=0.0035`
-  - `target_height_ratio=0.50`
+  - `target_height_ratio=0.55`
   - `max_linear_velocity=0.16`
   - `min_linear_velocity=0.10`
   - `deadzone_center=50`
   - `deadzone_height=30`
-  - `bbox_timeout_sec=0.6` from presentation mode
-  - `max_source_age_sec=0.8`
+  - `bbox_timeout_sec=1.6` from presentation mode
+  - `max_source_age_sec=0.0`
   - `allow_reverse=false`
   - `command_rate_hz=10.0`
   - `linear_accel_limit=0.12/s`
@@ -38,7 +38,8 @@ Latest follow-mode state:
 - BBox input is now low-pass filtered before velocity is computed:
   - `bbox_smoothing_alpha=0.25`
   - `bbox_filter_reset_sec=0.9`
-- Detector appends source image age to `/vision/person_bbox`; follow rejects stale detections instead of turning on old visual data.
+- Detector appends source image age to `/vision/person_bbox`; follow reports it in `/follow/status`.
+- Source-age rejection is disabled by default after field feedback showed it could block all motion on the Pi5 DNN path.
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
 - Detector preprocessing now matches the old TensorFlow SSD path:
   - `scale_factor=1.0`

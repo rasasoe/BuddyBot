@@ -31,7 +31,7 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
 - Follow forward is intentionally slower than the early high-power profile:
   - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.0035`
-  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.50`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.55`
   - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.16`
   - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.10`
 - Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
@@ -44,8 +44,9 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.25`
   - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
 - Stale visual data is rejected before commanding motion:
-  - `BUDDYBOT_FOLLOW_BBOX_TIMEOUT=0.6`
-  - `BUDDYBOT_FOLLOW_MAX_SOURCE_AGE=0.8`
+  - `BUDDYBOT_FOLLOW_BBOX_TIMEOUT=1.6`
+  - `BUDDYBOT_FOLLOW_MAX_SOURCE_AGE=0.0`
+  - source age is reported in `/follow/status`, but default rejection is disabled because the Pi5 DNN path can exceed the first strict threshold and block all motion.
 - Presentation mode now defaults to the old standalone-controller camera scale:
   - `BUDDYBOT_CAMERA_WIDTH=320`
   - `BUDDYBOT_CAMERA_HEIGHT=240`
