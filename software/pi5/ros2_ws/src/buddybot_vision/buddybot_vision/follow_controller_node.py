@@ -42,22 +42,24 @@ class FollowControllerNode(Node):
         # Declare parameters with practical defaults
         self.declare_parameter('image_width', 320)
         self.declare_parameter('image_height', 240)
-        self.declare_parameter('center_x_gain', 0.0035)  # Angular velocity gain for center offset
-        self.declare_parameter('height_gain', 0.007)    # Linear velocity gain for box height
+        self.declare_parameter('center_x_gain', 0.0012)  # Angular velocity gain for center offset
+        self.declare_parameter('height_gain', 0.0035)    # Linear velocity gain for box height
         self.declare_parameter('target_height_ratio', 0.50)  # Target box height as fraction of image
-        self.declare_parameter('max_linear_velocity', 0.28)  # normalized 0-1 (pico maps directly to PWM)
-        self.declare_parameter('max_angular_velocity', 0.28)  # normalized 0-1
-        self.declare_parameter('min_linear_velocity', 0.14)  # small floor for gearbox stiction
-        self.declare_parameter('deadzone_center', 30)        # pixels, ignore small center offsets
-        self.declare_parameter('deadzone_height', 20)        # pixels, ignore small height changes
+        self.declare_parameter('max_linear_velocity', 0.16)  # normalized 0-1 (pico maps directly to PWM)
+        self.declare_parameter('max_angular_velocity', 0.10)  # normalized 0-1
+        self.declare_parameter('min_linear_velocity', 0.10)  # small floor for gearbox stiction
+        self.declare_parameter('deadzone_center', 50)        # pixels, ignore small center offsets
+        self.declare_parameter('deadzone_height', 30)        # pixels, ignore small height changes
         self.declare_parameter('follow_enabled_topic', '/follow/enabled')
-        self.declare_parameter('bbox_timeout_sec', 0.8)
+        self.declare_parameter('bbox_timeout_sec', 0.6)
+        self.declare_parameter('max_source_age_sec', 0.8)
         self.declare_parameter('min_detection_confidence', 0.15)
         self.declare_parameter('command_rate_hz', 10.0)
-        self.declare_parameter('linear_accel_limit', 0.25)   # normalized units per second
-        self.declare_parameter('angular_accel_limit', 0.35)  # normalized units per second
-        self.declare_parameter('bbox_smoothing_alpha', 0.35)
+        self.declare_parameter('linear_accel_limit', 0.12)   # normalized units per second
+        self.declare_parameter('angular_accel_limit', 0.12)  # normalized units per second
+        self.declare_parameter('bbox_smoothing_alpha', 0.25)
         self.declare_parameter('bbox_filter_reset_sec', 0.9)
+        self.declare_parameter('allow_reverse', False)
         self.declare_parameter('status_topic', '/follow/status')
         self.declare_parameter('status_rate_hz', 2.0)
 
@@ -74,12 +76,14 @@ class FollowControllerNode(Node):
         self.deadzone_height = self.get_parameter('deadzone_height').value
         self.follow_enabled_topic = self.get_parameter('follow_enabled_topic').value
         self.bbox_timeout_sec = float(self.get_parameter('bbox_timeout_sec').value)
+        self.max_source_age_sec = max(0.0, float(self.get_parameter('max_source_age_sec').value))
         self.min_detection_confidence = float(self.get_parameter('min_detection_confidence').value)
         self.command_rate_hz = max(1.0, float(self.get_parameter('command_rate_hz').value))
         self.linear_accel_limit = max(0.01, float(self.get_parameter('linear_accel_limit').value))
         self.angular_accel_limit = max(0.01, float(self.get_parameter('angular_accel_limit').value))
         self.bbox_smoothing_alpha = min(1.0, max(0.0, float(self.get_parameter('bbox_smoothing_alpha').value)))
         self.bbox_filter_reset_sec = max(0.0, float(self.get_parameter('bbox_filter_reset_sec').value))
+        self.allow_reverse = bool(self.get_parameter('allow_reverse').value)
         self.status_topic = str(self.get_parameter('status_topic').value)
         self.status_rate_hz = max(0.2, float(self.get_parameter('status_rate_hz').value))
 
@@ -117,6 +121,7 @@ class FollowControllerNode(Node):
         self.has_bbox = False
         self.last_raw_bbox = None
         self.filtered_bbox = None
+        self.last_source_image_age_sec = None
         self.last_reject_reason = "waiting_for_bbox"
         self.target_twist = Twist()
         self.current_twist = Twist()
@@ -140,10 +145,12 @@ class FollowControllerNode(Node):
         self.get_logger().info(f"  Deadzones: center={self.deadzone_center}px, height={self.deadzone_height}px")
         self.get_logger().info(f"  Follow enable topic: {self.follow_enabled_topic}")
         self.get_logger().info(f"  BBox timeout: {self.bbox_timeout_sec:.2f}s")
+        self.get_logger().info(f"  Max source image age: {self.max_source_age_sec:.2f}s")
         self.get_logger().info(f"  Min detection confidence: {self.min_detection_confidence:.2f}")
         self.get_logger().info(f"  Command rate: {self.command_rate_hz:.1f}Hz")
         self.get_logger().info(f"  Accel limits: linear={self.linear_accel_limit}/s angular={self.angular_accel_limit}/s")
         self.get_logger().info(f"  BBox smoothing alpha: {self.bbox_smoothing_alpha:.2f}")
+        self.get_logger().info(f"  Allow reverse: {self.allow_reverse}")
         self.get_logger().info(f"  Status topic: {self.status_topic} at {self.status_rate_hz:.1f}Hz")
 
     def follow_enabled_callback(self, msg: Bool):
@@ -177,9 +184,19 @@ class FollowControllerNode(Node):
 
             # Extract bounding box data
             x, y, width, height, confidence = msg.data[:5]
+            source_image_age_sec = float(msg.data[5]) if len(msg.data) >= 6 else 0.0
             if float(confidence) < self.min_detection_confidence:
                 self.last_reject_reason = f"low_confidence:{float(confidence):.3f}"
                 self.get_logger().debug(f"Ignoring low-confidence detection: {confidence:.2f}")
+                return
+            if self.max_source_age_sec > 0.0 and source_image_age_sec > self.max_source_age_sec:
+                self.following_active = False
+                self.target_twist = Twist()
+                self.last_source_image_age_sec = source_image_age_sec
+                self.last_reject_reason = f"stale_image:{source_image_age_sec:.2f}s"
+                self.get_logger().debug(
+                    f"Ignoring stale detection from image age {source_image_age_sec:.2f}s"
+                )
                 return
 
             # Update state
@@ -195,10 +212,12 @@ class FollowControllerNode(Node):
                 "width": float(width),
                 "height": float(height),
                 "confidence": float(confidence),
+                "source_image_age_sec": source_image_age_sec,
             }
             smoothed_bbox = self._smooth_bbox(raw_bbox, previous_age)
 
             self.last_raw_bbox = raw_bbox
+            self.last_source_image_age_sec = source_image_age_sec
             self.filtered_bbox = smoothed_bbox
             self.has_bbox = True
             self.last_bbox_time = now
@@ -300,6 +319,8 @@ class FollowControllerNode(Node):
 
             # Limit linear velocity
             linear_vel = max(-self.max_linear_vel, min(self.max_linear_vel, linear_vel))
+            if not self.allow_reverse and linear_vel < 0.0:
+                linear_vel = 0.0
             twist.linear.x = linear_vel
 
         return twist
@@ -321,6 +342,7 @@ class FollowControllerNode(Node):
             "width": alpha * raw_bbox["width"] + beta * self.filtered_bbox["width"],
             "height": alpha * raw_bbox["height"] + beta * self.filtered_bbox["height"],
             "confidence": raw_bbox["confidence"],
+            "source_image_age_sec": raw_bbox.get("source_image_age_sec", 0.0),
         }
 
     def _ramp_twist(self, current: Twist, target: Twist, dt: float) -> Twist:
@@ -398,10 +420,12 @@ class FollowControllerNode(Node):
                 "max_angular_velocity": self.max_angular_vel,
                 "min_linear_velocity": self.min_linear_vel,
                 "bbox_timeout_sec": self.bbox_timeout_sec,
+                "max_source_age_sec": self.max_source_age_sec,
                 "command_rate_hz": self.command_rate_hz,
                 "linear_accel_limit": self.linear_accel_limit,
                 "angular_accel_limit": self.angular_accel_limit,
                 "bbox_smoothing_alpha": self.bbox_smoothing_alpha,
+                "allow_reverse": self.allow_reverse,
             },
         }
 
@@ -436,6 +460,7 @@ class FollowControllerNode(Node):
             "width": round(float(bbox.get("width", 0.0)), 2),
             "height": round(float(bbox.get("height", 0.0)), 2),
             "confidence": round(float(bbox.get("confidence", 0.0)), 3),
+            "source_image_age_sec": round(float(bbox.get("source_image_age_sec", 0.0)), 3),
         }
 
     def destroy_node(self):

@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
 Last updated: 2026-05-11
-Repo baseline: current `main` (`Improve follow smoothing diagnostics`)
+Repo baseline: current `main` (`Make follow lag-safe for slow camera`)
 
 ## 2026-05-06 Fast Resume
 
@@ -23,29 +23,37 @@ Latest known-good direction:
   - `/cmd_vel_final`
 
 Latest follow/manual motion baseline:
-- Follow rotation is now the slow-camera profile, tuned down from the previous 80% baseline:
-  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0035`
-  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.28`
-- Follow forward/backward is intentionally slower than the early high-power profile:
-  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.007`
+- Follow is now a lag-safe visual profile because the detector sees people but the live camera/control loop can fall behind real motion.
+- Camera capture drains queued UVC frames before publishing:
+  - `BUDDYBOT_CAMERA_DISCARD_BUFFERED_FRAMES=2`
+- Follow rotation is intentionally much slower than the previous 80% baseline:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0012`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
+- Follow forward is intentionally slower than the early high-power profile:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.0035`
   - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.50`
-  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.28`
-  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.14`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.16`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.10`
+- Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
+  - `BUDDYBOT_FOLLOW_ALLOW_REVERSE=0`
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
-  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.25`
-  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.35`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.12`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.12`
 - Follow bbox input is now filtered before velocity is computed:
-  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.35`
+  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.25`
   - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
+- Stale visual data is rejected before commanding motion:
+  - `BUDDYBOT_FOLLOW_BBOX_TIMEOUT=0.6`
+  - `BUDDYBOT_FOLLOW_MAX_SOURCE_AGE=0.8`
 - Presentation mode now defaults to the old standalone-controller camera scale:
   - `BUDDYBOT_CAMERA_WIDTH=320`
   - `BUDDYBOT_CAMERA_HEIGHT=240`
   - `BUDDYBOT_CAMERA_FPS=10`
   - `BUDDYBOT_CAMERA_PUBLISH_RATE=10`
 - Deadzone defaults are scaled from the old 160x120 follow controller to 320x240:
-  - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=30`
-  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=20`
+  - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=50`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=30`
 - Detector preprocessing matches the old TensorFlow SSD controller:
   - `scale_factor=1.0`
   - `mean_values=[0,0,0]`

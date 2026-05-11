@@ -1248,3 +1248,34 @@ Detection quality follow-up:
 - Scaled deadzones for the 320x240 input:
   - center deadzone `15` at 160px wide -> `30` at 320px wide
   - height deadzone `10` at 120px high -> `20` at 240px high
+
+## 2026-05-11 Follow lag-safe profile
+
+Context:
+- User feedback: person recognition is good, but camera response feels delayed by seconds while the robot turns/accelerates too fast, so follow mode can look like it is avoiding the user.
+- The main risk is control using stale visual data, not just detector accuracy.
+
+Changes:
+- Camera node now drains queued UVC frames before publishing.
+  - New parameter: `discard_buffered_frames`
+  - Presentation default: `BUDDYBOT_CAMERA_DISCARD_BUFFERED_FRAMES=2`
+- Detector now appends source image age to `/vision/person_bbox`.
+- Follow controller rejects stale detections before they can command motion.
+  - `BUDDYBOT_FOLLOW_BBOX_TIMEOUT=0.6`
+  - `BUDDYBOT_FOLLOW_MAX_SOURCE_AGE=0.8`
+- Follow motion is now intentionally lag-safe:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0012`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.0035`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.16`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.10`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.12`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.12`
+  - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=50`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=30`
+  - `BUDDYBOT_FOLLOW_ALLOW_REVERSE=0`
+
+Expected behavior:
+- If the camera/detector loop falls behind, follow should ramp to stop instead of continuing to turn on old bbox data.
+- If the person is too close, follow should stop rather than reverse away from the user.
+- This profile may feel deliberately slow; raise `BUDDYBOT_FOLLOW_MAX_LINEAR` only after confirming the camera view and robot motion stay in sync.

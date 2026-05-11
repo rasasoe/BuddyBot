@@ -354,7 +354,7 @@ class DetectorNode(Node):
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
             self.frame_count += 1
             if self.frame_count % self.detection_interval == 0:
-                self._run_detection(cv_image)
+                self._run_detection(cv_image, msg.header.stamp)
         except cv_bridge.CvBridgeError as exc:
             self.get_logger().error(f"CV bridge error: {exc}")
         except Exception as exc:
@@ -369,7 +369,7 @@ class DetectorNode(Node):
                 f"Detector unavailable: backend={self.detector_backend}, reason={self.detector_reason}"
             )
 
-    def _run_detection(self, image) -> None:
+    def _run_detection(self, image, image_stamp) -> None:
         if not self.detector_ready:
             self._log_unavailable_detector()
             return
@@ -403,7 +403,7 @@ class DetectorNode(Node):
                     )
                 return
 
-            self._publish_bbox(best_person)
+            self._publish_bbox(best_person, image_stamp)
             if self.publish_debug:
                 debug_image = self._draw_detection(image.copy(), best_person)
                 self._publish_debug_image(debug_image)
@@ -570,8 +570,19 @@ class DetectorNode(Node):
         self._last_dnn_best_person_conf = best_person_conf
         return best_detection
 
-    def _publish_bbox(self, detection: Dict[str, float]) -> None:
+    def _image_age_sec(self, image_stamp) -> float:
         try:
+            if int(image_stamp.sec) == 0 and int(image_stamp.nanosec) == 0:
+                return 0.0
+            stamp_ns = int(image_stamp.sec) * 1_000_000_000 + int(image_stamp.nanosec)
+            now_ns = int(self.get_clock().now().nanoseconds)
+            return max(0.0, (now_ns - stamp_ns) / 1e9)
+        except Exception:
+            return 0.0
+
+    def _publish_bbox(self, detection: Dict[str, float], image_stamp) -> None:
+        try:
+            image_age_sec = self._image_age_sec(image_stamp)
             bbox_msg = Float32MultiArray()
             bbox_msg.data = [
                 float(detection["x"]),
@@ -579,6 +590,7 @@ class DetectorNode(Node):
                 float(detection["width"]),
                 float(detection["height"]),
                 float(detection["confidence"]),
+                float(image_age_sec),
             ]
             self.bbox_publisher.publish(bbox_msg)
         except Exception as exc:

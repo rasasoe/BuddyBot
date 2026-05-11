@@ -49,6 +49,7 @@ class CameraNode(Node):
         self.declare_parameter('backend', 'v4l2')
         self.declare_parameter('pixel_format', 'MJPG')
         self.declare_parameter('buffer_size', 1)
+        self.declare_parameter('discard_buffered_frames', 2)
         self.declare_parameter('open_retries', 4)
         self.declare_parameter('open_retry_delay', 0.6)
 
@@ -62,6 +63,7 @@ class CameraNode(Node):
         self.backend = str(self.get_parameter('backend').value).lower()
         self.pixel_format = str(self.get_parameter('pixel_format').value).upper()
         self.buffer_size = int(self.get_parameter('buffer_size').value)
+        self.discard_buffered_frames = max(0, int(self.get_parameter('discard_buffered_frames').value))
         self.open_retries = int(self.get_parameter('open_retries').value)
         self.open_retry_delay = float(self.get_parameter('open_retry_delay').value)
 
@@ -99,6 +101,7 @@ class CameraNode(Node):
         self.get_logger().info(f"  Publish rate: {self.publish_rate} Hz")
         self.get_logger().info(f"  Pixel format: {self.pixel_format}")
         self.get_logger().info(f"  Buffer size: {self.buffer_size}")
+        self.get_logger().info(f"  Discard buffered frames: {self.discard_buffered_frames}")
         self.get_logger().info(f"  Frame ID: {self.frame_id}")
 
     def _initialize_camera(self):
@@ -362,8 +365,19 @@ class CameraNode(Node):
             return
 
         try:
-            # Capture frame
-            ret, frame = self.cap.read()
+            # Drain a few queued UVC frames before decoding so follow control
+            # reacts to the current camera view instead of a stale buffer.
+            ret = False
+            frame = None
+            if self.discard_buffered_frames > 0:
+                for _ in range(self.discard_buffered_frames):
+                    if not self.cap.grab():
+                        break
+                else:
+                    ret, frame = self.cap.retrieve()
+
+            if not ret or frame is None:
+                ret, frame = self.cap.read()
 
             if not ret or frame is None:
                 self.get_logger().warn("Failed to capture frame")

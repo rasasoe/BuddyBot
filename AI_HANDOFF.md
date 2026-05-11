@@ -2,7 +2,7 @@
 
 ## 2026-05-06 Resume Snapshot
 
-Current repo baseline: current `main` (`Improve follow smoothing diagnostics`).
+Current repo baseline: current `main` (`Make follow lag-safe for slow camera`).
 
 Current practical priority:
 - Focus on user-following mode first.
@@ -17,24 +17,28 @@ Latest follow-mode state:
 - DNN threshold is lowered for indoor detections.
 - Detector has HOG/cascade fallback and diagnostic logging.
 - Panel subscribes to bbox/debug image with compatible BEST_EFFORT QoS and shows detection boxes on the camera feed when available.
-- Follow controller is now tuned for the old standalone-controller feel, camera-cadence tracking, and slow rotation:
+- Follow controller is now tuned for lag-safe camera tracking because person detection is good but live control can trail the camera:
   - presentation camera defaults: `320x240 @ 10fps`
-  - `center_x_gain=0.0035`
-  - `max_angular_velocity=0.28`
-  - `height_gain=0.007`
+  - `discard_buffered_frames=2`
+  - `center_x_gain=0.0012`
+  - `max_angular_velocity=0.10`
+  - `height_gain=0.0035`
   - `target_height_ratio=0.50`
-  - `max_linear_velocity=0.28`
-  - `min_linear_velocity=0.14`
-  - `deadzone_center=30`
-  - `deadzone_height=20`
-  - `bbox_timeout_sec=2.0` from presentation mode
+  - `max_linear_velocity=0.16`
+  - `min_linear_velocity=0.10`
+  - `deadzone_center=50`
+  - `deadzone_height=30`
+  - `bbox_timeout_sec=0.6` from presentation mode
+  - `max_source_age_sec=0.8`
+  - `allow_reverse=false`
   - `command_rate_hz=10.0`
-  - `linear_accel_limit=0.25/s`
-  - `angular_accel_limit=0.35/s`
+  - `linear_accel_limit=0.12/s`
+  - `angular_accel_limit=0.12/s`
 - Important behavior change: bbox callbacks now update a target command, and a 10Hz command timer ramps current velocity toward that target. This avoids follow mode pulsing `forward -> stop -> forward` when detector updates are slower than command_mux timeout.
 - BBox input is now low-pass filtered before velocity is computed:
-  - `bbox_smoothing_alpha=0.35`
+  - `bbox_smoothing_alpha=0.25`
   - `bbox_filter_reset_sec=0.9`
+- Detector appends source image age to `/vision/person_bbox`; follow rejects stale detections instead of turning on old visual data.
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
 - Detector preprocessing now matches the old TensorFlow SSD path:
   - `scale_factor=1.0`
