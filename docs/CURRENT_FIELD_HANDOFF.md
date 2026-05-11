@@ -38,6 +38,10 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.10`
 - Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
   - `BUDDYBOT_FOLLOW_ALLOW_REVERSE=0`
+- Because C920/MobileNet can keep the person bbox nearly full-frame even when the user steps away, follow now has a slow visible-person forward crawl:
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.08`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
+  - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
   - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.12`
@@ -64,6 +68,7 @@ Latest follow/manual motion baseline:
   - `mobilenet_ssd_v2_coco.pb` or `frozen_inference_graph.pb`
   - `mobilenet_ssd_v2_coco.pbtxt` or `ssd_mobilenet_v2_coco_2018_03_29.pbtxt`
 - Follow controller publishes `/follow/status` for panel/debug diagnostics.
+- `/follow/status.control_reason` and the panel follow note show why the current follow command was selected, for example `visible_forward_after_reverse_blocked`.
 - Manual rotation profile:
   - `offset=0.096,gain=0.112`
 - Manual strafe profile was restored because lateral movement felt too weak:

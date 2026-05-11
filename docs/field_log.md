@@ -1293,3 +1293,12 @@ Second no-motion correction:
 - Relaxed `BUDDYBOT_FOLLOW_BBOX_TIMEOUT` to `2.5` so Pi5 DNN latency does not drop the controller to idle between detections.
 - Limited OpenCV to two threads by default for camera/detector nodes and kept camera buffer size at 1.
 - Reduced `BUDDYBOT_CAMERA_DISCARD_BUFFERED_FRAMES` default to `1`; multiple blocking `grab()` calls inside a ROS timer can reduce publish cadence when the buffer is already empty.
+
+Follow saturated-bbox correction:
+- Field feedback: C920/MobileNet keeps the person bbox nearly full-frame, so height-based distance control still decides "too close" and clamps forward motion to zero because reverse is disabled.
+- Added visible-person forward creep:
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.08`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
+- When a person is visible and roughly centered, follow now commands a very slow forward crawl even if bbox height is saturated.
+- `/follow/status` now exposes `control_reason`, and the panel follow note shows that reason beside the current command.
+- LiDAR avoidance remains the layer that should stop/escape if the user is actually too close in front of the robot.

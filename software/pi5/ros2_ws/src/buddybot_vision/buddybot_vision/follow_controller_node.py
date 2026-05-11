@@ -60,6 +60,8 @@ class FollowControllerNode(Node):
         self.declare_parameter('bbox_smoothing_alpha', 0.25)
         self.declare_parameter('bbox_filter_reset_sec', 0.9)
         self.declare_parameter('allow_reverse', False)
+        self.declare_parameter('visible_forward_velocity', 0.08)
+        self.declare_parameter('visible_forward_center_deadzone', 120)
         self.declare_parameter('status_topic', '/follow/status')
         self.declare_parameter('status_rate_hz', 2.0)
 
@@ -84,6 +86,8 @@ class FollowControllerNode(Node):
         self.bbox_smoothing_alpha = min(1.0, max(0.0, float(self.get_parameter('bbox_smoothing_alpha').value)))
         self.bbox_filter_reset_sec = max(0.0, float(self.get_parameter('bbox_filter_reset_sec').value))
         self.allow_reverse = bool(self.get_parameter('allow_reverse').value)
+        self.visible_forward_velocity = max(0.0, float(self.get_parameter('visible_forward_velocity').value))
+        self.visible_forward_center_deadzone = max(0.0, float(self.get_parameter('visible_forward_center_deadzone').value))
         self.status_topic = str(self.get_parameter('status_topic').value)
         self.status_rate_hz = max(0.2, float(self.get_parameter('status_rate_hz').value))
 
@@ -123,6 +127,7 @@ class FollowControllerNode(Node):
         self.filtered_bbox = None
         self.last_source_image_age_sec = None
         self.last_reject_reason = "waiting_for_bbox"
+        self.last_control_reason = "waiting_for_bbox"
         self.target_twist = Twist()
         self.current_twist = Twist()
         self.following_active = False
@@ -151,6 +156,10 @@ class FollowControllerNode(Node):
         self.get_logger().info(f"  Accel limits: linear={self.linear_accel_limit}/s angular={self.angular_accel_limit}/s")
         self.get_logger().info(f"  BBox smoothing alpha: {self.bbox_smoothing_alpha:.2f}")
         self.get_logger().info(f"  Allow reverse: {self.allow_reverse}")
+        self.get_logger().info(
+            f"  Visible forward: velocity={self.visible_forward_velocity}, "
+            f"center_deadzone={self.visible_forward_center_deadzone}px"
+        )
         self.get_logger().info(f"  Status topic: {self.status_topic} at {self.status_rate_hz:.1f}Hz")
 
     def follow_enabled_callback(self, msg: Bool):
@@ -304,12 +313,14 @@ class FollowControllerNode(Node):
 
         # Calculate height error (negative = too far, positive = too close)
         height_error = bbox_height - self.target_height
+        linear_reason = "height_deadzone"
 
         # Apply deadzone for height control
         if abs(height_error) > self.deadzone_height:
             # Linear velocity proportional to height error
             # Negative height_error means person is far, so move forward (positive vx)
             linear_vel = -height_error * self.height_gain
+            linear_reason = "height_forward" if linear_vel > 0.0 else "height_too_close"
 
             # Enforce a small minimum duty cycle to overcome gearbox stiction.
             # The command timer ramps up to this floor instead of jumping to it.
@@ -321,8 +332,21 @@ class FollowControllerNode(Node):
             linear_vel = max(-self.max_linear_vel, min(self.max_linear_vel, linear_vel))
             if not self.allow_reverse and linear_vel < 0.0:
                 linear_vel = 0.0
+                linear_reason = "reverse_blocked"
             twist.linear.x = linear_vel
 
+        if (
+            self.visible_forward_velocity > 0.0
+            and twist.linear.x <= 1e-4
+            and abs(center_offset) <= self.visible_forward_center_deadzone
+        ):
+            twist.linear.x = min(self.max_linear_vel, self.visible_forward_velocity)
+            linear_reason = f"visible_forward_after_{linear_reason}"
+
+        self.last_control_reason = (
+            f"{linear_reason},height={bbox_height:.0f}/{self.target_height:.0f},"
+            f"offset={center_offset:.0f}"
+        )
         return twist
 
     def _smooth_bbox(self, raw_bbox: dict, previous_age: float | None) -> dict:
@@ -412,6 +436,7 @@ class FollowControllerNode(Node):
             "filtered_bbox": self._round_bbox(self.filtered_bbox),
             "target_cmd": self._twist_payload(self.target_twist),
             "current_cmd": self._twist_payload(self.current_twist),
+            "control_reason": self.last_control_reason,
             "params": {
                 "center_x_gain": self.center_x_gain,
                 "height_gain": self.height_gain,
@@ -426,6 +451,8 @@ class FollowControllerNode(Node):
                 "angular_accel_limit": self.angular_accel_limit,
                 "bbox_smoothing_alpha": self.bbox_smoothing_alpha,
                 "allow_reverse": self.allow_reverse,
+                "visible_forward_velocity": self.visible_forward_velocity,
+                "visible_forward_center_deadzone": self.visible_forward_center_deadzone,
             },
         }
 

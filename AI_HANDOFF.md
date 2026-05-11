@@ -32,6 +32,8 @@ Latest follow-mode state:
   - `bbox_timeout_sec=2.5` from presentation mode
   - `max_source_age_sec=0.0`
   - `allow_reverse=false`
+  - `visible_forward_velocity=0.08`
+  - `visible_forward_center_deadzone=120`
   - `command_rate_hz=10.0`
   - `linear_accel_limit=0.12/s`
   - `angular_accel_limit=0.12/s`
@@ -41,6 +43,7 @@ Latest follow-mode state:
   - `bbox_filter_reset_sec=0.9`
 - Detector appends source image age to `/vision/person_bbox`; follow reports it in `/follow/status`.
 - Source-age rejection is disabled by default after field feedback showed it could block all motion on the Pi5 DNN path.
+- If C920/MobileNet returns a saturated/full-frame person bbox, follow no longer relies only on bbox height. It creeps forward slowly while the person is visible and roughly centered, with LiDAR avoidance responsible for stopping if the person is actually too close.
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
 - Detector preprocessing now matches the old TensorFlow SSD path:
   - `scale_factor=1.0`
