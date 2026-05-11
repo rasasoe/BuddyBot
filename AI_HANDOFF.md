@@ -19,16 +19,17 @@ Latest follow-mode state:
 - Panel subscribes to bbox/debug image with compatible BEST_EFFORT QoS and shows detection boxes on the camera feed when available.
 - Follow controller is now tuned for lag-safe camera tracking because person detection is good but live control can trail the camera:
   - presentation camera defaults: `320x240 @ 10fps`
-  - `discard_buffered_frames=2`
+  - `discard_buffered_frames=1`
+  - camera/detector `opencv_threads=2`
   - `center_x_gain=0.0012`
   - `max_angular_velocity=0.10`
   - `height_gain=0.0035`
-  - `target_height_ratio=0.55`
+  - `target_height_ratio=0.75`
   - `max_linear_velocity=0.16`
   - `min_linear_velocity=0.10`
   - `deadzone_center=50`
   - `deadzone_height=30`
-  - `bbox_timeout_sec=1.6` from presentation mode
+  - `bbox_timeout_sec=2.5` from presentation mode
   - `max_source_age_sec=0.0`
   - `allow_reverse=false`
   - `command_rate_hz=10.0`

@@ -82,6 +82,7 @@ class DetectorNode(Node):
         self.declare_parameter("cascade_resize_width", 320)
         self.declare_parameter("face_cascade", "haarcascade_frontalface_default.xml")
         self.declare_parameter("upper_body_cascade", "haarcascade_upperbody.xml")
+        self.declare_parameter("opencv_threads", 2)
         self.declare_parameter("status_topic", "/vision/detector_status")
 
         self.model_config = str(self.get_parameter("model_config").value)
@@ -103,7 +104,13 @@ class DetectorNode(Node):
         self.cascade_resize_width = int(self.get_parameter("cascade_resize_width").value)
         self.face_cascade_name = str(self.get_parameter("face_cascade").value)
         self.upper_body_cascade_name = str(self.get_parameter("upper_body_cascade").value)
+        self.opencv_threads = max(0, int(self.get_parameter("opencv_threads").value))
         self.status_topic = str(self.get_parameter("status_topic").value)
+        if self.opencv_threads > 0:
+            try:
+                cv2.setNumThreads(self.opencv_threads)
+            except Exception:
+                pass
 
         self.model_config_path = self._resolve_resource_path(self.model_config)
         self.model_weights_path = self._resolve_resource_path(self.model_weights)
@@ -251,6 +258,7 @@ class DetectorNode(Node):
         self.get_logger().info(f"  Input size: {self.input_size}")
         self.get_logger().info(f"  HOG fallback: {'enabled' if self.allow_hog_fallback else 'disabled'}")
         self.get_logger().info(f"  Cascade fallback: {'enabled' if self.allow_cascade_fallback else 'disabled'}")
+        self.get_logger().info(f"  OpenCV threads: {self.opencv_threads}")
         self.get_logger().info(f"  Active backend: {self.detector_backend}")
         self.get_logger().info(f"  Debug image: {'enabled' if self.publish_debug else 'disabled'}")
 

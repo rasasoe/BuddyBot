@@ -1285,3 +1285,11 @@ Follow hotfix after field feedback:
 - The stale-image gate was too strict for Pi5 DNN latency, so source-age rejection is disabled by default while still reporting image age in `/follow/status`.
 - `BUDDYBOT_FOLLOW_BBOX_TIMEOUT` was relaxed from `0.6` to `1.6` so slow but valid detector updates can keep a command alive.
 - `BUDDYBOT_FOLLOW_TARGET_HEIGHT` was nudged from `0.50` to `0.55` so the robot is less likely to treat a normal starting distance as already close enough.
+
+Second no-motion correction:
+- Field feedback still showed detection without motion.
+- The likely cause is that the detected person bbox is taller than the old standalone target, so reverse-disabled follow clamps the command to zero as "too close".
+- Raised `BUDDYBOT_FOLLOW_TARGET_HEIGHT` to `0.75`, keeping reverse disabled and low max speeds.
+- Relaxed `BUDDYBOT_FOLLOW_BBOX_TIMEOUT` to `2.5` so Pi5 DNN latency does not drop the controller to idle between detections.
+- Limited OpenCV to two threads by default for camera/detector nodes and kept camera buffer size at 1.
+- Reduced `BUDDYBOT_CAMERA_DISCARD_BUFFERED_FRAMES` default to `1`; multiple blocking `grab()` calls inside a ROS timer can reduce publish cadence when the buffer is already empty.

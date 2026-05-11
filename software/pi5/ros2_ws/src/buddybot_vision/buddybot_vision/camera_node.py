@@ -49,7 +49,8 @@ class CameraNode(Node):
         self.declare_parameter('backend', 'v4l2')
         self.declare_parameter('pixel_format', 'MJPG')
         self.declare_parameter('buffer_size', 1)
-        self.declare_parameter('discard_buffered_frames', 2)
+        self.declare_parameter('discard_buffered_frames', 1)
+        self.declare_parameter('opencv_threads', 2)
         self.declare_parameter('open_retries', 4)
         self.declare_parameter('open_retry_delay', 0.6)
 
@@ -64,8 +65,14 @@ class CameraNode(Node):
         self.pixel_format = str(self.get_parameter('pixel_format').value).upper()
         self.buffer_size = int(self.get_parameter('buffer_size').value)
         self.discard_buffered_frames = max(0, int(self.get_parameter('discard_buffered_frames').value))
+        self.opencv_threads = max(0, int(self.get_parameter('opencv_threads').value))
         self.open_retries = int(self.get_parameter('open_retries').value)
         self.open_retry_delay = float(self.get_parameter('open_retry_delay').value)
+        if self.opencv_threads > 0:
+            try:
+                cv2.setNumThreads(self.opencv_threads)
+            except Exception:
+                pass
 
         # Initialize camera
         self.cap = None
@@ -102,6 +109,7 @@ class CameraNode(Node):
         self.get_logger().info(f"  Pixel format: {self.pixel_format}")
         self.get_logger().info(f"  Buffer size: {self.buffer_size}")
         self.get_logger().info(f"  Discard buffered frames: {self.discard_buffered_frames}")
+        self.get_logger().info(f"  OpenCV threads: {self.opencv_threads}")
         self.get_logger().info(f"  Frame ID: {self.frame_id}")
 
     def _initialize_camera(self):
