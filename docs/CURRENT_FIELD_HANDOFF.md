@@ -23,20 +23,29 @@ Latest known-good direction:
   - `/cmd_vel_final`
 
 Latest follow/manual motion baseline:
-- Follow rotation is the 80% baseline, not the earlier very slow turn profile:
-  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0064`
-  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.64`
+- Follow rotation is now the slow-camera profile, tuned down from the previous 80% baseline:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0035`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.28`
 - Follow forward/backward is intentionally slower than the early high-power profile:
   - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.007`
-  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.45`
-  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.18`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.50`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.28`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.14`
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
-  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.45`
-  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.80`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.25`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.35`
 - Follow bbox input is now filtered before velocity is computed:
-  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.45`
+  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.35`
   - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
+- Presentation mode now defaults to the old standalone-controller camera scale:
+  - `BUDDYBOT_CAMERA_WIDTH=160`
+  - `BUDDYBOT_CAMERA_HEIGHT=120`
+  - `BUDDYBOT_CAMERA_FPS=10`
+  - `BUDDYBOT_CAMERA_PUBLISH_RATE=10`
+- Deadzone defaults are aligned with the old 160x120 follow controller:
+  - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=15`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=10`
 - Follow controller publishes `/follow/status` for panel/debug diagnostics.
 - Manual rotation profile:
   - `offset=0.096,gain=0.112`

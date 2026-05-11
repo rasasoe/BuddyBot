@@ -17,19 +17,23 @@ Latest follow-mode state:
 - DNN threshold is lowered for indoor detections.
 - Detector has HOG/cascade fallback and diagnostic logging.
 - Panel subscribes to bbox/debug image with compatible BEST_EFFORT QoS and shows detection boxes on the camera feed when available.
-- Follow controller is now tuned for camera-cadence tracking rather than raw speed:
-  - `center_x_gain=0.0064`
-  - `max_angular_velocity=0.64`
+- Follow controller is now tuned for the old 160x120 standalone-controller feel, camera-cadence tracking, and slow rotation:
+  - presentation camera defaults: `160x120 @ 10fps`
+  - `center_x_gain=0.0035`
+  - `max_angular_velocity=0.28`
   - `height_gain=0.007`
-  - `max_linear_velocity=0.45`
-  - `min_linear_velocity=0.18`
+  - `target_height_ratio=0.50`
+  - `max_linear_velocity=0.28`
+  - `min_linear_velocity=0.14`
+  - `deadzone_center=15`
+  - `deadzone_height=10`
   - `bbox_timeout_sec=2.0` from presentation mode
   - `command_rate_hz=10.0`
-  - `linear_accel_limit=0.45/s`
-  - `angular_accel_limit=0.80/s`
+  - `linear_accel_limit=0.25/s`
+  - `angular_accel_limit=0.35/s`
 - Important behavior change: bbox callbacks now update a target command, and a 10Hz command timer ramps current velocity toward that target. This avoids follow mode pulsing `forward -> stop -> forward` when detector updates are slower than command_mux timeout.
 - BBox input is now low-pass filtered before velocity is computed:
-  - `bbox_smoothing_alpha=0.45`
+  - `bbox_smoothing_alpha=0.35`
   - `bbox_filter_reset_sec=0.9`
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
 - Camera toolbar now has follow start/stop next to camera controls.

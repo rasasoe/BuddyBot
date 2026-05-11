@@ -1203,3 +1203,29 @@ Field verification:
 - If motion still jitters but commands are smooth, suspect detector bbox jitter or motor/Pico response.
 - If `/follow/status` is live but `/cmd_vel_final` is idle, inspect command mux status.
 - If `/follow/status` is not live, verify `buddybot_vision` was rebuilt and `follow_controller_node` restarted.
+
+Follow profile retuned against the old standalone controller:
+- Field feedback after the diagnostics pass: camera reaction feels slow while motor rotation is too fast, causing the robot to snap into an in-place spin.
+- Compared against the old `pc_controller` follow profile:
+  - camera: `160x120`
+  - target box height: `60px` (`0.50` of frame height)
+  - center deadzone: `15px`
+  - distance deadzone: `10px`
+- The ROS profile had drifted too close/aggressive:
+  - camera default `320x240`
+  - target height ratio `0.80`
+  - max angular `0.64`
+- Retuned the presentation/default follow profile toward the old low-latency behavior:
+  - camera default `320x240@15` -> `160x120@10`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT`: `0.80` -> `0.50`
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN`: `0.0064` -> `0.0035`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR`: `0.64` -> `0.28`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR`: `0.45` -> `0.28`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR`: `0.18` -> `0.14`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL`: `0.45` -> `0.25`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL`: `0.80` -> `0.35`
+  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA`: `0.45` -> `0.35`
+  - added script-level deadzone overrides:
+    - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=15`
+    - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=10`
+- Goal: prefer slow, stable, wide-deadzone tracking over fast correction while camera/detector cadence is still limited.
