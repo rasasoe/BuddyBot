@@ -62,11 +62,13 @@ class DetectorNode(Node):
 
         self.declare_parameter("model_config", "models/mobilenet_ssd_v2_coco.pbtxt")
         self.declare_parameter("model_weights", "models/mobilenet_ssd_v2_coco.pb")
-        self.declare_parameter("confidence_threshold", 0.5)
+        self.declare_parameter("confidence_threshold", 0.2)
         self.declare_parameter("detection_interval", 5)
         self.declare_parameter("input_size", [300, 300])
-        self.declare_parameter("mean_values", [127.5, 127.5, 127.5])
-        self.declare_parameter("scale_factor", 0.007843)
+        # TensorFlow SSD MobileNet v2 COCO already carries the expected
+        # preprocessing in the graph/pbtxt path used by the legacy controller.
+        self.declare_parameter("mean_values", [0.0, 0.0, 0.0])
+        self.declare_parameter("scale_factor", 1.0)
         self.declare_parameter("publish_debug_image", False)
         # TensorFlow SSD MobileNet v2 COCO uses class id 1 for "person".
         self.declare_parameter("person_class_id", 1)
@@ -156,11 +158,31 @@ class DetectorNode(Node):
             candidates.extend(
                 [
                     Path.cwd() / candidate,
+                    Path.home() / "BuddyBot" / candidate,
+                    Path.home() / "BuddyBot" / "models" / candidate.name,
+                    Path.home() / "AI_CAR" / "OpencvDnn" / "models" / candidate.name,
                     PACKAGE_ROOT / candidate,
                     PACKAGE_ROOT / "models" / candidate.name,
                     PACKAGE_DIR / candidate,
                 ]
             )
+
+            aliases = {
+                "mobilenet_ssd_v2_coco.pb": ["frozen_inference_graph.pb"],
+                "mobilenet_ssd_v2_coco.pbtxt": ["ssd_mobilenet_v2_coco_2018_03_29.pbtxt"],
+            }
+            for alias_name in aliases.get(candidate.name, []):
+                candidates.extend(
+                    [
+                        Path.cwd() / candidate.parent / alias_name,
+                        Path.cwd() / "models" / alias_name,
+                        Path.home() / "BuddyBot" / candidate.parent / alias_name,
+                        Path.home() / "BuddyBot" / "models" / alias_name,
+                        Path.home() / "AI_CAR" / "OpencvDnn" / "models" / alias_name,
+                        PACKAGE_ROOT / candidate.parent / alias_name,
+                        PACKAGE_ROOT / "models" / alias_name,
+                    ]
+                )
 
         if get_package_share_directory is not None:
             try:

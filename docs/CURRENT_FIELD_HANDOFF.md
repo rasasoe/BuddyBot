@@ -39,13 +39,19 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.35`
   - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
 - Presentation mode now defaults to the old standalone-controller camera scale:
-  - `BUDDYBOT_CAMERA_WIDTH=160`
-  - `BUDDYBOT_CAMERA_HEIGHT=120`
+  - `BUDDYBOT_CAMERA_WIDTH=320`
+  - `BUDDYBOT_CAMERA_HEIGHT=240`
   - `BUDDYBOT_CAMERA_FPS=10`
   - `BUDDYBOT_CAMERA_PUBLISH_RATE=10`
-- Deadzone defaults are aligned with the old 160x120 follow controller:
-  - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=15`
-  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=10`
+- Deadzone defaults are scaled from the old 160x120 follow controller to 320x240:
+  - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=30`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=20`
+- Detector preprocessing matches the old TensorFlow SSD controller:
+  - `scale_factor=1.0`
+  - `mean_values=[0,0,0]`
+- Detector accepts both repo model names and old standalone model names:
+  - `mobilenet_ssd_v2_coco.pb` or `frozen_inference_graph.pb`
+  - `mobilenet_ssd_v2_coco.pbtxt` or `ssd_mobilenet_v2_coco_2018_03_29.pbtxt`
 - Follow controller publishes `/follow/status` for panel/debug diagnostics.
 - Manual rotation profile:
   - `offset=0.096,gain=0.112`

@@ -17,16 +17,16 @@ Latest follow-mode state:
 - DNN threshold is lowered for indoor detections.
 - Detector has HOG/cascade fallback and diagnostic logging.
 - Panel subscribes to bbox/debug image with compatible BEST_EFFORT QoS and shows detection boxes on the camera feed when available.
-- Follow controller is now tuned for the old 160x120 standalone-controller feel, camera-cadence tracking, and slow rotation:
-  - presentation camera defaults: `160x120 @ 10fps`
+- Follow controller is now tuned for the old standalone-controller feel, camera-cadence tracking, and slow rotation:
+  - presentation camera defaults: `320x240 @ 10fps`
   - `center_x_gain=0.0035`
   - `max_angular_velocity=0.28`
   - `height_gain=0.007`
   - `target_height_ratio=0.50`
   - `max_linear_velocity=0.28`
   - `min_linear_velocity=0.14`
-  - `deadzone_center=15`
-  - `deadzone_height=10`
+  - `deadzone_center=30`
+  - `deadzone_height=20`
   - `bbox_timeout_sec=2.0` from presentation mode
   - `command_rate_hz=10.0`
   - `linear_accel_limit=0.25/s`
@@ -36,6 +36,12 @@ Latest follow-mode state:
   - `bbox_smoothing_alpha=0.35`
   - `bbox_filter_reset_sec=0.9`
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
+- Detector preprocessing now matches the old TensorFlow SSD path:
+  - `scale_factor=1.0`
+  - `mean_values=[0,0,0]`
+- Detector model resolution/path aliases accept both repo names and old standalone names:
+  - `mobilenet_ssd_v2_coco.pb` or `frozen_inference_graph.pb`
+  - `mobilenet_ssd_v2_coco.pbtxt` or `ssd_mobilenet_v2_coco_2018_03_29.pbtxt`
 - Camera toolbar now has follow start/stop next to camera controls.
 - Manual rotation is about 80% of the original aggressive baseline:
   - panel rotate profile `offset=0.096,gain=0.112`

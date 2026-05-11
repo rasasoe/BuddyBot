@@ -48,8 +48,8 @@ class FollowControllerNode(Node):
         self.declare_parameter('max_linear_velocity', 0.28)  # normalized 0-1 (pico maps directly to PWM)
         self.declare_parameter('max_angular_velocity', 0.28)  # normalized 0-1
         self.declare_parameter('min_linear_velocity', 0.14)  # small floor for gearbox stiction
-        self.declare_parameter('deadzone_center', 15)        # pixels, ignore small center offsets
-        self.declare_parameter('deadzone_height', 10)        # pixels, ignore small height changes
+        self.declare_parameter('deadzone_center', 30)        # pixels, ignore small center offsets
+        self.declare_parameter('deadzone_height', 20)        # pixels, ignore small height changes
         self.declare_parameter('follow_enabled_topic', '/follow/enabled')
         self.declare_parameter('bbox_timeout_sec', 0.8)
         self.declare_parameter('min_detection_confidence', 0.15)

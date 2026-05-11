@@ -1229,3 +1229,22 @@ Follow profile retuned against the old standalone controller:
     - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=15`
     - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=10`
 - Goal: prefer slow, stable, wide-deadzone tracking over fast correction while camera/detector cadence is still limited.
+
+Detection quality follow-up:
+- User feedback: object/person recognition is now poor; likely from both lowered image resolution and model preprocessing mismatch.
+- Important comparison with the old standalone controller:
+  - Old code used `cv2.dnn.blobFromImage(frame, size=(300,300), swapRB=True, crop=False)` with default `scale=1.0` and `mean=0`.
+  - ROS detector had been using `scale_factor=0.007843` and `mean_values=[127.5,127.5,127.5]`, which is more like the Caffe MobileNetSSD preprocessing path and can suppress TensorFlow SSD confidences.
+- Updated detector defaults for TensorFlow SSD MobileNet v2 COCO:
+  - `scale_factor=1.0`
+  - `mean_values=[0,0,0]`
+  - `confidence_threshold=0.2`
+- Added model-path aliases so either naming convention works:
+  - `mobilenet_ssd_v2_coco.pb` or `frozen_inference_graph.pb`
+  - `mobilenet_ssd_v2_coco.pbtxt` or `ssd_mobilenet_v2_coco_2018_03_29.pbtxt`
+  - checks `~/BuddyBot/models` and legacy `~/AI_CAR/OpencvDnn/models`
+- Restored presentation camera input to `320x240 @ 10fps` while keeping the slow motor profile.
+- Increased detection cadence to every 2 frames.
+- Scaled deadzones for the 320x240 input:
+  - center deadzone `15` at 160px wide -> `30` at 320px wide
+  - height deadzone `10` at 120px high -> `20` at 240px high
