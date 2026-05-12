@@ -1352,3 +1352,14 @@ Manual-like forward follow correction:
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.12`
 - BBox smoothing alpha was raised to `0.45` so the controller follows the latest 10fps camera / roughly 5Hz detector signal with less lag.
 - Expected result: the robot should move forward decisively when the person is visible, without returning to the earlier fast spin behavior.
+
+Closer stop-distance and slower turn correction:
+- User reported forward speed now feels acceptable, but the robot stops while still around 2.3m away and needs to come closer to the user's front.
+- The camera-height stop threshold was too conservative for the C920/MobileNet bbox geometry, so the follow target was moved closer:
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.90`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.94`
+- Follow turn speed was reduced further because the camera stream cannot keep up with the chassis rotation:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0008`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.07`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.08`
+- Forward force remains unchanged from the manual-like tuning.

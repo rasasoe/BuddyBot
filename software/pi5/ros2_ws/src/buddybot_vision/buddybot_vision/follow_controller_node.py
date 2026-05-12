@@ -43,11 +43,11 @@ class FollowControllerNode(Node):
         # Declare parameters with practical defaults
         self.declare_parameter('image_width', 320)
         self.declare_parameter('image_height', 240)
-        self.declare_parameter('center_x_gain', 0.0012)  # Angular velocity gain for center offset
+        self.declare_parameter('center_x_gain', 0.0008)  # Angular velocity gain for center offset
         self.declare_parameter('height_gain', 0.010)    # Linear velocity gain for box height
-        self.declare_parameter('target_height_ratio', 0.72)  # Target box height as fraction of image
+        self.declare_parameter('target_height_ratio', 0.90)  # Target box height as fraction of image
         self.declare_parameter('max_linear_velocity', 0.42)  # normalized 0-1 (pico maps directly to PWM)
-        self.declare_parameter('max_angular_velocity', 0.10)  # normalized 0-1
+        self.declare_parameter('max_angular_velocity', 0.07)  # normalized 0-1
         self.declare_parameter('min_linear_velocity', 0.34)  # manual-like floor for gearbox stiction
         self.declare_parameter('deadzone_center', 50)        # pixels, ignore small center offsets
         self.declare_parameter('deadzone_height', 16)        # pixels, ignore small height changes
@@ -57,13 +57,13 @@ class FollowControllerNode(Node):
         self.declare_parameter('min_detection_confidence', 0.15)
         self.declare_parameter('command_rate_hz', 10.0)
         self.declare_parameter('linear_accel_limit', 0.55)   # normalized units per second
-        self.declare_parameter('angular_accel_limit', 0.12)  # normalized units per second
+        self.declare_parameter('angular_accel_limit', 0.08)  # normalized units per second
         self.declare_parameter('bbox_smoothing_alpha', 0.45)
         self.declare_parameter('bbox_filter_reset_sec', 0.9)
         self.declare_parameter('allow_reverse', False)
         self.declare_parameter('visible_forward_velocity', 0.34)
         self.declare_parameter('visible_forward_center_deadzone', 120)
-        self.declare_parameter('visible_forward_max_height_ratio', 0.82)
+        self.declare_parameter('visible_forward_max_height_ratio', 0.94)
         self.declare_parameter('use_lidar_distance', False)
         self.declare_parameter('scan_topic', '/scan')
         self.declare_parameter('scan_forward_center_deg', 180.0)

@@ -21,10 +21,10 @@ Latest follow-mode state:
   - presentation camera defaults: `320x240 @ 10fps`
   - `discard_buffered_frames=1`
   - camera/detector `opencv_threads=2`
-  - `center_x_gain=0.0012`
-  - `max_angular_velocity=0.10`
+  - `center_x_gain=0.0008`
+  - `max_angular_velocity=0.07`
   - `height_gain=0.010`
-  - `target_height_ratio=0.72`
+  - `target_height_ratio=0.90`
   - `max_linear_velocity=0.42`
   - `min_linear_velocity=0.34`
   - `deadzone_center=50`
@@ -34,14 +34,14 @@ Latest follow-mode state:
   - `allow_reverse=false`
   - `visible_forward_velocity=0.34`
   - `visible_forward_center_deadzone=120`
-  - `visible_forward_max_height_ratio=0.82`
+  - `visible_forward_max_height_ratio=0.94`
   - `use_lidar_distance=false`
   - `target_distance_m=0.95`
   - `distance_deadzone_m=0.18`
   - `min_follow_distance_m=0.45`
   - `command_rate_hz=10.0`
   - `linear_accel_limit=0.55/s`
-  - `angular_accel_limit=0.12/s`
+  - `angular_accel_limit=0.08/s`
 - Important behavior change: bbox callbacks now update a target command, and a 10Hz command timer ramps current velocity toward that target. This avoids follow mode pulsing `forward -> stop -> forward` when detector updates are slower than command_mux timeout.
 - BBox input is now low-pass filtered before velocity is computed:
   - `bbox_smoothing_alpha=0.45`
