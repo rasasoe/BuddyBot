@@ -1374,3 +1374,15 @@ Near-front final follow tuning:
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.055`
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.06`
 - Forward force stays unchanged because the user reported forward speed now feels acceptable.
+
+Vision-bearing / LiDAR-safety follow split:
+- User reported the robot now approaches about 1.5m in front, but still needs to come much closer and rotate slightly slower.
+- The C920/MobileNet bbox height is saturated too early to be a reliable final stop distance. The follow profile now treats vision mainly as bearing/target confirmation, and lets the existing LiDAR avoidance layer handle the near-field safety boundary.
+- Camera-height stop was moved past a full-frame box so it no longer stops at mid-distance:
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=1.16`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=1.10`
+- Turn response was lowered again:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.00055`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.045`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.05`
+- Forward speed and stiction floor remain unchanged.

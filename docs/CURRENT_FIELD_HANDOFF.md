@@ -29,11 +29,11 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_CAMERA_OPENCV_THREADS=2`
   - `BUDDYBOT_DETECT_OPENCV_THREADS=2`
 - Follow rotation is intentionally very slow because the camera/detector stream cannot support fast turning:
-  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.00065`
-  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.055`
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.00055`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.045`
 - Follow forward is now near the panel's 100% manual-forward feel, but still below the backend hard cap:
   - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.010`
-  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.98`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=1.16`
   - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.42`
   - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.34`
 - Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
@@ -41,7 +41,7 @@ Latest follow/manual motion baseline:
 - Because C920/MobileNet can keep the person bbox nearly full-frame even when the user steps away, follow now has a visible-person forward push:
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.34`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
-  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.99`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=1.10`
   - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
 - Follow distance defaults back to camera bbox height, because corridor screenshots showed LiDAR distance gating could falsely block centered forward motion:
   - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=0`
@@ -53,7 +53,7 @@ Latest follow/manual motion baseline:
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
   - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.55`
-  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.06`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.05`
 - Follow bbox input is now filtered before velocity is computed:
   - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.45`
   - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
