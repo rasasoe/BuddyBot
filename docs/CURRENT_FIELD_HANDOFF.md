@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
-Last updated: 2026-05-11
-Repo baseline: current `main` (`Make follow lag-safe for slow camera`)
+Last updated: 2026-05-12
+Repo baseline: current `main`
 
 ## 2026-05-06 Fast Resume
 
@@ -31,31 +31,31 @@ Latest follow/manual motion baseline:
 - Follow rotation is intentionally much slower than the previous 80% baseline:
   - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0012`
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
-- Follow forward is still below manual-drive speed, but now high enough to overcome the real chassis static friction:
-  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.006`
+- Follow forward is now near the panel's 100% manual-forward feel, but still below the backend hard cap:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.010`
   - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.72`
-  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.30`
-  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.22`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.42`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.34`
 - Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
   - `BUDDYBOT_FOLLOW_ALLOW_REVERSE=0`
-- Because C920/MobileNet can keep the person bbox nearly full-frame even when the user steps away, follow now has a slow visible-person forward crawl:
-  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.22`
+- Because C920/MobileNet can keep the person bbox nearly full-frame even when the user steps away, follow now has a visible-person forward push:
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.34`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.82`
   - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
 - Follow distance defaults back to camera bbox height, because corridor screenshots showed LiDAR distance gating could falsely block centered forward motion:
   - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=0`
-  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=20`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=16`
   - `BUDDYBOT_FOLLOW_TARGET_DISTANCE=0.95`
   - `BUDDYBOT_FOLLOW_DISTANCE_DEADZONE=0.18`
   - `BUDDYBOT_FOLLOW_MIN_DISTANCE=0.45`
   - LiDAR distance control can still be enabled for experiments, but default safety stays in `lidar_avoidance_node`.
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
-  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.30`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.55`
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.12`
 - Follow bbox input is now filtered before velocity is computed:
-  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.25`
+  - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.45`
   - `BUDDYBOT_FOLLOW_BBOX_FILTER_RESET_SEC=0.9`
 - Stale visual data is rejected before commanding motion:
   - `BUDDYBOT_FOLLOW_BBOX_TIMEOUT=2.5`
@@ -68,7 +68,7 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_CAMERA_PUBLISH_RATE=10`
 - Deadzone defaults are scaled from the old 160x120 follow controller to 320x240:
   - `BUDDYBOT_FOLLOW_CENTER_DEADZONE=50`
-  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=30`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=16`
 - Detector preprocessing matches the old TensorFlow SSD controller:
   - `scale_factor=1.0`
   - `mean_values=[0,0,0]`

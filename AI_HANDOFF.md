@@ -23,16 +23,16 @@ Latest follow-mode state:
   - camera/detector `opencv_threads=2`
   - `center_x_gain=0.0012`
   - `max_angular_velocity=0.10`
-  - `height_gain=0.006`
+  - `height_gain=0.010`
   - `target_height_ratio=0.72`
-  - `max_linear_velocity=0.30`
-  - `min_linear_velocity=0.22`
+  - `max_linear_velocity=0.42`
+  - `min_linear_velocity=0.34`
   - `deadzone_center=50`
-  - `deadzone_height=30`
+  - `deadzone_height=16`
   - `bbox_timeout_sec=2.5` from presentation mode
   - `max_source_age_sec=0.0`
   - `allow_reverse=false`
-  - `visible_forward_velocity=0.22`
+  - `visible_forward_velocity=0.34`
   - `visible_forward_center_deadzone=120`
   - `visible_forward_max_height_ratio=0.82`
   - `use_lidar_distance=false`
@@ -40,11 +40,11 @@ Latest follow-mode state:
   - `distance_deadzone_m=0.18`
   - `min_follow_distance_m=0.45`
   - `command_rate_hz=10.0`
-  - `linear_accel_limit=0.30/s`
+  - `linear_accel_limit=0.55/s`
   - `angular_accel_limit=0.12/s`
 - Important behavior change: bbox callbacks now update a target command, and a 10Hz command timer ramps current velocity toward that target. This avoids follow mode pulsing `forward -> stop -> forward` when detector updates are slower than command_mux timeout.
 - BBox input is now low-pass filtered before velocity is computed:
-  - `bbox_smoothing_alpha=0.25`
+  - `bbox_smoothing_alpha=0.45`
   - `bbox_filter_reset_sec=0.9`
 - Detector appends source image age to `/vision/person_bbox`; follow reports it in `/follow/status`.
 - Source-age rejection is disabled by default after field feedback showed it could block all motion on the Pi5 DNN path.

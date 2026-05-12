@@ -1337,3 +1337,18 @@ Stiction correction after motor-squeal feedback:
 - Visible-forward creep now also has a close-range stop guard:
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.82`
 - Goal: the robot should actually break static friction and move when the person is visible, but stop creeping once the bbox is very large/close.
+
+Manual-like forward follow correction:
+- User reported the follow command still felt too weak after the first stiction fix and asked for a forward force closer to manual control while keeping motion matched to camera FPS.
+- Manual panel forward at 100% is about `0.40`, with backend cap `BUDDYBOT_MANUAL_LINEAR_LIMIT=0.52`.
+- Follow forward defaults were raised to a manual-like but still camera-safe band:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.010`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.42`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.34`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.55`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.34`
+- Follow rotation stays slow:
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.12`
+- BBox smoothing alpha was raised to `0.45` so the controller follows the latest 10fps camera / roughly 5Hz detector signal with less lag.
+- Expected result: the robot should move forward decisively when the person is visible, without returning to the earlier fast spin behavior.
