@@ -35,6 +35,8 @@ Latest follow-mode state:
   - `visible_forward_velocity=0.34`
   - `visible_forward_center_deadzone=120`
   - `visible_forward_max_height_ratio=1.10`
+  - near-field turn suppression: `area_ratio>=0.34` or `width_ratio>=0.50`
+  - close anchor stop: `area_ratio>=0.56`, `width_ratio>=0.70`, or top-line anchor near frame top
   - `use_lidar_distance=false`
   - `target_distance_m=0.95`
   - `distance_deadzone_m=0.18`
@@ -51,6 +53,7 @@ Latest follow-mode state:
 - If C920/MobileNet returns a saturated/full-frame person bbox, follow no longer relies only on bbox height. It creeps forward slowly while the person is visible and roughly centered, with LiDAR avoidance responsible for stopping if the person is actually too close.
 - LiDAR distance control exists but is disabled by default after corridor screenshots showed centered forward motion could be falsely blocked. Default follow distance is camera-height based, with LiDAR still active as a separate avoidance/safety override.
 - `follow_controller_node` publishes `/follow/status` JSON diagnostics for panel and debug bundles.
+- `detector_node` now has a short target lock so follow mode does not immediately switch to another person when the original target leaves the frame during a turn.
 - Detector preprocessing now matches the old TensorFlow SSD path:
   - `scale_factor=1.0`
   - `mean_values=[0,0,0]`

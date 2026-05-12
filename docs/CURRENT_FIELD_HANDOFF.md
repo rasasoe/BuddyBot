@@ -43,6 +43,13 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=1.10`
   - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
+- Near-field vision behavior:
+  - turn suppression starts at bbox `area_ratio>=0.34` or `width_ratio>=0.50`
+  - close anchor stop triggers at bbox `area_ratio>=0.56`, `width_ratio>=0.70`, or a top-line close anchor
+  - this prevents the chassis from rotating the camera away from a close target.
+- Detector target lock:
+  - the detector prefers the previously tracked person for about 2s if another person appears elsewhere in frame.
+  - if a new detection is too far from the locked target during that window, it is withheld instead of switching targets.
 - Follow distance defaults back to camera bbox height, because corridor screenshots showed LiDAR distance gating could falsely block centered forward motion:
   - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=0`
   - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=16`

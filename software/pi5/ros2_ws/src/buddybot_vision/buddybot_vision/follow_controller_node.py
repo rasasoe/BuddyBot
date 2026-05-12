@@ -64,6 +64,12 @@ class FollowControllerNode(Node):
         self.declare_parameter('visible_forward_velocity', 0.34)
         self.declare_parameter('visible_forward_center_deadzone', 120)
         self.declare_parameter('visible_forward_max_height_ratio', 1.10)
+        self.declare_parameter('near_turn_suppress_area_ratio', 0.34)
+        self.declare_parameter('near_turn_suppress_width_ratio', 0.50)
+        self.declare_parameter('close_stop_area_ratio', 0.56)
+        self.declare_parameter('close_stop_width_ratio', 0.70)
+        self.declare_parameter('close_stop_top_ratio', 0.05)
+        self.declare_parameter('close_stop_min_height_ratio', 0.90)
         self.declare_parameter('use_lidar_distance', False)
         self.declare_parameter('scan_topic', '/scan')
         self.declare_parameter('scan_forward_center_deg', 180.0)
@@ -103,6 +109,21 @@ class FollowControllerNode(Node):
         self.visible_forward_max_height_ratio = max(
             0.0,
             float(self.get_parameter('visible_forward_max_height_ratio').value),
+        )
+        self.near_turn_suppress_area_ratio = max(
+            0.0,
+            float(self.get_parameter('near_turn_suppress_area_ratio').value),
+        )
+        self.near_turn_suppress_width_ratio = max(
+            0.0,
+            float(self.get_parameter('near_turn_suppress_width_ratio').value),
+        )
+        self.close_stop_area_ratio = max(0.0, float(self.get_parameter('close_stop_area_ratio').value))
+        self.close_stop_width_ratio = max(0.0, float(self.get_parameter('close_stop_width_ratio').value))
+        self.close_stop_top_ratio = max(0.0, float(self.get_parameter('close_stop_top_ratio').value))
+        self.close_stop_min_height_ratio = max(
+            0.0,
+            float(self.get_parameter('close_stop_min_height_ratio').value),
         )
         self.use_lidar_distance = bool(self.get_parameter('use_lidar_distance').value)
         self.scan_topic = str(self.get_parameter('scan_topic').value)
@@ -192,6 +213,12 @@ class FollowControllerNode(Node):
             f"  Visible forward: velocity={self.visible_forward_velocity}, "
             f"center_deadzone={self.visible_forward_center_deadzone}px, "
             f"max_height={self.visible_forward_max_height:.0f}px"
+        )
+        self.get_logger().info(
+            f"  Near stop: area={self.close_stop_area_ratio:.2f}, width={self.close_stop_width_ratio:.2f}, "
+            f"top={self.close_stop_top_ratio:.2f}, min_height={self.close_stop_min_height_ratio:.2f}, "
+            f"turn_suppress_area={self.near_turn_suppress_area_ratio:.2f}, "
+            f"turn_suppress_width={self.near_turn_suppress_width_ratio:.2f}"
         )
         self.get_logger().info(
             f"  LiDAR distance: enabled={self.use_lidar_distance} topic={self.scan_topic} "
@@ -344,15 +371,26 @@ class FollowControllerNode(Node):
         person_center_x = bbox_x + bbox_width / 2
         image_center_x = self.image_width / 2
         center_offset = person_center_x - image_center_x
+        proximity = self._proximity_state(bbox_x, bbox_y, bbox_width, bbox_height)
+
+        if proximity["close_stop"]:
+            self.last_control_reason = (
+                f"close_anchor_stop,area={proximity['area_ratio']:.2f},"
+                f"width={proximity['width_ratio']:.2f},height={proximity['height_ratio']:.2f},"
+                f"top={proximity['top_ratio']:.2f},offset={center_offset:.0f}"
+            )
+            return twist
 
         # Apply deadzone for center control
-        if abs(center_offset) > self.deadzone_center:
+        if not proximity["turn_suppressed"] and abs(center_offset) > self.deadzone_center:
             # Angular velocity proportional to center offset
             angular_vel = -center_offset * self.center_x_gain
 
             # Limit angular velocity
             angular_vel = max(-self.max_angular_vel, min(self.max_angular_vel, angular_vel))
             twist.angular.z = angular_vel
+        elif proximity["turn_suppressed"]:
+            twist.angular.z = 0.0
 
         lidar_distance = self._person_lidar_distance(center_offset)
         linear_reason = "height_deadzone"
@@ -416,9 +454,40 @@ class FollowControllerNode(Node):
 
         self.last_control_reason = (
             f"{linear_reason},height={bbox_height:.0f}/{self.target_height:.0f},"
-            f"offset={center_offset:.0f},lidar={self._format_optional_float(lidar_distance)}"
+            f"offset={center_offset:.0f},lidar={self._format_optional_float(lidar_distance)},"
+            f"area={proximity['area_ratio']:.2f},turn_suppressed={proximity['turn_suppressed']}"
         )
         return twist
+
+    def _proximity_state(self, bbox_x: float, bbox_y: float, bbox_width: float, bbox_height: float) -> dict:
+        image_width = max(1.0, float(self.image_width))
+        image_height = max(1.0, float(self.image_height))
+        width_ratio = max(0.0, float(bbox_width) / image_width)
+        height_ratio = max(0.0, float(bbox_height) / image_height)
+        area_ratio = width_ratio * height_ratio
+        top_ratio = max(0.0, float(bbox_y) / image_height)
+
+        close_by_area = area_ratio >= self.close_stop_area_ratio
+        close_by_width = width_ratio >= self.close_stop_width_ratio
+        close_by_top_anchor = (
+            top_ratio <= self.close_stop_top_ratio
+            and height_ratio >= self.close_stop_min_height_ratio
+            and width_ratio >= self.near_turn_suppress_width_ratio
+        )
+        close_stop = close_by_area or close_by_width or close_by_top_anchor
+        turn_suppressed = (
+            close_stop
+            or area_ratio >= self.near_turn_suppress_area_ratio
+            or width_ratio >= self.near_turn_suppress_width_ratio
+        )
+        return {
+            "width_ratio": width_ratio,
+            "height_ratio": height_ratio,
+            "area_ratio": area_ratio,
+            "top_ratio": top_ratio,
+            "close_stop": close_stop,
+            "turn_suppressed": turn_suppressed,
+        }
 
     def _person_lidar_distance(self, center_offset: float) -> float | None:
         if not self.use_lidar_distance or self.latest_scan is None or self.last_scan_time is None:
@@ -566,6 +635,12 @@ class FollowControllerNode(Node):
                 "visible_forward_velocity": self.visible_forward_velocity,
                 "visible_forward_center_deadzone": self.visible_forward_center_deadzone,
                 "visible_forward_max_height_ratio": self.visible_forward_max_height_ratio,
+                "near_turn_suppress_area_ratio": self.near_turn_suppress_area_ratio,
+                "near_turn_suppress_width_ratio": self.near_turn_suppress_width_ratio,
+                "close_stop_area_ratio": self.close_stop_area_ratio,
+                "close_stop_width_ratio": self.close_stop_width_ratio,
+                "close_stop_top_ratio": self.close_stop_top_ratio,
+                "close_stop_min_height_ratio": self.close_stop_min_height_ratio,
                 "use_lidar_distance": self.use_lidar_distance,
                 "target_distance_m": self.target_distance_m,
                 "distance_deadzone_m": self.distance_deadzone_m,

@@ -84,6 +84,10 @@ class DetectorNode(Node):
         self.declare_parameter("upper_body_cascade", "haarcascade_upperbody.xml")
         self.declare_parameter("opencv_threads", 2)
         self.declare_parameter("status_topic", "/vision/detector_status")
+        self.declare_parameter("target_lock_enabled", True)
+        self.declare_parameter("target_lock_timeout_sec", 2.0)
+        self.declare_parameter("target_lock_max_center_jump_ratio", 0.55)
+        self.declare_parameter("target_lock_min_iou", 0.03)
 
         self.model_config = str(self.get_parameter("model_config").value)
         self.model_weights = str(self.get_parameter("model_weights").value)
@@ -106,6 +110,13 @@ class DetectorNode(Node):
         self.upper_body_cascade_name = str(self.get_parameter("upper_body_cascade").value)
         self.opencv_threads = max(0, int(self.get_parameter("opencv_threads").value))
         self.status_topic = str(self.get_parameter("status_topic").value)
+        self.target_lock_enabled = bool(self.get_parameter("target_lock_enabled").value)
+        self.target_lock_timeout_sec = max(0.0, float(self.get_parameter("target_lock_timeout_sec").value))
+        self.target_lock_max_center_jump_ratio = max(
+            0.0,
+            float(self.get_parameter("target_lock_max_center_jump_ratio").value),
+        )
+        self.target_lock_min_iou = max(0.0, float(self.get_parameter("target_lock_min_iou").value))
         if self.opencv_threads > 0:
             try:
                 cv2.setNumThreads(self.opencv_threads)
@@ -129,6 +140,9 @@ class DetectorNode(Node):
         self._last_not_ready_log = self.get_clock().now()
         self._last_diag_log = self.get_clock().now()
         self._last_dnn_best_person_conf = 0.0
+        self.locked_target_bbox = None
+        self.locked_target_time = None
+        self.target_lock_reason = "unlocked"
 
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -238,6 +252,7 @@ class DetectorNode(Node):
                 "details": self.detector_details,
                 "model_config": str(self.model_config_path),
                 "model_weights": str(self.model_weights_path),
+                "target_lock_reason": self.target_lock_reason,
             },
             ensure_ascii=False,
         )
@@ -259,6 +274,12 @@ class DetectorNode(Node):
         self.get_logger().info(f"  HOG fallback: {'enabled' if self.allow_hog_fallback else 'disabled'}")
         self.get_logger().info(f"  Cascade fallback: {'enabled' if self.allow_cascade_fallback else 'disabled'}")
         self.get_logger().info(f"  OpenCV threads: {self.opencv_threads}")
+        self.get_logger().info(
+            f"  Target lock: {'enabled' if self.target_lock_enabled else 'disabled'} "
+            f"timeout={self.target_lock_timeout_sec:.1f}s "
+            f"max_jump={self.target_lock_max_center_jump_ratio:.2f} "
+            f"min_iou={self.target_lock_min_iou:.2f}"
+        )
         self.get_logger().info(f"  Active backend: {self.detector_backend}")
         self.get_logger().info(f"  Debug image: {'enabled' if self.publish_debug else 'disabled'}")
 
@@ -411,6 +432,10 @@ class DetectorNode(Node):
                     )
                 return
 
+            best_person = self._select_locked_target([best_person], image.shape[1], image.shape[0])
+            if best_person is None:
+                return
+
             self._publish_bbox(best_person, image_stamp)
             if self.publish_debug:
                 debug_image = self._draw_detection(image.copy(), best_person)
@@ -544,8 +569,7 @@ class DetectorNode(Node):
         image_width: int,
         image_height: int,
     ) -> Optional[Dict[str, float]]:
-        best_detection = None
-        best_score = 0.0
+        candidates: List[Dict[str, float]] = []
         best_person_conf = 0.0
 
         for detection in detections[0, 0]:
@@ -565,18 +589,98 @@ class DetectorNode(Node):
 
             size_score = width * height
             total_score = confidence * size_score
-            if total_score > best_score:
-                best_score = total_score
-                best_detection = {
+            candidates.append(
+                {
                     "x": x1,
                     "y": y1,
                     "width": width,
                     "height": height,
                     "confidence": confidence,
+                    "score": total_score,
                 }
+            )
 
         self._last_dnn_best_person_conf = best_person_conf
-        return best_detection
+        return self._select_locked_target(candidates, image_width, image_height)
+
+    def _select_locked_target(
+        self,
+        candidates: List[Dict[str, float]],
+        image_width: int,
+        image_height: int,
+    ) -> Optional[Dict[str, float]]:
+        if not candidates:
+            self.target_lock_reason = "no_candidates"
+            return None
+
+        if not self.target_lock_enabled or self.locked_target_bbox is None or self.locked_target_time is None:
+            selected = max(candidates, key=lambda item: float(item.get("score", 0.0)))
+            self._remember_target(selected, "new_target")
+            return selected
+
+        lock_age = (self.get_clock().now() - self.locked_target_time).nanoseconds / 1e9
+        if lock_age > self.target_lock_timeout_sec:
+            selected = max(candidates, key=lambda item: float(item.get("score", 0.0)))
+            self._remember_target(selected, f"lock_expired:{lock_age:.2f}s")
+            return selected
+
+        max_center_jump = max(1.0, image_width * self.target_lock_max_center_jump_ratio)
+        matched_candidates = []
+        for candidate in candidates:
+            iou = self._bbox_iou(candidate, self.locked_target_bbox)
+            center_distance = self._bbox_center_distance(candidate, self.locked_target_bbox)
+            if iou >= self.target_lock_min_iou or center_distance <= max_center_jump:
+                continuity_score = float(candidate.get("score", 0.0)) * (1.0 + (2.0 * iou))
+                matched_candidates.append((continuity_score, candidate, iou, center_distance))
+
+        if not matched_candidates:
+            self.target_lock_reason = f"lock_hold_no_match:{lock_age:.2f}s"
+            return None
+
+        _, selected, best_iou, best_distance = max(matched_candidates, key=lambda item: item[0])
+        self._remember_target(selected, f"lock_match:iou={best_iou:.2f},dist={best_distance:.0f}")
+        return selected
+
+    def _remember_target(self, detection: Dict[str, float], reason: str) -> None:
+        self.locked_target_bbox = {
+            "x": float(detection["x"]),
+            "y": float(detection["y"]),
+            "width": float(detection["width"]),
+            "height": float(detection["height"]),
+        }
+        self.locked_target_time = self.get_clock().now()
+        self.target_lock_reason = reason
+
+    @staticmethod
+    def _bbox_center_distance(first: Dict[str, float], second: Dict[str, float]) -> float:
+        first_cx = float(first["x"]) + float(first["width"]) / 2.0
+        first_cy = float(first["y"]) + float(first["height"]) / 2.0
+        second_cx = float(second["x"]) + float(second["width"]) / 2.0
+        second_cy = float(second["y"]) + float(second["height"]) / 2.0
+        return ((first_cx - second_cx) ** 2 + (first_cy - second_cy) ** 2) ** 0.5
+
+    @staticmethod
+    def _bbox_iou(first: Dict[str, float], second: Dict[str, float]) -> float:
+        first_x1 = float(first["x"])
+        first_y1 = float(first["y"])
+        first_x2 = first_x1 + float(first["width"])
+        first_y2 = first_y1 + float(first["height"])
+        second_x1 = float(second["x"])
+        second_y1 = float(second["y"])
+        second_x2 = second_x1 + float(second["width"])
+        second_y2 = second_y1 + float(second["height"])
+
+        inter_x1 = max(first_x1, second_x1)
+        inter_y1 = max(first_y1, second_y1)
+        inter_x2 = min(first_x2, second_x2)
+        inter_y2 = min(first_y2, second_y2)
+        inter_area = max(0.0, inter_x2 - inter_x1) * max(0.0, inter_y2 - inter_y1)
+        first_area = max(0.0, first_x2 - first_x1) * max(0.0, first_y2 - first_y1)
+        second_area = max(0.0, second_x2 - second_x1) * max(0.0, second_y2 - second_y1)
+        union_area = first_area + second_area - inter_area
+        if union_area <= 1e-6:
+            return 0.0
+        return inter_area / union_area
 
     def _image_age_sec(self, image_stamp) -> float:
         try:

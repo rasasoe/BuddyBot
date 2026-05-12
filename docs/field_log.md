@@ -1386,3 +1386,14 @@ Vision-bearing / LiDAR-safety follow split:
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.045`
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.05`
 - Forward speed and stiction floor remain unchanged.
+
+Close anchor stop and target-lock correction:
+- User pointed out that once bbox height saturates, a better close-distance cue is a reference/anchor line rather than height alone.
+- Follow controller now uses near-field bbox geometry:
+  - suppresses turning when bbox `area_ratio>=0.34` or `width_ratio>=0.50`
+  - stops both forward and rotation when bbox `area_ratio>=0.56`, `width_ratio>=0.70`, or the top anchor reaches the top line with a large bbox
+- This is intended to stop the robot in front of the user without rotating the camera away at close range.
+- Detector now keeps a short target lock on the previous person:
+  - prefers a detection near/overlapping the previous target
+  - withholds far-away candidate people for about 2s instead of immediately switching to them
+- This addresses the observed failure where the robot lost the original user during a turn and started following another person.
