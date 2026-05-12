@@ -1363,3 +1363,14 @@ Closer stop-distance and slower turn correction:
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.07`
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.08`
 - Forward force remains unchanged from the manual-like tuning.
+
+Near-front final follow tuning:
+- User reported the new behavior is better, but follow still stops too far away and turn speed should be a little slower.
+- Stop distance was moved much closer by requiring the person bbox to nearly fill the camera height before follow stops:
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.98`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.99`
+- Turn response was reduced one more step:
+  - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.00065`
+  - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.055`
+  - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.06`
+- Forward force stays unchanged because the user reported forward speed now feels acceptable.
