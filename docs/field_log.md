@@ -1322,3 +1322,18 @@ Field correction after screenshots:
   - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.60`
   - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=20`
 - LiDAR remains active through the separate `lidar_avoidance_node` safety override, but it is no longer the default forward-distance controller.
+
+Stiction correction after motor-squeal feedback:
+- User reported that motors make a high-pitched drive sound when a person is in frame, but the chassis does not move. When the person leaves the camera view, the sound stops.
+- This confirms follow commands reach the Pico, but the commanded linear speed is below the real robot's static-friction threshold.
+- Follow forward defaults were raised while keeping rotation slow:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.006`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.72`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.30`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.22`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.30`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.22`
+  - `BUDDYBOT_FOLLOW_HEIGHT_DEADZONE=16`
+- Visible-forward creep now also has a close-range stop guard:
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.82`
+- Goal: the robot should actually break static friction and move when the person is visible, but stop creeping once the bbox is very large/close.

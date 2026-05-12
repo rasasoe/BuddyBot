@@ -31,16 +31,17 @@ Latest follow/manual motion baseline:
 - Follow rotation is intentionally much slower than the previous 80% baseline:
   - `BUDDYBOT_FOLLOW_CENTER_GAIN=0.0012`
   - `BUDDYBOT_FOLLOW_MAX_ANGULAR=0.10`
-- Follow forward is intentionally slower than the early high-power profile:
-  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.0035`
-  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.60`
-  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.16`
-  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.10`
+- Follow forward is still below manual-drive speed, but now high enough to overcome the real chassis static friction:
+  - `BUDDYBOT_FOLLOW_HEIGHT_GAIN=0.006`
+  - `BUDDYBOT_FOLLOW_TARGET_HEIGHT=0.72`
+  - `BUDDYBOT_FOLLOW_MAX_LINEAR=0.30`
+  - `BUDDYBOT_FOLLOW_MIN_LINEAR=0.22`
 - Reverse is disabled in follow mode so stale close-range detections stop instead of making the robot back away from the user:
   - `BUDDYBOT_FOLLOW_ALLOW_REVERSE=0`
 - Because C920/MobileNet can keep the person bbox nearly full-frame even when the user steps away, follow now has a slow visible-person forward crawl:
-  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.08`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD=0.22`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
+  - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=0.82`
   - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
 - Follow distance defaults back to camera bbox height, because corridor screenshots showed LiDAR distance gating could falsely block centered forward motion:
   - `BUDDYBOT_FOLLOW_USE_LIDAR_DISTANCE=0`
@@ -51,7 +52,7 @@ Latest follow/manual motion baseline:
   - LiDAR distance control can still be enabled for experiments, but default safety stays in `lidar_avoidance_node`.
 - Follow now publishes a smoothed 10Hz command stream:
   - `BUDDYBOT_FOLLOW_COMMAND_RATE=10.0`
-  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.12`
+  - `BUDDYBOT_FOLLOW_LINEAR_ACCEL=0.30`
   - `BUDDYBOT_FOLLOW_ANGULAR_ACCEL=0.12`
 - Follow bbox input is now filtered before velocity is computed:
   - `BUDDYBOT_FOLLOW_BBOX_SMOOTHING_ALPHA=0.25`

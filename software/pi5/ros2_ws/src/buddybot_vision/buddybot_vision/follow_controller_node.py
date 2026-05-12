@@ -44,25 +44,26 @@ class FollowControllerNode(Node):
         self.declare_parameter('image_width', 320)
         self.declare_parameter('image_height', 240)
         self.declare_parameter('center_x_gain', 0.0012)  # Angular velocity gain for center offset
-        self.declare_parameter('height_gain', 0.0035)    # Linear velocity gain for box height
-        self.declare_parameter('target_height_ratio', 0.60)  # Target box height as fraction of image
-        self.declare_parameter('max_linear_velocity', 0.16)  # normalized 0-1 (pico maps directly to PWM)
+        self.declare_parameter('height_gain', 0.006)    # Linear velocity gain for box height
+        self.declare_parameter('target_height_ratio', 0.72)  # Target box height as fraction of image
+        self.declare_parameter('max_linear_velocity', 0.30)  # normalized 0-1 (pico maps directly to PWM)
         self.declare_parameter('max_angular_velocity', 0.10)  # normalized 0-1
-        self.declare_parameter('min_linear_velocity', 0.10)  # small floor for gearbox stiction
+        self.declare_parameter('min_linear_velocity', 0.22)  # small floor for gearbox stiction
         self.declare_parameter('deadzone_center', 50)        # pixels, ignore small center offsets
-        self.declare_parameter('deadzone_height', 20)        # pixels, ignore small height changes
+        self.declare_parameter('deadzone_height', 16)        # pixels, ignore small height changes
         self.declare_parameter('follow_enabled_topic', '/follow/enabled')
         self.declare_parameter('bbox_timeout_sec', 2.5)
         self.declare_parameter('max_source_age_sec', 0.0)
         self.declare_parameter('min_detection_confidence', 0.15)
         self.declare_parameter('command_rate_hz', 10.0)
-        self.declare_parameter('linear_accel_limit', 0.12)   # normalized units per second
+        self.declare_parameter('linear_accel_limit', 0.30)   # normalized units per second
         self.declare_parameter('angular_accel_limit', 0.12)  # normalized units per second
         self.declare_parameter('bbox_smoothing_alpha', 0.25)
         self.declare_parameter('bbox_filter_reset_sec', 0.9)
         self.declare_parameter('allow_reverse', False)
-        self.declare_parameter('visible_forward_velocity', 0.08)
+        self.declare_parameter('visible_forward_velocity', 0.22)
         self.declare_parameter('visible_forward_center_deadzone', 120)
+        self.declare_parameter('visible_forward_max_height_ratio', 0.82)
         self.declare_parameter('use_lidar_distance', False)
         self.declare_parameter('scan_topic', '/scan')
         self.declare_parameter('scan_forward_center_deg', 180.0)
@@ -99,6 +100,10 @@ class FollowControllerNode(Node):
         self.allow_reverse = bool(self.get_parameter('allow_reverse').value)
         self.visible_forward_velocity = max(0.0, float(self.get_parameter('visible_forward_velocity').value))
         self.visible_forward_center_deadzone = max(0.0, float(self.get_parameter('visible_forward_center_deadzone').value))
+        self.visible_forward_max_height_ratio = max(
+            0.0,
+            float(self.get_parameter('visible_forward_max_height_ratio').value),
+        )
         self.use_lidar_distance = bool(self.get_parameter('use_lidar_distance').value)
         self.scan_topic = str(self.get_parameter('scan_topic').value)
         self.scan_forward_center_deg = float(self.get_parameter('scan_forward_center_deg').value)
@@ -114,6 +119,7 @@ class FollowControllerNode(Node):
 
         # Calculate target height in pixels
         self.target_height = self.image_height * self.target_height_ratio
+        self.visible_forward_max_height = self.image_height * self.visible_forward_max_height_ratio
 
         # Publisher for velocity commands
         command_qos = QoSProfile(
@@ -184,7 +190,8 @@ class FollowControllerNode(Node):
         self.get_logger().info(f"  Allow reverse: {self.allow_reverse}")
         self.get_logger().info(
             f"  Visible forward: velocity={self.visible_forward_velocity}, "
-            f"center_deadzone={self.visible_forward_center_deadzone}px"
+            f"center_deadzone={self.visible_forward_center_deadzone}px, "
+            f"max_height={self.visible_forward_max_height:.0f}px"
         )
         self.get_logger().info(
             f"  LiDAR distance: enabled={self.use_lidar_distance} topic={self.scan_topic} "
@@ -402,8 +409,9 @@ class FollowControllerNode(Node):
             and self.visible_forward_velocity > 0.0
             and twist.linear.x <= 1e-4
             and abs(center_offset) <= self.visible_forward_center_deadzone
+            and bbox_height <= self.visible_forward_max_height
         ):
-            twist.linear.x = min(self.max_linear_vel, self.visible_forward_velocity)
+            twist.linear.x = min(self.max_linear_vel, max(self.visible_forward_velocity, self.min_linear_vel))
             linear_reason = f"visible_forward_after_{linear_reason}"
 
         self.last_control_reason = (
@@ -557,6 +565,7 @@ class FollowControllerNode(Node):
                 "allow_reverse": self.allow_reverse,
                 "visible_forward_velocity": self.visible_forward_velocity,
                 "visible_forward_center_deadzone": self.visible_forward_center_deadzone,
+                "visible_forward_max_height_ratio": self.visible_forward_max_height_ratio,
                 "use_lidar_distance": self.use_lidar_distance,
                 "target_distance_m": self.target_distance_m,
                 "distance_deadzone_m": self.distance_deadzone_m,
