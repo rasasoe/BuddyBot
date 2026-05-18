@@ -27,6 +27,7 @@ import requests
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
 
 try:
@@ -41,8 +42,8 @@ class VoiceInterface(Node):
         self.declare_parameter("offline_mode", True)
         self.declare_parameter("command_enabled", True)
         self.declare_parameter("enable_microphone", False)
-        self.declare_parameter("allow_online_recognition", False)
-        self.declare_parameter("recognition_backend", "sphinx")
+        self.declare_parameter("allow_online_recognition", True)
+        self.declare_parameter("recognition_backend", "google")
         self.declare_parameter("recognition_language", "ko-KR")
         self.declare_parameter("phrase_time_limit", 4.0)
         self.declare_parameter("wake_timeout_sec", 10.0)
@@ -90,10 +91,16 @@ class VoiceInterface(Node):
         self.follow_pub = self.create_publisher(Bool, "/follow/enabled", 10)
         self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", 10)
         self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", 10)
+        state_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
         self.create_subscription(String, "/voice/text", self.text_callback, 10)
-        self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, 10)
-        self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, 10)
-        self.create_subscription(String, "/voice/server_url", self.voice_server_url_callback, 10)
+        self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, state_qos)
+        self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, state_qos)
+        self.create_subscription(String, "/voice/server_url", self.voice_server_url_callback, state_qos)
         self.create_subscription(String, "/voice/response", self.voice_response_callback, 10)
         self.create_subscription(String, "/system/command_status", self.system_status_callback, 10)
         self.create_subscription(String, "/nav/navigation_status", self.navigation_status_callback, 10)
@@ -121,6 +128,10 @@ class VoiceInterface(Node):
         self.get_logger().info(f"Wake words: {', '.join(self.wake_words)}")
         self.get_logger().info(f"Command processing: {'enabled' if self.command_enabled else 'disabled'}")
         self.get_logger().info(f"Microphone listener: {'enabled' if self.enable_microphone else 'disabled'}")
+        self.get_logger().info(
+            f"Recognition: backend={self.recognition_backend}, language={self.recognition_language}, "
+            f"online={'enabled' if self.allow_online_recognition else 'disabled'}"
+        )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
 
         if self.enable_microphone:
@@ -412,21 +423,25 @@ class VoiceInterface(Node):
     def _recognize_audio(self, recognizer, audio) -> str:
         backend = self.recognition_backend
 
-        if backend == "sphinx":
+        if backend in ("google", "auto") and self.allow_online_recognition:
             try:
-                return recognizer.recognize_sphinx(audio).strip()
-            except Exception as exc:
-                self._publish_status(f"sphinx_failed:{exc}")
-                self.get_logger().warn(f"Sphinx recognition failed: {exc}")
-                return ""
-
-        if backend == "google" and self.allow_online_recognition:
-            try:
-                return recognizer.recognize_google(audio, language=self.recognition_language).strip()
+                transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
+                if transcript:
+                    self._publish_status(f"recognized:google:{transcript}")
+                return transcript
             except Exception as exc:
                 self._publish_status(f"google_recognition_failed:{exc}")
                 self.get_logger().warn(f"Google recognition failed: {exc}")
-                return ""
+
+        if backend in ("sphinx", "auto", "google"):
+            try:
+                transcript = recognizer.recognize_sphinx(audio).strip()
+                if transcript:
+                    self._publish_status(f"recognized:sphinx:{transcript}")
+                return transcript
+            except Exception as exc:
+                self._publish_status(f"sphinx_failed:{exc}")
+                self.get_logger().warn(f"Sphinx recognition failed: {exc}")
 
         self._publish_status(f"recognition_backend_unavailable:{backend}")
         return ""
@@ -459,7 +474,7 @@ class VoiceInterface(Node):
     def _detect_speaker_backend(self) -> str:
         if self.speaker_backend and self.speaker_backend != "auto":
             return self.speaker_backend if shutil.which(self.speaker_backend) else ""
-        for candidate in ("espeak-ng", "espeak"):
+        for candidate in ("espeak-ng", "espeak", "spd-say"):
             if shutil.which(candidate):
                 return candidate
         return ""
@@ -496,6 +511,19 @@ class VoiceInterface(Node):
         if not backend:
             return
 
+        if backend == "spd-say":
+            completed = subprocess.run(
+                [backend, text],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if completed.returncode != 0:
+                stderr = (completed.stderr or completed.stdout or "").strip()
+                raise RuntimeError(stderr or f"{backend} exited with {completed.returncode}")
+            return
+
         voice = self.speaker_voice_ko if any("\uac00" <= ch <= "\ud7a3" for ch in text) else self.speaker_voice_en
         command = [backend, "-s", str(self.speaker_rate_wpm)]
         if voice:
@@ -509,6 +537,15 @@ class VoiceInterface(Node):
             timeout=20,
             check=False,
         )
+        if completed.returncode != 0 and voice:
+            command = [backend, "-s", str(self.speaker_rate_wpm), text]
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
         if completed.returncode != 0:
             stderr = (completed.stderr or completed.stdout or "").strip()
             raise RuntimeError(stderr or f"{backend} exited with {completed.returncode}")

@@ -828,9 +828,9 @@
         const serverLabel = data?.server_connected ? "서버컴 연결됨" : "서버컴 대기";
         note.textContent = voiceModeEnabled
           ? (voiceServerMode
-            ? `음성모드 켜짐, 서버컴 연동입니다. "버디봇"이라고 부르면 스피커가 "네"라고 답하고, 10초 안에 전진/정지/추종/주방 이동 같은 로봇 명령을 실행합니다. 자유 대화는 서버컴으로 보냅니다. ${serverLabel}.`
-            : `음성모드 켜짐, 로컬 명령 모드입니다. "버디봇"이라고 부르면 스피커가 "네"라고 답하고, 10초 안에 전진/정지/사용자 추종/주방 이동 같은 명령을 실행합니다.`)
-          : `음성모드를 켜면 "버디봇 전진"처럼 바로 말하거나, "버디봇"으로 부른 뒤 "전진"만 말해도 실행합니다.`;
+            ? `음성모드 켜짐, 서버컴 연동입니다. 로봇 마이크에 "버디봇"이라고 부르면 스피커가 "네"라고 답하고, 10초 안에 전진/정지/추종/주방 이동 같은 로봇 명령을 실행합니다. 자유 대화는 서버컴으로 보냅니다. ${serverLabel}.`
+            : `음성모드 켜짐, 로봇 마이크 로컬 명령 모드입니다. 로봇 마이크에 "버디봇"이라고 부르면 스피커가 "네"라고 답하고, 10초 안에 전진/정지/사용자 추종/주방 이동 같은 명령을 실행합니다.`)
+          : `음성모드를 켜면 로봇 마이크가 기본으로 듣습니다. "버디봇 전진"처럼 바로 말하거나, "버디봇"으로 부른 뒤 "전진"만 말해도 실행합니다.`;
       }
     }
 
@@ -1043,20 +1043,14 @@
           ? (useServer ? "음성모드를 서버컴 연동으로 켰습니다. 로봇 명령은 로컬에서 먼저 실행합니다." : "음성모드를 로컬 명령으로 켰습니다.")
           : "음성모드를 껐습니다.");
         await refreshStatus();
-        if(enabled){
-          startBrowserVoice();
-        }else{
+        if(!enabled){
           stopBrowserVoice();
         }
       }catch(error){ showError(error); }
     }
 
     async function toggleVoiceMode(){
-      const nextEnabled = !voiceModeEnabled;
-      if(nextEnabled){
-        startBrowserVoice();
-      }
-      await setVoiceMode(nextEnabled);
+      await setVoiceMode(!voiceModeEnabled);
     }
 
     async function toggleAssistant(){
@@ -1272,9 +1266,7 @@
     if("webkitSpeechRecognition" in window || "SpeechRecognition" in window){
       voiceBtn.onclick = async () => {
         if(!voiceModeEnabled){
-          startBrowserVoice();
           await setVoiceMode(true);
-          return;
         }
         if(browserVoiceListening){
           stopBrowserVoice();

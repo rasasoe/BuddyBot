@@ -139,6 +139,11 @@ ENABLE_PI_SPEAKER="${BUDDYBOT_ENABLE_PI_SPEAKER:-1}"
 SPEAKER_VOLUME_PERCENT="${BUDDYBOT_SPEAKER_VOLUME_PERCENT:-35}"
 VOICE_COMMAND_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_COMMAND_ENABLED:-1}")"
 VOICE_AI_URL="${BUDDYBOT_AI_URL:-http://100.115.246.76:8000}"
+VOICE_RECOGNITION_BACKEND="${BUDDYBOT_VOICE_RECOGNITION_BACKEND:-google}"
+VOICE_ALLOW_ONLINE_RECOGNITION_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_ALLOW_ONLINE_RECOGNITION:-1}")"
+VOICE_RECOGNITION_LANGUAGE="${BUDDYBOT_VOICE_RECOGNITION_LANGUAGE:-ko-KR}"
+VOICE_PHRASE_TIME_LIMIT="${BUDDYBOT_VOICE_PHRASE_TIME_LIMIT:-4.0}"
+VOICE_WAKE_TIMEOUT="${BUDDYBOT_VOICE_WAKE_TIMEOUT:-10.0}"
 VOICE_MIC_PARAM="$(bool_param_value "$ENABLE_MIC_LISTENER")"
 VOICE_SPEAKER_PARAM="$(bool_param_value "$ENABLE_PI_SPEAKER")"
 
@@ -349,6 +354,7 @@ echo "[mapping] pico disabled: ${DISABLE_PICO}"
 echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
+echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s wake ${VOICE_WAKE_TIMEOUT}s"
 echo "[mapping] Pi speaker enabled: ${ENABLE_PI_SPEAKER}"
 echo "[mapping] Pi speaker volume target: ${SPEAKER_VOLUME_PERCENT}%"
 echo "[mapping] panel build: ${BUDDYBOT_PANEL_BUILD}"
@@ -377,7 +383,7 @@ start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 if is_truthy "$ENABLE_OFFLINE_VOICE"; then
   set_speaker_volume "$SPEAKER_VOLUME_PERCENT"
-  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}"
+  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}"
 fi
 if is_truthy "$DISABLE_CAMERA"; then
   echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"
