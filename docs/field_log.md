@@ -1397,3 +1397,57 @@ Close anchor stop and target-lock correction:
   - prefers a detection near/overlapping the previous target
   - withholds far-away candidate people for about 2s instead of immediately switching to them
 - This addresses the observed failure where the robot lost the original user during a turn and started following another person.
+
+## 2026-05-18 Follow yaw trim and voice mode
+
+Field feedback:
+- Manual forward drives straight, but user-following forward motion slowly rotates left while advancing.
+- Next requested demo slice is voice operation:
+  - voice mode button on/off from the panel
+  - choose local robot command mode or server-computer linked conversation
+  - commands such as `버디봇 전진`, `버디봇 사용자 추종`, `버디봇 정지`, `버디봇 주방 이동`
+  - server-linked mode should still execute robot commands locally, while free conversation goes to the server.
+
+Changes:
+- Added follow forward yaw trim:
+  - `BUDDYBOT_FOLLOW_FORWARD_YAW_TRIM=-0.05`
+  - `BUDDYBOT_FOLLOW_FORWARD_YAW_TRIM_CENTER_DEADZONE=120`
+  - Trim only applies while follow is moving forward, target is near center, and near-field turn suppression is not active.
+  - `/follow/status.control_reason` now reports the applied `yaw_trim`.
+- Presentation/mapping launchers pass the new follow trim parameters.
+- Added panel voice mode:
+  - voice mode ON/OFF button
+  - local command vs server-computer linked selector
+  - `/api/voice-mode`
+  - status card for current voice mode
+- Panel chat routing now executes known robot commands locally before trying the server.
+  - This prevents `버디봇 전진` or `버디봇 정지` from being swallowed by server free-chat routing.
+  - Unknown/free-form messages are sent to the server only when server mode is enabled and reachable.
+- `buddybot_voice.voice_interface` now accepts runtime control topics:
+  - `/voice/enabled`
+  - `/voice/assistant_enabled`
+  - `/voice/server_url`
+- Presentation mode now defaults `BUDDYBOT_VOICE_COMMAND_ENABLED=0`; the panel voice mode button enables command processing.
+
+Validation:
+- Python syntax compile passed for:
+  - `follow_controller_node.py`
+  - `panel_server.py`
+  - `voice_interface.py`
+- Browser panel script passed `node --check` after extracting the inline script.
+- Local panel command routing check:
+  - `버디봇 전진` -> manual forward
+  - `버디봇 사용자 추종` -> follow on
+  - `버디봇 정지` -> manual stop/follow off
+  - `버디봇 주방 이동` -> requests `kitchen` checkpoint if it exists
+
+Pi5 rebuild for this slice:
+
+```bash
+cd ~/BuddyBot/software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel buddybot_voice
+source install/setup.bash
+cd ~/BuddyBot
+BUDDYBOT_FORCE_LIDAR_START=1 bash scripts/start_presentation_mode.sh mapping
+```

@@ -64,6 +64,8 @@ class FollowControllerNode(Node):
         self.declare_parameter('visible_forward_velocity', 0.34)
         self.declare_parameter('visible_forward_center_deadzone', 120)
         self.declare_parameter('visible_forward_max_height_ratio', 1.10)
+        self.declare_parameter('forward_yaw_trim', -0.05)
+        self.declare_parameter('forward_yaw_trim_center_deadzone', 120)
         self.declare_parameter('near_turn_suppress_area_ratio', 0.34)
         self.declare_parameter('near_turn_suppress_width_ratio', 0.50)
         self.declare_parameter('close_stop_area_ratio', 0.56)
@@ -109,6 +111,11 @@ class FollowControllerNode(Node):
         self.visible_forward_max_height_ratio = max(
             0.0,
             float(self.get_parameter('visible_forward_max_height_ratio').value),
+        )
+        self.forward_yaw_trim = float(self.get_parameter('forward_yaw_trim').value)
+        self.forward_yaw_trim_center_deadzone = max(
+            0.0,
+            float(self.get_parameter('forward_yaw_trim_center_deadzone').value),
         )
         self.near_turn_suppress_area_ratio = max(
             0.0,
@@ -178,6 +185,7 @@ class FollowControllerNode(Node):
         self.last_source_image_age_sec = None
         self.last_reject_reason = "waiting_for_bbox"
         self.last_control_reason = "waiting_for_bbox"
+        self.last_forward_yaw_trim_applied = 0.0
         self.latest_scan = None
         self.last_scan_time = None
         self.last_lidar_distance_m = None
@@ -213,6 +221,10 @@ class FollowControllerNode(Node):
             f"  Visible forward: velocity={self.visible_forward_velocity}, "
             f"center_deadzone={self.visible_forward_center_deadzone}px, "
             f"max_height={self.visible_forward_max_height:.0f}px"
+        )
+        self.get_logger().info(
+            f"  Forward yaw trim: trim={self.forward_yaw_trim}, "
+            f"center_deadzone={self.forward_yaw_trim_center_deadzone}px"
         )
         self.get_logger().info(
             f"  Near stop: area={self.close_stop_area_ratio:.2f}, width={self.close_stop_width_ratio:.2f}, "
@@ -452,12 +464,34 @@ class FollowControllerNode(Node):
             twist.linear.x = min(self.max_linear_vel, max(self.visible_forward_velocity, self.min_linear_vel))
             linear_reason = f"visible_forward_after_{linear_reason}"
 
+        yaw_trim = self._apply_forward_yaw_trim(twist, center_offset, proximity)
+        self.last_forward_yaw_trim_applied = yaw_trim
+
         self.last_control_reason = (
             f"{linear_reason},height={bbox_height:.0f}/{self.target_height:.0f},"
             f"offset={center_offset:.0f},lidar={self._format_optional_float(lidar_distance)},"
-            f"area={proximity['area_ratio']:.2f},turn_suppressed={proximity['turn_suppressed']}"
+            f"area={proximity['area_ratio']:.2f},turn_suppressed={proximity['turn_suppressed']},"
+            f"yaw_trim={yaw_trim:.3f}"
         )
         return twist
+
+    def _apply_forward_yaw_trim(self, twist: Twist, center_offset: float, proximity: dict) -> float:
+        if abs(self.forward_yaw_trim) < 1e-4:
+            return 0.0
+        if twist.linear.x <= 1e-4:
+            return 0.0
+        if proximity.get("turn_suppressed", False):
+            return 0.0
+        if abs(center_offset) > self.forward_yaw_trim_center_deadzone:
+            return 0.0
+
+        linear_scale = min(1.0, max(0.0, abs(twist.linear.x) / max(1e-4, self.max_linear_vel)))
+        trim = self.forward_yaw_trim * linear_scale
+        twist.angular.z = max(
+            -self.max_angular_vel,
+            min(self.max_angular_vel, twist.angular.z + trim),
+        )
+        return trim
 
     def _proximity_state(self, bbox_x: float, bbox_y: float, bbox_width: float, bbox_height: float) -> dict:
         image_width = max(1.0, float(self.image_width))
@@ -635,6 +669,8 @@ class FollowControllerNode(Node):
                 "visible_forward_velocity": self.visible_forward_velocity,
                 "visible_forward_center_deadzone": self.visible_forward_center_deadzone,
                 "visible_forward_max_height_ratio": self.visible_forward_max_height_ratio,
+                "forward_yaw_trim": self.forward_yaw_trim,
+                "forward_yaw_trim_center_deadzone": self.forward_yaw_trim_center_deadzone,
                 "near_turn_suppress_area_ratio": self.near_turn_suppress_area_ratio,
                 "near_turn_suppress_width_ratio": self.near_turn_suppress_width_ratio,
                 "close_stop_area_ratio": self.close_stop_area_ratio,

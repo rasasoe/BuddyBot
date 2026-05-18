@@ -39,6 +39,7 @@ class VoiceInterface(Node):
     def __init__(self):
         super().__init__("voice_interface")
         self.declare_parameter("offline_mode", True)
+        self.declare_parameter("command_enabled", True)
         self.declare_parameter("enable_microphone", False)
         self.declare_parameter("allow_online_recognition", False)
         self.declare_parameter("recognition_backend", "sphinx")
@@ -60,6 +61,8 @@ class VoiceInterface(Node):
         self.declare_parameter("buddybot_ai_url", "http://127.0.0.1:8000")
 
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
+        self.command_enabled = bool(self.get_parameter("command_enabled").value)
+        self.server_assistant_enabled = not self.offline_mode
         self.enable_microphone = bool(self.get_parameter("enable_microphone").value)
         self.allow_online_recognition = bool(self.get_parameter("allow_online_recognition").value)
         self.recognition_backend = str(self.get_parameter("recognition_backend").value).strip().lower()
@@ -88,6 +91,9 @@ class VoiceInterface(Node):
         self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", 10)
         self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", 10)
         self.create_subscription(String, "/voice/text", self.text_callback, 10)
+        self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, 10)
+        self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, 10)
+        self.create_subscription(String, "/voice/server_url", self.voice_server_url_callback, 10)
         self.create_subscription(String, "/voice/response", self.voice_response_callback, 10)
         self.create_subscription(String, "/system/command_status", self.system_status_callback, 10)
         self.create_subscription(String, "/nav/navigation_status", self.navigation_status_callback, 10)
@@ -113,6 +119,7 @@ class VoiceInterface(Node):
         mode = "offline-local" if self.offline_mode else "ai-bridge"
         self.get_logger().info(f"Voice interface ready in {mode} mode")
         self.get_logger().info(f"Wake words: {', '.join(self.wake_words)}")
+        self.get_logger().info(f"Command processing: {'enabled' if self.command_enabled else 'disabled'}")
         self.get_logger().info(f"Microphone listener: {'enabled' if self.enable_microphone else 'disabled'}")
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
 
@@ -133,6 +140,26 @@ class VoiceInterface(Node):
         if not text:
             return
         self.enqueue_speech(text)
+
+    def voice_enabled_callback(self, msg: Bool) -> None:
+        self.command_enabled = bool(msg.data)
+        state = "enabled" if self.command_enabled else "disabled"
+        self._publish_status(f"voice_mode:{state}")
+        self.get_logger().info(f"Voice command processing {state}")
+
+    def voice_assistant_callback(self, msg: Bool) -> None:
+        self.server_assistant_enabled = bool(msg.data)
+        self.offline_mode = not self.server_assistant_enabled
+        mode = "server-assistant" if self.server_assistant_enabled else "local-command"
+        self._publish_status(f"voice_assistant:{mode}")
+        self.get_logger().info(f"Voice assistant mode -> {mode}")
+
+    def voice_server_url_callback(self, msg: String) -> None:
+        server_url = msg.data.strip().rstrip("/")
+        if not server_url:
+            return
+        self.buddybot_ai_url = server_url
+        self._publish_status(f"voice_server_url:{server_url}")
 
     def system_status_callback(self, msg: String) -> None:
         self._system_status = msg.data
@@ -155,20 +182,24 @@ class VoiceInterface(Node):
         if not cleaned:
             return
 
+        if not self.command_enabled:
+            self._publish_status(f"ignored:{source}:voice_disabled")
+            return
+
         self._publish_status(f"heard:{source}:{cleaned}")
-        answer = ""
+        answer = self._handle_offline_command(
+            cleaned,
+            allow_help=not self.server_assistant_enabled,
+        )
 
-        if self.offline_mode:
-            answer = self._handle_offline_command(cleaned)
-
-        if not answer:
+        if not answer and self.server_assistant_enabled:
             answer = self._forward_to_ai(cleaned)
 
         if answer:
             self._publish_response(answer)
             self.get_logger().info(f"Voice handled ({source}): {cleaned} -> {answer}")
 
-    def _handle_offline_command(self, message: str) -> str:
+    def _handle_offline_command(self, message: str, *, allow_help: bool = True) -> str:
         text = self._normalize_text(message)
         if not text:
             return ""
@@ -231,7 +262,7 @@ class VoiceInterface(Node):
             self._set_follow_enabled(False)
             return "사용자 추종을 중지했습니다."
 
-        if any(keyword in command_text for keyword in ("follow", "track user", "따라와", "추종 시작", "추종 켜")):
+        if any(keyword in command_text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
             self._set_follow_enabled(True)
             return "사용자 추종을 시작했습니다."
 
@@ -250,6 +281,8 @@ class VoiceInterface(Node):
         if any(keyword in command_text for keyword in ("status", "state", "상태", "지금 상태")):
             return self._build_status_response()
 
+        if not allow_help:
+            return ""
         return "명령을 이해하지 못했습니다. 전진, 정지, 좌회전, 주방, 추종 시작처럼 말씀해 주세요."
 
     def _normalize_text(self, text: str) -> str:

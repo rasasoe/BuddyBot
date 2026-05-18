@@ -137,6 +137,12 @@ class AssistantSettings(BaseModel):
     server_url: str
 
 
+class VoiceModeRequest(BaseModel):
+    enabled: bool
+    use_server: bool = False
+    server_url: str = ""
+
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -197,6 +203,7 @@ class PanelBridge:
     def __init__(self) -> None:
         self.follow_enabled = False
         self.assistant_enabled = False
+        self.voice_mode_enabled = False
         self.manual_avoidance_enabled = self._env_flag("BUDDYBOT_MANUAL_AVOIDANCE_ENABLED", False)
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
         self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))
@@ -220,6 +227,9 @@ class PanelBridge:
         self._manual_pub = None
         self._manual_avoidance_pub = None
         self._follow_pub = None
+        self._voice_enabled_pub = None
+        self._voice_assistant_pub = None
+        self._voice_server_url_pub = None
         self._estop_pub = None
         self._route_pub = None
         self._waypoint_goal_pub = None
@@ -345,6 +355,9 @@ class PanelBridge:
             self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", command_qos)
             self._manual_avoidance_pub = self._node.create_publisher(Bool, "/system/manual_avoidance_enabled", state_qos)
             self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", command_qos)
+            self._voice_enabled_pub = self._node.create_publisher(Bool, "/voice/enabled", state_qos)
+            self._voice_assistant_pub = self._node.create_publisher(Bool, "/voice/assistant_enabled", state_qos)
+            self._voice_server_url_pub = self._node.create_publisher(String, "/voice/server_url", state_qos)
             self._estop_pub = self._node.create_publisher(Bool, "/system/estop", command_qos)
             self._route_pub = self._node.create_publisher(String, "/nav/route_goal", command_qos)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", command_qos)
@@ -358,6 +371,7 @@ class PanelBridge:
             self._node.create_timer(0.1, self._manual_publish_timer)
             self._node.create_timer(0.2, self._mini_map_timer)
             self._publish_manual_avoidance_state()
+            self._publish_voice_mode_state()
 
             map_qos = 10
             if QoSProfile is not None:
@@ -961,6 +975,8 @@ class PanelBridge:
             "panel_static_dir": str(STATIC_DIR),
             "waypoint_file": str(WAYPOINT_FILE),
             "mode": "assistant" if self.assistant_enabled else "standalone",
+            "voice_mode_enabled": self.voice_mode_enabled,
+            "voice_server_mode": self.assistant_enabled,
             "follow_enabled": self.follow_enabled,
             "navigation_status": navigation_status,
             "ros2_connected": self.ros2_connected,
@@ -1557,6 +1573,34 @@ class PanelBridge:
         self._publish_manual_avoidance_state()
         return self.status()
 
+    def _publish_voice_mode_state(self) -> None:
+        if self._voice_enabled_pub is not None:
+            msg = Bool()
+            msg.data = bool(self.voice_mode_enabled)
+            self._voice_enabled_pub.publish(msg)
+        if self._voice_assistant_pub is not None:
+            msg = Bool()
+            msg.data = bool(self.assistant_enabled)
+            self._voice_assistant_pub.publish(msg)
+        if self._voice_server_url_pub is not None:
+            msg = String()
+            msg.data = self.server_url
+            self._voice_server_url_pub.publish(msg)
+
+    def set_voice_mode(self, enabled: bool, use_server: bool, server_url: str = "") -> Dict[str, Any]:
+        self.voice_mode_enabled = bool(enabled)
+        self.assistant_enabled = bool(use_server)
+        cleaned_server_url = (server_url or self.server_url).strip().rstrip("/")
+        if cleaned_server_url:
+            self.server_url = cleaned_server_url
+        self.last_command = (
+            f"voice_mode:{'on' if self.voice_mode_enabled else 'off'}:"
+            f"{'server' if self.assistant_enabled else 'local'}"
+        )
+        self._server_check_at = 0.0
+        self._publish_voice_mode_state()
+        return self.status()
+
     def trigger_estop(self) -> None:
         self.last_command = "estop"
         self.stop_mini_map(update_last_command=False)
@@ -1621,6 +1665,8 @@ class PanelBridge:
         self.assistant_enabled = enabled
         self.server_url = server_url.rstrip("/")
         self.last_command = f"assistant:{'on' if enabled else 'off'}"
+        self._server_check_at = 0.0
+        self._publish_voice_mode_state()
         return self.status()
 
     def _cached_server_connected(self) -> bool:
@@ -1642,6 +1688,10 @@ class PanelBridge:
             return False
 
     def handle_chat(self, message: str) -> str:
+        local_response = self._handle_local_command(message, allow_help=False)
+        if local_response:
+            return local_response
+
         if self.assistant_enabled and self.check_server():
             try:
                 response = requests.post(
@@ -1653,51 +1703,95 @@ class PanelBridge:
                 return response.json().get("response", "No response received.")
             except requests.RequestException:
                 pass
-        return self._handle_local_command(message)
+        if self.assistant_enabled:
+            return "서버컴 연결이 되지 않아 자유 대화는 잠시 사용할 수 없습니다. 전진, 정지, 추종, 주방 이동 같은 로컬 명령은 계속 사용할 수 있습니다."
+        return self._handle_local_command(message, allow_help=True)
 
-    def _handle_local_command(self, message: str) -> str:
+    def _strip_wake_prefix(self, message: str) -> str:
         text = message.lower().strip()
         wake_words = ("버디봇", "버디봇아", "버디", "buddybot", "buddy")
 
         if text in wake_words:
-            return "네, 부르셨어요?"
+            return ""
 
         for wake_word in wake_words:
             if text.startswith(f"{wake_word} "):
-                text = text[len(wake_word):].strip()
-                break
+                return text[len(wake_word):].strip()
             if text.startswith(f"{wake_word},"):
-                text = text[len(wake_word) + 1:].strip()
-                break
+                return text[len(wake_word) + 1:].strip()
+        return text
+
+    def _resolve_navigation_target(self, text: str) -> Optional[tuple[str, str]]:
+        data = self._load_waypoints()
+        waypoints = data.get("waypoints", {})
+        destinations = data.get("destinations", {})
+        lower_text = text.lower()
+
+        for name in waypoints:
+            if name and name.lower() in lower_text:
+                return ("waypoint", name)
+        for name in destinations:
+            if name and name.lower() in lower_text:
+                return ("destination", name)
+
+        aliases = [
+            ("kitchen", ("kitchen", "주방", "부엌")),
+            ("living_room_center", ("living room", "livingroom", "거실")),
+            ("charging_station", ("charge", "charger", "charging", "충전", "충전소", "도킹")),
+        ]
+        for canonical, words in aliases:
+            if any(word in lower_text for word in words):
+                if canonical in waypoints:
+                    return ("waypoint", canonical)
+                if canonical in destinations:
+                    return ("destination", canonical)
+                return ("waypoint", canonical)
+        return None
+
+    def _start_navigation_target(self, target_type: str, name: str) -> str:
+        if target_type == "destination":
+            result = self.run_destination(name)
+            return f"{result['name']} 경로 실행 요청을 보냈습니다."
+        result = self.go_waypoint(name)
+        return f"{result['name']} 체크포인트로 이동 요청을 보냈습니다."
+
+    def _handle_local_command(self, message: str, *, allow_help: bool = True) -> str:
+        raw_text = message.lower().strip()
+        wake_words = ("버디봇", "버디봇아", "버디", "buddybot", "buddy")
+
+        if raw_text in wake_words:
+            return "네, 부르셨어요?"
+
+        text = self._strip_wake_prefix(message)
 
         if not text:
             return "네, 말씀하세요."
 
         if any(keyword in text for keyword in ("stop", "halt", "brake", "정지", "멈춰", "스톱")):
             self.manual_command("stop", 0.0)
-            return "Standalone mode에서 로봇을 정지했습니다."
+            return "버디봇을 정지했습니다."
         if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self.manual_command("forward", 0.35)
-            return "Standalone mode에서 앞으로 이동합니다."
+            return "버디봇이 앞으로 이동합니다."
         if any(keyword in text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
             self.manual_command("backward", 0.35)
-            return "Standalone mode에서 뒤로 이동합니다."
+            return "버디봇이 뒤로 이동합니다."
         if any(keyword in text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로")):
             self.manual_command("strafe_left", 0.3)
-            return "Standalone mode에서 왼쪽으로 이동합니다."
+            return "버디봇이 왼쪽으로 이동합니다."
         if any(keyword in text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로")):
             self.manual_command("strafe_right", 0.3)
-            return "Standalone mode에서 오른쪽으로 이동합니다."
+            return "버디봇이 오른쪽으로 이동합니다."
         if any(keyword in text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):
             self.manual_command("rotate_left", 0.45)
-            return "Standalone mode에서 좌회전합니다."
+            return "버디봇이 좌회전합니다."
         if any(keyword in text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
             self.manual_command("rotate_right", 0.45)
-            return "Standalone mode에서 우회전합니다."
+            return "버디봇이 우회전합니다."
         if any(keyword in text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
             self.set_follow_enabled(False)
             return "사용자 추종을 중지했습니다."
-        if any(keyword in text for keyword in ("follow", "track user", "따라와", "추종 시작", "추종 켜")):
+        if any(keyword in text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
             self.set_follow_enabled(True)
             return "사용자 추종을 시작했습니다."
         if any(keyword in text for keyword in ("status", "state", "상태", "지금 상태")):
@@ -1708,25 +1802,17 @@ class PanelBridge:
                 f"버디봇은 온라인 상태입니다. 위치는 x={pose['x']}, y={pose['y']}, theta={pose['theta']}이고, "
                 f"카메라는 {'켜짐' if self.camera_available() else '대기'}, 맵은 {'준비됨' if self.map_available() else '대기'} 상태입니다."
             )
-        if "kitchen" in text or "주방" in text or "부엌" in text:
+
+        target = self._resolve_navigation_target(text)
+        if target is not None and any(keyword in text for keyword in ("move", "go", "이동", "가", "와", "경로", "주방", "부엌", "거실", "충전", "도킹")):
             try:
-                self.go_waypoint("kitchen")
+                return self._start_navigation_target(target[0], target[1])
             except ValueError as exc:
                 return str(exc)
-            return "주방으로 이동 요청을 보냈습니다."
-        if "living room" in text or "거실" in text:
-            try:
-                self.go_waypoint("living_room_center")
-            except ValueError as exc:
-                return str(exc)
-            return "거실로 이동 요청을 보냈습니다."
-        if "charge" in text or "충전" in text or "도킹" in text:
-            try:
-                self.go_waypoint("charging_station")
-            except ValueError as exc:
-                return str(exc)
-            return "충전 스테이션으로 이동 요청을 보냈습니다."
-        return "Standalone BuddyBot mode입니다. 버디봇이라고 부른 뒤 전진, 좌회전, 왼쪽 이동, 정지, 추종, 상태, 주방 같은 명령을 써보세요."
+
+        if not allow_help:
+            return ""
+        return "로컬 명령 모드입니다. 버디봇이라고 부른 뒤 전진, 좌회전, 왼쪽 이동, 정지, 추종, 상태, 주방 같은 명령을 써보세요."
 
     def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
@@ -2211,6 +2297,11 @@ def api_camera():
 @app.post("/api/assistant")
 def api_assistant(settings: AssistantSettings):
     return bridge.set_assistant(settings.enabled, settings.server_url)
+
+
+@app.post("/api/voice-mode")
+def api_voice_mode(settings: VoiceModeRequest):
+    return bridge.set_voice_mode(settings.enabled, settings.use_server, settings.server_url)
 
 
 @app.post("/api/chat")

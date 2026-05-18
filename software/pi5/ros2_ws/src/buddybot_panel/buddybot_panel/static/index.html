@@ -30,7 +30,8 @@
     .metric strong{display:block;margin-top:6px;font-size:.98rem;line-height:1.25}
     .chip-row{grid-template-columns:repeat(5,minmax(0,1fr))}
     .chip{display:flex;align-items:center;justify-content:center;padding:10px 12px;border-radius:999px;border:1px solid var(--line);background:#f3eee2;font-size:.88rem;font-weight:600;text-align:center}
-    .hero-actions,.chat-form{grid-template-columns:1fr auto}
+    .hero-actions{grid-template-columns:minmax(0,1fr) minmax(170px,220px) auto}
+    .chat-form{grid-template-columns:1fr auto}
     .mission-actions{grid-template-columns:1fr}
     .mission-actions.compact{grid-template-columns:minmax(0,1fr) minmax(220px,280px)}
     .control-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -99,7 +100,11 @@
         <p class="lead">미니맵 시작 버튼을 누르면 로봇은 제자리에서 유지되고, 라이브 주행 중 들어오는 LiDAR 스캔으로 로컬 미니맵만 계속 누적합니다. 그 상태에서 바로 체크포인트 저장과 이동을 이어갈 수 있습니다.</p>
         <div class="hero-actions">
           <input id="server-url" value="http://127.0.0.1:8000">
-          <button class="secondary" onclick="toggleAssistant()">어시스턴트 전환</button>
+          <select id="voice-server-mode">
+            <option value="local">로컬 명령</option>
+            <option value="server">서버컴 연동</option>
+          </select>
+          <button class="secondary" id="voice-mode-toggle-btn" onclick="toggleVoiceMode()">음성모드 ON</button>
         </div>
         <div class="chip-row">
           <div class="chip" id="build-chip">빌드: unknown</div>
@@ -279,7 +284,7 @@
             <p class="note">카메라 미리보기는 왼쪽 주행 카드 위로 이동했습니다. 여기서는 음성 입력과 채팅 로그를 집중해서 봅니다.</p>
           </div>
         </div>
-        <div class="callout"><strong>명령 콘솔</strong><div class="note">상태, 주방, 정지, 추종, 좌회전, 충전 같은 짧은 명령을 바로 보낼 수 있습니다. 브라우저 음성 입력과 브라우저 TTS도 여기서 계속 쓸 수 있습니다.</div></div>
+        <div class="callout"><strong>명령 콘솔</strong><div class="note" id="voice-mode-note">음성모드를 켜면 버디봇 전진, 버디봇 사용자 추종, 버디봇 정지, 버디봇 주방 이동 같은 명령을 바로 실행합니다. 서버컴 연동을 고르면 로봇 명령은 로컬에서 처리하고, 나머지 말은 서버컴으로 보내 자유 대화합니다.</div></div>
         <div class="dual"><button id="voice-btn">음성 입력</button><button class="secondary" onclick="sendChat('status')">상태 요약</button></div>
         <div class="chat-log" id="chat-log"></div>
         <div class="chat-form"><input id="chat-input" placeholder="예: 상태, 정지, 추종, 주방, 충전"><button onclick="sendChat()">전송</button></div>
@@ -297,6 +302,8 @@
     let routeSequence = [];
     let manualToggleDirection = null;
     let manualToggleTimer = null;
+    let voiceModeEnabled = false;
+    let voiceServerMode = false;
 
     const chatLog = document.getElementById("chat-log");
     const waypointSelect = document.getElementById("waypoint-select");
@@ -596,6 +603,8 @@
       const followStatus = data.follow_status || {};
       const followStateLabel = ({tracking:"추종 중", armed:"대기 중", idle:"유휴"})[(fusion.follow_state || (data.follow_enabled ? "armed" : "idle"))] || (fusion.follow_state || "유휴");
       assistantEnabled = data.mode === "assistant";
+      voiceModeEnabled = Boolean(data.voice_mode_enabled);
+      voiceServerMode = Boolean(data.voice_server_mode);
       lastStatus = data;
       lastMiniMapStatus = minimap;
       lastPose = data.pose || null;
@@ -612,6 +621,7 @@
         statusCard("맵", data.map_available ? "준비됨" : "대기 중"),
         statusCard("사람", data.person_detected ? `검출 ${data.person_age_sec}s` : "없음"),
         statusCard("추종", followStateLabel),
+        statusCard("음성", data.voice_mode_enabled ? (data.voice_server_mode ? "서버 연동" : "로컬 명령") : "꺼짐"),
         statusCard("내비게이션", data.navigation_status || "idle"),
         statusCard("안전", safetyState),
         statusCard("수동 조작", data.manual_active ? "동작 중" : "유휴"),
@@ -637,6 +647,7 @@
       }
       document.getElementById("camera-summary").textContent = !cameraEnabled ? "카메라를 다시 열면 수동 조작 위에서 바로 전방 영상을 볼 수 있습니다." : data.camera_available ? "/camera/image_raw 미리보기가 정상 동작 중입니다." : "카메라 프레임이 아직 없습니다. camera_node 와 USB 전원을 확인하세요.";
       document.getElementById("camera-note").textContent = data.pico_connected ? `Pico 상태가 최신입니다. 베이스 브리지가 살아 있고 검출기는 ${detector.backend || "waiting"} 상태입니다.` : "Pico 상태가 오래됐습니다. USB 시리얼 브리지를 확인하세요.";
+      syncVoiceModeUI(data);
       updateManualAvoidanceUI();
       document.getElementById("checkpoint-status-note").textContent = navigationReadyMessage(data);
       document.getElementById("minimap-note").textContent = minimap.active
@@ -646,6 +657,28 @@
           : minimap.map_available
             ? `저장된 미니맵이 준비되어 있습니다. 확인된 셀 ${minimap.known_cells || 0}개 기준으로 체크포인트 저장과 이동을 계속할 수 있습니다.`
             : "미니맵 시작 버튼을 누르면 로봇을 움직이지 않고 LiDAR 미니맵만 라이브로 누적합니다. 그 상태에서 바로 체크포인트를 저장하거나 이동할 수 있습니다.";
+    }
+
+    function syncVoiceModeUI(data = lastStatus){
+      const modeSelect = document.getElementById("voice-server-mode");
+      const toggleBtn = document.getElementById("voice-mode-toggle-btn");
+      const note = document.getElementById("voice-mode-note");
+      if(modeSelect && voiceModeEnabled){
+        modeSelect.value = voiceServerMode ? "server" : "local";
+      }
+      if(toggleBtn){
+        toggleBtn.textContent = voiceModeEnabled ? "음성모드 OFF" : "음성모드 ON";
+        toggleBtn.classList.toggle("accent", voiceModeEnabled);
+        toggleBtn.classList.toggle("secondary", !voiceModeEnabled);
+      }
+      if(note){
+        const serverLabel = data?.server_connected ? "서버컴 연결됨" : "서버컴 대기";
+        note.textContent = voiceModeEnabled
+          ? (voiceServerMode
+            ? `음성모드 ON, 서버컴 연동입니다. 로봇 명령은 즉시 실행하고 자유 대화는 서버컴으로 보냅니다. ${serverLabel}.`
+            : "음성모드 ON, 로컬 명령 모드입니다. 버디봇 전진, 정지, 사용자 추종, 주방 이동 같은 명령을 실행합니다.")
+          : "음성모드를 켜면 버디봇 전진, 버디봇 사용자 추종, 버디봇 정지, 버디봇 주방 이동 같은 명령을 바로 실행합니다.";
+      }
     }
 
     async function refreshMissionData(){
@@ -848,13 +881,24 @@
       await setFollow(true);
     }
 
-    async function toggleAssistant(){
+    async function setVoiceMode(enabled){
       try{
         const serverUrl = document.getElementById("server-url").value.trim();
-        const data = await apiJson("/api/assistant", {method:"POST", body:JSON.stringify({enabled:!assistantEnabled, server_url:serverUrl})});
-        addMsg("bot", data.mode === "assistant" ? "어시스턴트 모드를 켰습니다." : "독립 모드를 켰습니다.");
+        const useServer = document.getElementById("voice-server-mode").value === "server";
+        const data = await apiJson("/api/voice-mode", {method:"POST", body:JSON.stringify({enabled, use_server:useServer, server_url:serverUrl})});
+        addMsg("bot", enabled
+          ? (useServer ? "음성모드를 서버컴 연동으로 켰습니다. 로봇 명령은 로컬에서 먼저 실행합니다." : "음성모드를 로컬 명령으로 켰습니다.")
+          : "음성모드를 껐습니다.");
         await refreshStatus();
       }catch(error){ showError(error); }
+    }
+
+    async function toggleVoiceMode(){
+      await setVoiceMode(!voiceModeEnabled);
+    }
+
+    async function toggleAssistant(){
+      await toggleVoiceMode();
     }
 
     async function sendChat(textArg){
@@ -1050,6 +1094,11 @@
       }
     });
     waypointSelect.addEventListener("change", () => updateWaypointSelectionUI());
+    document.getElementById("voice-server-mode").addEventListener("change", () => {
+      if(voiceModeEnabled){
+        setVoiceMode(true);
+      }
+    });
 
     const voiceBtn = document.getElementById("voice-btn");
     document.getElementById("camera-feed").addEventListener("error", () => {
@@ -1067,7 +1116,10 @@
         sendChat();
       };
       recognition.onend = () => { voiceBtn.textContent = "음성 입력"; };
-      voiceBtn.onclick = () => {
+      voiceBtn.onclick = async () => {
+        if(!voiceModeEnabled){
+          await setVoiceMode(true);
+        }
         recognition.start();
         voiceBtn.textContent = "듣는 중...";
       };

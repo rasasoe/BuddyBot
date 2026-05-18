@@ -1,7 +1,7 @@
 # BuddyBot Current Field Handoff
 
-Last updated: 2026-05-12
-Repo baseline: current `main`
+Last updated: 2026-05-18
+Repo baseline: current working tree after follow-yaw/voice-mode update
 
 ## 2026-05-06 Fast Resume
 
@@ -43,6 +43,10 @@ Latest follow/manual motion baseline:
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_CENTER_DEADZONE=120`
   - `BUDDYBOT_FOLLOW_VISIBLE_FORWARD_MAX_HEIGHT=1.10`
   - This keeps the robot moving forward slowly when the person is visible and roughly centered, while LiDAR avoidance still handles close obstacles.
+- Follow forward now applies the same practical right-yaw trim direction used by manual forward, only while moving forward and the person is near center:
+  - `BUDDYBOT_FOLLOW_FORWARD_YAW_TRIM=-0.05`
+  - `BUDDYBOT_FOLLOW_FORWARD_YAW_TRIM_CENTER_DEADZONE=120`
+  - This is intended to cancel the field-observed slight left drift during follow forward motion without changing manual drive.
 - Near-field vision behavior:
   - turn suppression starts at bbox `area_ratio>=0.34` or `width_ratio>=0.50`
   - close anchor stop triggers at bbox `area_ratio>=0.56`, `width_ratio>=0.70`, or a top-line close anchor
@@ -90,6 +94,22 @@ Latest follow/manual motion baseline:
   - frontend `offset=0.26,gain=0.14`
   - backend `BUDDYBOT_MANUAL_STRAFE_LIMIT=0.46`
 
+Latest voice-mode baseline:
+- Presentation mode starts microphone listening, but robot voice command execution is gated off until the panel voice mode is turned on:
+  - `BUDDYBOT_VOICE_COMMAND_ENABLED=0`
+- The panel has a voice-mode selector:
+  - `로컬 명령`: execute robot commands locally.
+  - `서버컴 연동`: execute robot commands locally first, then send only unmatched/free conversation to `BUDDYBOT_AI_URL` / server URL.
+- Supported local commands include examples such as:
+  - `버디봇 전진`
+  - `버디봇 정지`
+  - `버디봇 사용자 추종`
+  - `버디봇 주방 이동`
+- The panel publishes voice runtime state to:
+  - `/voice/enabled`
+  - `/voice/assistant_enabled`
+  - `/voice/server_url`
+
 Why this matters:
 - Previous follow behavior could pulse `forward -> stop -> forward` because follow commands were only published when bbox messages arrived.
 - `command_mux_node` treats sources as stale after `0.5s`, so slow detector cadence could drop follow to idle between frames.
@@ -113,14 +133,14 @@ cd ~/BuddyBot
 bash scripts/start_presentation_mode.sh mapping
 ```
 
-Fast rebuild after the latest follow/panel-only change:
+Fast rebuild after the latest follow/panel/voice change:
 
 ```bash
 cd ~/BuddyBot
 git pull origin main
 cd ~/BuddyBot/software/pi5/ros2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install --packages-select buddybot_vision buddybot_panel
+colcon build --symlink-install --packages-select buddybot_vision buddybot_panel buddybot_voice
 source install/setup.bash
 cd ~/BuddyBot
 bash scripts/start_presentation_mode.sh mapping
