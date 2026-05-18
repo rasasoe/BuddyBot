@@ -18,6 +18,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   scripts/voice_interface.py
   DESTINATION lib/${PROJECT_NAME}
+  RENAME voice_interface
 )
 
 ament_package()
