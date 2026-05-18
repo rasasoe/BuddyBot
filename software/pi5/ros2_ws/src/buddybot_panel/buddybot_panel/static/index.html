@@ -304,6 +304,11 @@
     let manualToggleTimer = null;
     let voiceModeEnabled = false;
     let voiceServerMode = false;
+    let browserVoiceRecognition = null;
+    let browserVoiceListening = false;
+    let browserVoiceWakeUntil = 0;
+    let browserVoiceRestartTimer = null;
+    const BROWSER_VOICE_WAKE_MS = 10000;
 
     const chatLog = document.getElementById("chat-log");
     const waypointSelect = document.getElementById("waypoint-select");
@@ -351,6 +356,118 @@
       utterance.rate = 1;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
+    }
+
+    function normalizeVoiceTranscript(text){
+      return String(text || "")
+        .toLowerCase()
+        .replace(/[,.?!:;，。？！、~…]/g, " ")
+        .replace(/\s+/g, " ")
+        .split("버디 봇").join("버디봇")
+        .trim();
+    }
+
+    function voiceHasWakeWord(text){
+      const normalized = normalizeVoiceTranscript(text);
+      return ["버디봇아", "버디봇", "버디", "buddybot", "buddy"].some((word) => normalized === word || normalized.startsWith(`${word} `));
+    }
+
+    function setVoiceButtonLabel(text){
+      const voiceBtn = document.getElementById("voice-btn");
+      if(voiceBtn && !voiceBtn.disabled){
+        voiceBtn.textContent = text;
+      }
+    }
+
+    async function handleBrowserVoiceTranscript(transcript){
+      const normalized = normalizeVoiceTranscript(transcript);
+      if(!normalized){ return; }
+      const hasWake = voiceHasWakeWord(normalized);
+      if(hasWake){
+        browserVoiceWakeUntil = Date.now() + BROWSER_VOICE_WAKE_MS;
+        await sendChat(normalized);
+        return;
+      }
+      if(Date.now() <= browserVoiceWakeUntil){
+        browserVoiceWakeUntil = Date.now() + BROWSER_VOICE_WAKE_MS;
+        await sendChat(normalized);
+      }
+    }
+
+    function ensureBrowserVoiceRecognition(){
+      if(browserVoiceRecognition){
+        return browserVoiceRecognition;
+      }
+      if(!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)){
+        return null;
+      }
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = "ko-KR";
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        for(let index = event.resultIndex; index < event.results.length; index += 1){
+          if(event.results[index].isFinal){
+            handleBrowserVoiceTranscript(event.results[index][0].transcript).catch(showError);
+          }
+        }
+      };
+      recognition.onerror = (event) => {
+        if(event.error === "not-allowed" || event.error === "service-not-allowed"){
+          browserVoiceListening = false;
+          setVoiceButtonLabel("브라우저 마이크 차단됨");
+          addMsg("bot", "브라우저 마이크 권한이 막혔습니다. 주소창 권한에서 마이크를 허용하거나 Pi 마이크 로그를 확인하세요.");
+        }
+      };
+      recognition.onend = () => {
+        if(browserVoiceRestartTimer){
+          clearTimeout(browserVoiceRestartTimer);
+        }
+        if(browserVoiceListening && voiceModeEnabled){
+          browserVoiceRestartTimer = setTimeout(() => {
+            try{
+              recognition.start();
+              setVoiceButtonLabel("음성 대기 중");
+            }catch(error){
+              console.warn(error);
+            }
+          }, 350);
+        }else{
+          setVoiceButtonLabel(voiceModeEnabled ? "브라우저 음성 시작" : "음성 입력");
+        }
+      };
+      browserVoiceRecognition = recognition;
+      return recognition;
+    }
+
+    function startBrowserVoice(){
+      const recognition = ensureBrowserVoiceRecognition();
+      if(!recognition){
+        setVoiceButtonLabel("음성 미지원");
+        return;
+      }
+      browserVoiceListening = true;
+      try{
+        recognition.start();
+        setVoiceButtonLabel("음성 대기 중");
+      }catch(error){
+        setVoiceButtonLabel("음성 대기 중");
+      }
+    }
+
+    function stopBrowserVoice(){
+      browserVoiceListening = false;
+      browserVoiceWakeUntil = 0;
+      if(browserVoiceRestartTimer){
+        clearTimeout(browserVoiceRestartTimer);
+        browserVoiceRestartTimer = null;
+      }
+      if(browserVoiceRecognition){
+        try{ browserVoiceRecognition.stop(); }catch(error){ console.warn(error); }
+      }
+      setVoiceButtonLabel("음성 입력");
     }
 
     function bindManualHoldButtons(){
@@ -921,11 +1038,20 @@
           ? (useServer ? "음성모드를 서버컴 연동으로 켰습니다. 로봇 명령은 로컬에서 먼저 실행합니다." : "음성모드를 로컬 명령으로 켰습니다.")
           : "음성모드를 껐습니다.");
         await refreshStatus();
+        if(enabled){
+          startBrowserVoice();
+        }else{
+          stopBrowserVoice();
+        }
       }catch(error){ showError(error); }
     }
 
     async function toggleVoiceMode(){
-      await setVoiceMode(!voiceModeEnabled);
+      const nextEnabled = !voiceModeEnabled;
+      if(nextEnabled){
+        startBrowserVoice();
+      }
+      await setVoiceMode(nextEnabled);
     }
 
     async function toggleAssistant(){
@@ -1139,23 +1265,17 @@
       document.getElementById("camera-feed").removeAttribute("src");
     });
     if("webkitSpeechRecognition" in window || "SpeechRecognition" in window){
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.lang = "ko-KR";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        document.getElementById("chat-input").value = transcript;
-        sendChat();
-      };
-      recognition.onend = () => { voiceBtn.textContent = "음성 입력"; };
       voiceBtn.onclick = async () => {
         if(!voiceModeEnabled){
+          startBrowserVoice();
           await setVoiceMode(true);
+          return;
         }
-        recognition.start();
-        voiceBtn.textContent = "듣는 중...";
+        if(browserVoiceListening){
+          stopBrowserVoice();
+        }else{
+          startBrowserVoice();
+        }
       };
     }else{
       voiceBtn.disabled = true;

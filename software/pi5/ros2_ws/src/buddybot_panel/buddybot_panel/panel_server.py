@@ -230,6 +230,7 @@ class PanelBridge:
         self._voice_enabled_pub = None
         self._voice_assistant_pub = None
         self._voice_server_url_pub = None
+        self._voice_response_pub = None
         self._estop_pub = None
         self._route_pub = None
         self._waypoint_goal_pub = None
@@ -358,6 +359,7 @@ class PanelBridge:
             self._voice_enabled_pub = self._node.create_publisher(Bool, "/voice/enabled", state_qos)
             self._voice_assistant_pub = self._node.create_publisher(Bool, "/voice/assistant_enabled", state_qos)
             self._voice_server_url_pub = self._node.create_publisher(String, "/voice/server_url", state_qos)
+            self._voice_response_pub = self._node.create_publisher(String, "/voice/response", command_qos)
             self._estop_pub = self._node.create_publisher(Bool, "/system/estop", command_qos)
             self._route_pub = self._node.create_publisher(String, "/nav/route_goal", command_qos)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", command_qos)
@@ -1710,6 +1712,7 @@ class PanelBridge:
     def handle_chat(self, message: str) -> str:
         local_response = self._handle_local_command(message, allow_help=False)
         if local_response:
+            self._publish_voice_response(local_response)
             return local_response
 
         if self.assistant_enabled and self.check_server():
@@ -1720,16 +1723,38 @@ class PanelBridge:
                     timeout=15,
                 )
                 response.raise_for_status()
-                return response.json().get("response", "No response received.")
+                answer = response.json().get("response", "No response received.")
+                self._publish_voice_response(answer)
+                return answer
             except requests.RequestException:
                 pass
         if self.assistant_enabled:
-            return "서버컴 연결이 되지 않아 자유 대화는 잠시 사용할 수 없습니다. 전진, 정지, 추종, 주방 이동 같은 로컬 명령은 계속 사용할 수 있습니다."
-        return self._handle_local_command(message, allow_help=True)
+            answer = "서버컴 연결이 되지 않아 자유 대화는 잠시 사용할 수 없습니다. 전진, 정지, 추종, 주방 이동 같은 로컬 명령은 계속 사용할 수 있습니다."
+            self._publish_voice_response(answer)
+            return answer
+        answer = self._handle_local_command(message, allow_help=True)
+        self._publish_voice_response(answer)
+        return answer
+
+    def _publish_voice_response(self, text: str) -> None:
+        if not text or not self.voice_mode_enabled or self._voice_response_pub is None:
+            return
+        msg = String()
+        msg.data = text
+        self._voice_response_pub.publish(msg)
+
+    @staticmethod
+    def _normalize_panel_command_text(message: str) -> str:
+        text = message.lower().strip()
+        for mark in (",", ".", "?", "!", ":", ";", "，", "。", "？", "！", "、", "~", "…"):
+            text = text.replace(mark, " ")
+        text = " ".join(text.split())
+        text = text.replace("버디 봇", "버디봇")
+        return text
 
     def _strip_wake_prefix(self, message: str) -> str:
-        text = message.lower().strip()
-        wake_words = ("버디봇", "버디봇아", "버디", "buddybot", "buddy")
+        text = self._normalize_panel_command_text(message)
+        wake_words = ("버디봇아", "버디봇", "버디", "buddybot", "buddy")
 
         if text in wake_words:
             return ""
@@ -1737,8 +1762,8 @@ class PanelBridge:
         for wake_word in wake_words:
             if text.startswith(f"{wake_word} "):
                 return text[len(wake_word):].strip()
-            if text.startswith(f"{wake_word},"):
-                return text[len(wake_word) + 1:].strip()
+            if text.startswith(wake_word) and len(text) > len(wake_word):
+                return text[len(wake_word):].strip()
         return text
 
     def _resolve_navigation_target(self, text: str) -> Optional[tuple[str, str]]:
@@ -1776,11 +1801,11 @@ class PanelBridge:
         return f"{result['name']} 체크포인트로 이동 요청을 보냈습니다."
 
     def _handle_local_command(self, message: str, *, allow_help: bool = True) -> str:
-        raw_text = message.lower().strip()
-        wake_words = ("버디봇", "버디봇아", "버디", "buddybot", "buddy")
+        raw_text = self._normalize_panel_command_text(message)
+        wake_words = ("버디봇아", "버디봇", "버디", "buddybot", "buddy")
 
         if raw_text in wake_words:
-            return "네, 부르셨어요?"
+            return "네."
 
         text = self._strip_wake_prefix(message)
 
