@@ -202,8 +202,8 @@ class PanelBridge:
 
     def __init__(self) -> None:
         self.follow_enabled = False
-        self.assistant_enabled = False
-        self.voice_mode_enabled = False
+        self.assistant_enabled = self._env_flag("BUDDYBOT_VOICE_SERVER_MODE", False)
+        self.voice_mode_enabled = self._env_flag("BUDDYBOT_VOICE_COMMAND_ENABLED", True)
         self.manual_avoidance_enabled = self._env_flag("BUDDYBOT_MANUAL_AVOIDANCE_ENABLED", False)
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
         self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))

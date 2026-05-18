@@ -424,16 +424,22 @@ class VoiceInterface(Node):
         backend = self.recognition_backend
 
         if backend in ("google", "auto") and self.allow_online_recognition:
-            try:
-                transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
-                if transcript:
-                    self._publish_status(f"recognized:google:{transcript}")
-                return transcript
-            except Exception as exc:
-                self._publish_status(f"google_recognition_failed:{exc}")
-                self.get_logger().warn(f"Google recognition failed: {exc}")
+            if shutil.which("flac") is None:
+                self._publish_status("google_recognition_missing_flac")
+                self.get_logger().warn("Google recognition needs the flac command line tool; install it with: sudo apt install -y flac")
+                if backend == "google":
+                    return ""
+            else:
+                try:
+                    transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
+                    if transcript:
+                        self._publish_status(f"recognized:google:{transcript}")
+                    return transcript
+                except Exception as exc:
+                    self._publish_status(f"google_recognition_failed:{exc}")
+                    self.get_logger().warn(f"Google recognition failed: {exc}")
 
-        if backend in ("sphinx", "auto", "google"):
+        if backend in ("sphinx", "auto"):
             try:
                 transcript = recognizer.recognize_sphinx(audio).strip()
                 if transcript:

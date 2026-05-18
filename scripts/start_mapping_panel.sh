@@ -355,6 +355,11 @@ echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
 echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s wake ${VOICE_WAKE_TIMEOUT}s"
+if [[ "$VOICE_RECOGNITION_BACKEND" == "google" || "$VOICE_RECOGNITION_BACKEND" == "auto" ]]; then
+  if ! command -v flac >/dev/null 2>&1; then
+    echo "[mapping] warning: google voice recognition needs flac; install with: sudo apt install -y flac"
+  fi
+fi
 echo "[mapping] Pi speaker enabled: ${ENABLE_PI_SPEAKER}"
 echo "[mapping] Pi speaker volume target: ${SPEAKER_VOLUME_PERCENT}%"
 echo "[mapping] panel build: ${BUDDYBOT_PANEL_BUILD}"

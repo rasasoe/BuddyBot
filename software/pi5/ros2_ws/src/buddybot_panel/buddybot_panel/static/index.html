@@ -743,6 +743,9 @@
       if(status.startsWith("google_recognition_failed")){
         return `Google 인식 실패${suffix}`;
       }
+      if(status.startsWith("google_recognition_missing_flac")){
+        return `flac 설치 필요${suffix}`;
+      }
       if(status.startsWith("sphinx_failed")){
         return `Sphinx 인식 실패${suffix}`;
       }
