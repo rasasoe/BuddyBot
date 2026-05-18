@@ -85,22 +85,22 @@ class VoiceInterface(Node):
         self.speaker_rate_wpm = int(self.get_parameter("speaker_rate_wpm").value)
         self.buddybot_ai_url = str(self.get_parameter("buddybot_ai_url").value).rstrip("/")
 
-        self.response_pub = self.create_publisher(String, "/voice/response", 10)
-        self.command_pub = self.create_publisher(String, "/voice/command_status", 10)
-        self.manual_pub = self.create_publisher(Twist, "/cmd_vel_manual", 10)
-        self.follow_pub = self.create_publisher(Bool, "/follow/enabled", 10)
-        self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", 10)
-        self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", 10)
-        state_qos = QoSProfile(
+        status_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
         )
+        self.response_pub = self.create_publisher(String, "/voice/response", 10)
+        self.command_pub = self.create_publisher(String, "/voice/command_status", status_qos)
+        self.manual_pub = self.create_publisher(Twist, "/cmd_vel_manual", 10)
+        self.follow_pub = self.create_publisher(Bool, "/follow/enabled", 10)
+        self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", 10)
+        self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", 10)
         self.create_subscription(String, "/voice/text", self.text_callback, 10)
-        self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, state_qos)
-        self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, state_qos)
-        self.create_subscription(String, "/voice/server_url", self.voice_server_url_callback, state_qos)
+        self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, status_qos)
+        self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, status_qos)
+        self.create_subscription(String, "/voice/server_url", self.voice_server_url_callback, status_qos)
         self.create_subscription(String, "/voice/response", self.voice_response_callback, 10)
         self.create_subscription(String, "/system/command_status", self.system_status_callback, 10)
         self.create_subscription(String, "/nav/navigation_status", self.navigation_status_callback, 10)

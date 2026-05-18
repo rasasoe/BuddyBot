@@ -275,6 +275,8 @@ class PanelBridge:
         self._system_status = "idle"
         self._navigation_status = "idle"
         self._navigation_status_updates = 0
+        self._voice_command_status = "waiting"
+        self._voice_command_status_stamp: Optional[float] = None
         self._manual_active = False
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
@@ -392,6 +394,7 @@ class PanelBridge:
             self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
             self._node.create_subscription(String, "/system/command_status", self._status_callback, 10)
             self._node.create_subscription(String, "/nav/navigation_status", self._navigation_status_callback, 10)
+            self._node.create_subscription(String, "/voice/command_status", self._voice_command_status_callback, state_qos)
             self._node.create_subscription(String, "/system/safety_status", self._safety_status_callback, 10)
             self._node.create_subscription(Bool, "/system/safety_active", self._safety_active_callback, 10)
             if LaserScan is not None:
@@ -466,6 +469,11 @@ class PanelBridge:
         with self._lock:
             self._navigation_status = msg.data
             self._navigation_status_updates += 1
+
+    def _voice_command_status_callback(self, msg: String) -> None:
+        with self._lock:
+            self._voice_command_status = msg.data
+            self._voice_command_status_stamp = time.time()
 
     def _safety_status_callback(self, msg: String) -> None:
         self._safety_status = msg.data
@@ -987,6 +995,13 @@ class PanelBridge:
         with self._lock:
             navigation_status = self._navigation_status
             manual_avoidance_enabled = bool(self.manual_avoidance_enabled)
+            voice_command_status = self._voice_command_status
+            voice_command_status_stamp = self._voice_command_status_stamp
+        voice_command_age_sec = (
+            round(max(0.0, time.time() - voice_command_status_stamp), 2)
+            if voice_command_status_stamp is not None
+            else None
+        )
         return {
             "panel_build": PANEL_BUILD,
             "panel_static_dir": str(STATIC_DIR),
@@ -1001,6 +1016,8 @@ class PanelBridge:
             "server_connected": self._cached_server_connected(),
             "last_command": self.last_command,
             "system_status": self._system_status,
+            "voice_command_status": voice_command_status,
+            "voice_command_age_sec": voice_command_age_sec,
             "map_available": self.map_available(),
             "pose_available": pose is not None,
             "pose": pose,

@@ -730,6 +730,37 @@
       return `LiDAR 대기 중: /scan frame ${frames}, age ${age}.${scanError} 새 터미널에서 ros2 topic echo --qos-reliability best_effort --once /scan 과 lidar.log를 확인하세요.`;
     }
 
+    function robotVoiceStatusText(data){
+      const status = data.voice_command_status || "waiting";
+      const age = data.voice_command_age_sec;
+      const suffix = age == null ? "" : ` · ${age}s`;
+      if(status.startsWith("recognized:google:") || status.startsWith("recognized:sphinx:")){
+        return `인식됨: ${status.split(":").slice(2).join(":")}${suffix}`;
+      }
+      if(status.startsWith("heard:")){
+        return `들은 말: ${status.split(":").slice(2).join(":")}${suffix}`;
+      }
+      if(status.startsWith("google_recognition_failed")){
+        return `Google 인식 실패${suffix}`;
+      }
+      if(status.startsWith("sphinx_failed")){
+        return `Sphinx 인식 실패${suffix}`;
+      }
+      if(status.includes("microphone_ready")){
+        return `마이크 준비${suffix}`;
+      }
+      if(status.includes("microphone_unavailable") || status.includes("microphone_open_failed")){
+        return `마이크 오류${suffix}`;
+      }
+      if(status.includes("speaker_ready")){
+        return `스피커 준비${suffix}`;
+      }
+      if(status.includes("speaker_backend_missing")){
+        return `스피커 없음${suffix}`;
+      }
+      return `${status}${suffix}`;
+    }
+
     function ensureNavigationReady(actionLabel){
       if(!lastStatus?.ros2_connected){
         addMsg("bot", `${actionLabel}을(를) 보내기 전에 ROS2 연결이 먼저 살아 있어야 합니다.`);
@@ -769,6 +800,7 @@
         statusCard("사람", data.person_detected ? `검출 ${data.person_age_sec}s` : "없음"),
         statusCard("추종", followStateLabel),
         statusCard("음성", data.voice_mode_enabled ? (data.voice_server_mode ? "서버 연동" : "로컬 명령") : "꺼짐"),
+        statusCard("로봇 음성", robotVoiceStatusText(data)),
         statusCard("내비게이션", data.navigation_status || "idle"),
         statusCard("안전", safetyState),
         statusCard("수동 조작", data.manual_active ? "동작 중" : "유휴"),
