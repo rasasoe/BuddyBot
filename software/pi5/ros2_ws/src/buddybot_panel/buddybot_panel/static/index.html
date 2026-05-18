@@ -694,7 +694,7 @@
         modeSelect.value = voiceServerMode ? "server" : "local";
       }
       if(toggleBtn){
-        toggleBtn.textContent = voiceModeEnabled ? "음성모드 OFF" : "음성모드 ON";
+        toggleBtn.textContent = voiceModeEnabled ? "음성모드 끄기" : "음성모드 켜기";
         toggleBtn.classList.toggle("accent", voiceModeEnabled);
         toggleBtn.classList.toggle("secondary", !voiceModeEnabled);
       }
@@ -702,9 +702,9 @@
         const serverLabel = data?.server_connected ? "서버컴 연결됨" : "서버컴 대기";
         note.textContent = voiceModeEnabled
           ? (voiceServerMode
-            ? `음성모드 ON, 서버컴 연동입니다. 로봇 명령은 즉시 실행하고 자유 대화는 서버컴으로 보냅니다. ${serverLabel}.`
-            : "음성모드 ON, 로컬 명령 모드입니다. 버디봇 전진, 정지, 사용자 추종, 주방 이동 같은 명령을 실행합니다.")
-          : "음성모드를 켜면 버디봇 전진, 버디봇 사용자 추종, 버디봇 정지, 버디봇 주방 이동 같은 명령을 바로 실행합니다.";
+            ? `음성모드 켜짐, 서버컴 연동입니다. "버디봇"이라고 부르면 스피커가 "네"라고 답하고, 10초 안에 전진/정지/추종/주방 이동 같은 로봇 명령을 실행합니다. 자유 대화는 서버컴으로 보냅니다. ${serverLabel}.`
+            : `음성모드 켜짐, 로컬 명령 모드입니다. "버디봇"이라고 부르면 스피커가 "네"라고 답하고, 10초 안에 전진/정지/사용자 추종/주방 이동 같은 명령을 실행합니다.`)
+          : `음성모드를 켜면 "버디봇 전진"처럼 바로 말하거나, "버디봇"으로 부른 뒤 "전진"만 말해도 실행합니다.`;
       }
     }
 

@@ -45,7 +45,7 @@ class VoiceInterface(Node):
         self.declare_parameter("recognition_backend", "sphinx")
         self.declare_parameter("recognition_language", "ko-KR")
         self.declare_parameter("phrase_time_limit", 4.0)
-        self.declare_parameter("wake_timeout_sec", 8.0)
+        self.declare_parameter("wake_timeout_sec", 10.0)
         self.declare_parameter(
             "wake_words",
             ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
@@ -209,13 +209,13 @@ class VoiceInterface(Node):
         for wake_word in self.wake_words:
             if text == wake_word:
                 self._last_wake_time = time.time()
-                return "네, 부르셨어요?"
+                return "네."
             if text.startswith(f"{wake_word} "):
                 command_text = text[len(wake_word):].strip()
                 wake_triggered = True
                 break
-            if text.startswith(f"{wake_word},"):
-                command_text = text[len(wake_word) + 1:].strip()
+            if text.startswith(wake_word) and len(text) > len(wake_word):
+                command_text = text[len(wake_word):].strip()
                 wake_triggered = True
                 break
 
@@ -287,9 +287,12 @@ class VoiceInterface(Node):
 
     def _normalize_text(self, text: str) -> str:
         cleaned = text.lower().strip()
+        for mark in (",", ".", "?", "!", ":", ";", "，", "。", "？", "！", "、", "~", "…"):
+            cleaned = cleaned.replace(mark, " ")
         for prefix in ("hey ", "ok ", "okay ", "저기 ", "야 "):
             if cleaned.startswith(prefix):
                 cleaned = cleaned[len(prefix):].strip()
+        cleaned = " ".join(cleaned.split())
         return cleaned
 
     def _build_status_response(self) -> str:
