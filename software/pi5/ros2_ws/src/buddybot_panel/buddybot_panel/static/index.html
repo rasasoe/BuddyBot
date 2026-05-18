@@ -28,7 +28,7 @@
     .metric{border:1px solid var(--line);border-radius:18px;padding:12px 13px;background:linear-gradient(180deg,#fffdf9 0%,#f6f0e4 100%)}
     .metric span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
     .metric strong{display:block;margin-top:6px;font-size:.98rem;line-height:1.25}
-    .chip-row{grid-template-columns:repeat(5,minmax(0,1fr))}
+    .chip-row{grid-template-columns:repeat(6,minmax(0,1fr))}
     .chip{display:flex;align-items:center;justify-content:center;padding:10px 12px;border-radius:999px;border:1px solid var(--line);background:#f3eee2;font-size:.88rem;font-weight:600;text-align:center}
     .hero-actions{grid-template-columns:minmax(0,1fr) minmax(170px,220px) auto}
     .chat-form{grid-template-columns:1fr auto}
@@ -114,6 +114,7 @@
           <div class="chip" id="server-chip">서버: 오프라인</div>
           <div class="chip" id="fusion-chip">운용 준비: 확인 중</div>
           <div class="chip" id="follow-chip">추종: off</div>
+          <div class="chip" id="browser-voice-chip">브라우저 음성: 대기</div>
         </div>
       </article>
       <article class="card stack">
@@ -377,6 +378,10 @@
       if(voiceBtn && !voiceBtn.disabled){
         voiceBtn.textContent = text;
       }
+      const chip = document.getElementById("browser-voice-chip");
+      if(chip){
+        chip.textContent = `브라우저 음성: ${text}`;
+      }
     }
 
     async function handleBrowserVoiceTranscript(transcript){
@@ -418,7 +423,7 @@
         if(event.error === "not-allowed" || event.error === "service-not-allowed"){
           browserVoiceListening = false;
           setVoiceButtonLabel("브라우저 마이크 차단됨");
-          addMsg("bot", "브라우저 마이크 권한이 막혔습니다. 주소창 권한에서 마이크를 허용하거나 Pi 마이크 로그를 확인하세요.");
+          addMsg("bot", "브라우저 마이크 권한이 막혔습니다. 주소창 마이크 권한을 허용하세요. http 주소에서 막히면 Pi 브라우저의 http://127.0.0.1:8090 또는 HTTPS/Tailscale Serve 주소로 열어야 합니다.");
         }
       };
       recognition.onend = () => {
@@ -1280,6 +1285,7 @@
     }else{
       voiceBtn.disabled = true;
       voiceBtn.textContent = "음성 미지원";
+      setVoiceButtonLabel("음성 미지원");
     }
 
     async function refreshAll(){
