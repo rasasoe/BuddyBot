@@ -204,7 +204,7 @@ wait_for_best_effort_message() {
 
 scan_streaming() {
   local timeout="${1:-8}"
-  wait_for_best_effort_message "/scan" "$timeout" || scan_available
+  wait_for_best_effort_message "/scan" "$timeout"
 }
 
 camera_streaming() {

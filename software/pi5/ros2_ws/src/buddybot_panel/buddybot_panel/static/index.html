@@ -9,7 +9,7 @@
     *{box-sizing:border-box}
     body{margin:0;color:var(--ink);font-family:"IBM Plex Sans","Noto Sans KR","Segoe UI",sans-serif;background:radial-gradient(circle at top left,rgba(20,104,93,.14),transparent 24%),radial-gradient(circle at bottom right,rgba(165,88,44,.14),transparent 28%),linear-gradient(180deg,#f7f4ee 0%,#ece5d8 100%)}
     .shell{width:min(1560px,calc(100% - 28px));margin:0 auto;padding:22px 0 30px}
-    .stack,.status-grid,.button-grid,.dual,.triple,.panel-list,.chat-log,.chip-row,.hero-actions,.mission-actions,.form-grid,.chat-form,.checkpoint-grid,.button-strip,.checkpoint-shell{display:grid;gap:12px}
+    .stack,.status-grid,.button-grid,.dual,.triple,.panel-list,.chat-log,.chip-row,.hero-actions,.mission-actions,.form-grid,.chat-form,.checkpoint-grid,.button-strip,.checkpoint-shell,.minimap-actions{display:grid;gap:12px}
     .hero{display:grid;grid-template-columns:1.35fr .95fr;gap:16px;margin-bottom:16px}
     .main{display:grid;grid-template-columns:minmax(340px,430px) minmax(0,1fr);gap:16px;align-items:start}
     .main > :nth-child(1){grid-column:1;grid-row:1}
@@ -40,8 +40,9 @@
     .checkpoint-grid{grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr)}
     .checkpoint-shell{padding:14px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,#fffefb 0%,#f4ecde 100%)}
     .button-strip{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .minimap-actions{grid-template-columns:repeat(4,minmax(0,1fr))}
     input,select{width:100%;padding:12px 14px;border-radius:15px;border:1px solid var(--line);background:#fffdf8;font:inherit;color:var(--ink)}
-    button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent);line-height:1.25;text-align:center}
+    button{border:0;border-radius:15px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--accent);line-height:1.25;text-align:center;min-width:0;white-space:normal;overflow-wrap:anywhere}
     button:hover{background:var(--accent-strong)}
     button.secondary{background:#e6ded0;color:var(--ink)}
     button.secondary:hover{background:#d8cdbb}
@@ -87,8 +88,9 @@
     .callout{border:1px solid var(--line);border-radius:18px;padding:13px 14px;background:linear-gradient(180deg,#fffefb 0%,#f6eee1 100%)}
     .callout strong{display:block;margin-bottom:6px}
     @media (max-width:1280px){.hero,.main{grid-template-columns:1fr}.main > :nth-child(1),.main > :nth-child(2),.main > :nth-child(3){grid-column:auto;grid-row:auto}.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:1180px){.minimap-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media (max-width:1024px){.control-pair,.manual-aux,.mission-actions.compact,.button-strip,.checkpoint-grid{grid-template-columns:1fr}}
-    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.control-pair,.manual-aux,.button-strip{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
+    @media (max-width:860px){.status-grid,.chip-row,.dual,.triple,.chat-form,.hero-actions,.panel-item .actions,.panel-item.route .actions,.control-pair,.manual-aux,.button-strip,.minimap-actions{grid-template-columns:1fr}.shell{width:min(calc(100% - 16px),1560px)}#map-canvas{height:420px}.map-wrap{min-height:420px}.manual-button,.manual-stop{min-height:78px}}
   </style>
 </head>
 <body>
@@ -218,11 +220,9 @@
         <div class="callout">
           <strong>라이브 미니맵</strong>
           <div class="note" id="minimap-note">LiDAR 기반 로컬 미니맵을 라이브로 누적합니다. 체크포인트 이동은 미니맵 시작 없이도 가능하고, 미니맵은 지도 누적용 보조 기능입니다.</div>
-          <div class="control-pair">
+          <div class="minimap-actions">
             <button class="accent" onclick="startMiniMap()">미니맵 시작</button>
             <button class="secondary" onclick="stopMiniMap()">미니맵 정지</button>
-          </div>
-          <div class="control-pair">
             <button class="secondary" onclick="refreshMiniMapStatus()">미니맵 새로고침</button>
             <button class="danger" onclick="resetMiniMap()">미니맵 초기화</button>
           </div>
@@ -583,6 +583,31 @@
       return "체크포인트 이동은 미니맵 시작 없이도 가능하지만, 현재 위치가 아직 없어 출발할 수 없습니다.";
     }
 
+    function lidarStatusText(data){
+      const frames = Number(data.scan_frames_received || 0);
+      const summary = data.scan_summary || {};
+      const valid = Number(summary.valid_points || 0);
+      if(data.scan_available){
+        return `정상 ${data.scan_age_sec}s · ${frames}프레임 · ${valid}점`;
+      }
+      if(frames > 0){
+        return `stale · ${frames}프레임`;
+      }
+      return "대기 중 · 0프레임";
+    }
+
+    function lidarDebugText(data){
+      const frames = Number(data.scan_frames_received || 0);
+      const summary = data.scan_summary || {};
+      const valid = Number(summary.valid_points || 0);
+      const age = data.scan_age_sec ?? "없음";
+      if(data.scan_available){
+        return `LiDAR live: age ${age}s, frames ${frames}, valid points ${valid}.`;
+      }
+      const scanError = data.last_scan_error ? ` last error: ${data.last_scan_error}` : "";
+      return `LiDAR 대기 중: /scan frame ${frames}, age ${age}.${scanError} 새 터미널에서 ros2 topic echo --qos-reliability best_effort --once /scan 과 lidar.log를 확인하세요.`;
+    }
+
     function ensureNavigationReady(actionLabel){
       if(!lastStatus?.ros2_connected){
         addMsg("bot", `${actionLabel}을(를) 보내기 전에 ROS2 연결이 먼저 살아 있어야 합니다.`);
@@ -614,7 +639,7 @@
       document.getElementById("status-box").innerHTML = [
         statusCard("ROS2", data.ros2_connected ? "연결됨" : "오프라인"),
         statusCard("Pico", picoState),
-        statusCard("LiDAR", data.scan_available ? `정상 ${data.scan_age_sec}s` : "대기 중"),
+        statusCard("LiDAR", lidarStatusText(data)),
         statusCard("카메라", data.camera_available ? `정상 ${data.camera_age_sec}s` : "대기 중"),
         statusCard("검출기", detectorLabel),
         statusCard("위치", data.pose ? `${data.pose.x}, ${data.pose.y}` : "없음"),
@@ -634,7 +659,7 @@
       document.getElementById("follow-chip").textContent = `추종: ${data.follow_enabled ? "켜짐" : "꺼짐"}`;
       document.getElementById("pose-chip").textContent = data.pose ? `위치: x=${data.pose.x}, y=${data.pose.y}, th=${data.pose.theta} (${data.pose.source})` : "위치: 없음";
       document.getElementById("camera-chip").textContent = data.camera_available ? `카메라: 정상 (${data.camera_age_sec}s 전)` : "카메라: 대기 중";
-      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 라이브 미니맵, 체크포인트 이동을 바로 시작할 수 있습니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"}`;
+      document.getElementById("system-note").textContent = fusion.operator_ready ? "주행, 라이브 미니맵, 체크포인트 이동을 바로 시작할 수 있습니다." : `막히는 항목: ${(fusion.blockers || []).join(", ") || "토픽 대기 중"} | ${lidarDebugText(data)}`;
       document.getElementById("fusion-note").textContent = fusion.fusion_ready
         ? `카메라, LiDAR, 맵, 위치가 모두 준비되었습니다. 사람 검출기는 ${detector.backend || "unknown"} 백엔드로 동작 중입니다.`
         : `운용은 가능하지만 아직 비어 있는 항목이 있습니다. 부족한 항목: ${(fusion.blockers || []).join(", ") || "unknown"} | 검출기: ${detector.backend || "waiting"} (${detector.reason || "waiting"})`;
@@ -651,7 +676,9 @@
       updateManualAvoidanceUI();
       document.getElementById("checkpoint-status-note").textContent = navigationReadyMessage(data);
       document.getElementById("minimap-note").textContent = minimap.active
-        ? `라이브 미니맵 누적 중: 셀 ${minimap.known_cells || 0} | 프레임 ${minimap.frames || 0} | 이동거리 ${minimap.distance_m || 0}m | 체크포인트 이동은 이 버튼과 무관하게 계속 가능합니다.`
+        ? (data.scan_available
+          ? `라이브 미니맵 누적 중: 셀 ${minimap.known_cells || 0} | 미니맵 프레임 ${minimap.frames || 0} | /scan ${data.scan_frames_received || 0}프레임 | 이동거리 ${minimap.distance_m || 0}m | 체크포인트 이동은 이 버튼과 무관하게 계속 가능합니다.`
+          : `미니맵은 켜져 있지만 LiDAR /scan 메시지가 아직 안 들어옵니다. ${lidarDebugText(data)}`)
         : minimap.completed
           ? `미니맵 누적이 멈춘 상태입니다. 확인된 셀 ${minimap.known_cells || 0}, 프레임 ${minimap.frames || 0}. 이 맵 위에서 체크포인트를 저장하고 이동할 수 있습니다.`
           : minimap.map_available

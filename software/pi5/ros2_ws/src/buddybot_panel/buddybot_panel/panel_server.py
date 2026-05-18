@@ -257,7 +257,7 @@ class PanelBridge:
         self._latest_map: Optional[Dict[str, Any]] = None
         self._latest_scan_map: Optional[Dict[str, Any]] = None
         self._latest_scan_stamp: Optional[float] = None
-        self._latest_scan_summary: Optional[Dict[str, float]] = None
+        self._latest_scan_summary: Optional[Dict[str, Any]] = None
         self._scan_frames_received = 0
         self._latest_camera_jpeg: Optional[bytes] = None
         self._latest_camera_stamp: Optional[float] = None
@@ -747,16 +747,31 @@ class PanelBridge:
             angle += float(msg.angle_increment)
         return min(values) if values else float("inf")
 
-    def _summarize_scan(self, msg: LaserScan) -> Dict[str, float]:
+    @staticmethod
+    def _json_distance(value: float) -> Optional[float]:
+        value = float(value)
+        return round(value, 3) if math.isfinite(value) else None
+
+    @staticmethod
+    def _finite_scan_value(summary: Optional[Dict[str, Any]], key: str) -> float:
+        if summary is None:
+            return float("inf")
+        try:
+            value = float(summary.get(key, float("inf")))
+        except (TypeError, ValueError):
+            return float("inf")
+        return value if math.isfinite(value) else float("inf")
+
+    def _summarize_scan(self, msg: LaserScan) -> Dict[str, Any]:
         center_deg = self._scan_forward_center_deg
         return {
-            "front_min": round(self._scan_sector_min(msg, center_deg, -30.0, 30.0), 3),
-            "front_left_min": round(self._scan_sector_min(msg, center_deg, 30.0, 72.0), 3),
-            "front_right_min": round(self._scan_sector_min(msg, center_deg, -72.0, -30.0), 3),
-            "left_min": round(self._scan_sector_min(msg, center_deg, 72.0, 136.0), 3),
-            "right_min": round(self._scan_sector_min(msg, center_deg, -136.0, -72.0), 3),
-            "rear_min": round(self._scan_sector_min(msg, center_deg + 180.0, -30.0, 30.0), 3),
-            "valid_points": float(
+            "front_min": self._json_distance(self._scan_sector_min(msg, center_deg, -30.0, 30.0)),
+            "front_left_min": self._json_distance(self._scan_sector_min(msg, center_deg, 30.0, 72.0)),
+            "front_right_min": self._json_distance(self._scan_sector_min(msg, center_deg, -72.0, -30.0)),
+            "left_min": self._json_distance(self._scan_sector_min(msg, center_deg, 72.0, 136.0)),
+            "right_min": self._json_distance(self._scan_sector_min(msg, center_deg, -136.0, -72.0)),
+            "rear_min": self._json_distance(self._scan_sector_min(msg, center_deg + 180.0, -30.0, 30.0)),
+            "valid_points": int(
                 sum(
                     1
                     for raw_range in msg.ranges
@@ -994,6 +1009,7 @@ class PanelBridge:
             "scan_available": self.scan_available(),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
+            "scan_summary": self.scan_summary(),
             "ros_init_error": self._ros_init_error,
             "spin_error": self._spin_error,
             "spin_thread_alive": bool(self._spin_thread and self._spin_thread.is_alive()),
@@ -1054,6 +1070,10 @@ class PanelBridge:
     def scan_frames_received(self) -> int:
         with self._lock:
             return int(self._scan_frames_received)
+
+    def scan_summary(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            return dict(self._latest_scan_summary) if self._latest_scan_summary is not None else None
 
     def detector_status(self, stale_after_sec: float = 4.0) -> Dict[str, Any]:
         with self._lock:
@@ -1275,9 +1295,9 @@ class PanelBridge:
         effective_front = None
         if scan_summary is not None:
             front_values = [
-                float(scan_summary.get("front_min", float("inf"))),
-                float(scan_summary.get("front_left_min", float("inf"))),
-                float(scan_summary.get("front_right_min", float("inf"))),
+                self._finite_scan_value(scan_summary, "front_min"),
+                self._finite_scan_value(scan_summary, "front_left_min"),
+                self._finite_scan_value(scan_summary, "front_right_min"),
             ]
             finite_front = [value for value in front_values if math.isfinite(value)]
             if finite_front:
@@ -1371,11 +1391,11 @@ class PanelBridge:
             return
 
         now = time.time()
-        front_min = float(scan_summary.get("front_min", float("inf")))
-        front_left_min = float(scan_summary.get("front_left_min", float("inf")))
-        front_right_min = float(scan_summary.get("front_right_min", float("inf")))
-        left_min = float(scan_summary.get("left_min", float("inf")))
-        right_min = float(scan_summary.get("right_min", float("inf")))
+        front_min = self._finite_scan_value(scan_summary, "front_min")
+        front_left_min = self._finite_scan_value(scan_summary, "front_left_min")
+        front_right_min = self._finite_scan_value(scan_summary, "front_right_min")
+        left_min = self._finite_scan_value(scan_summary, "left_min")
+        right_min = self._finite_scan_value(scan_summary, "right_min")
         effective_front = min(front_min, front_left_min, front_right_min)
         open_left = min(left_min, front_left_min)
         open_right = min(right_min, front_right_min)
