@@ -231,6 +231,7 @@ class PanelBridge:
         self._voice_assistant_pub = None
         self._voice_server_url_pub = None
         self._voice_response_pub = None
+        self._voice_manual_override_pub = None
         self._estop_pub = None
         self._route_pub = None
         self._waypoint_goal_pub = None
@@ -362,6 +363,7 @@ class PanelBridge:
             self._voice_assistant_pub = self._node.create_publisher(Bool, "/voice/assistant_enabled", state_qos)
             self._voice_server_url_pub = self._node.create_publisher(String, "/voice/server_url", state_qos)
             self._voice_response_pub = self._node.create_publisher(String, "/voice/response", command_qos)
+            self._voice_manual_override_pub = self._node.create_publisher(String, "/voice/manual_override", command_qos)
             self._estop_pub = self._node.create_publisher(Bool, "/system/estop", command_qos)
             self._route_pub = self._node.create_publisher(String, "/nav/route_goal", command_qos)
             self._waypoint_goal_pub = self._node.create_publisher(String, "/nav/waypoint_goal", command_qos)
@@ -1671,11 +1673,12 @@ class PanelBridge:
             linear_x = self._manual_linear_x
             linear_y = self._manual_linear_y
             angular_z = self._manual_angular_z
+        if not active:
+            return
         twist = Twist()
-        if active:
-            twist.linear.x = linear_x
-            twist.linear.y = linear_y
-            twist.angular.z = angular_z
+        twist.linear.x = linear_x
+        twist.linear.y = linear_y
+        twist.angular.z = angular_z
         self._manual_pub.publish(twist)
 
     def get_map_payload(self) -> Dict[str, Any]:
@@ -1759,6 +1762,13 @@ class PanelBridge:
         msg = String()
         msg.data = text
         self._voice_response_pub.publish(msg)
+
+    def _publish_voice_manual_override(self, reason: str) -> None:
+        if not self.ros2_connected or self._voice_manual_override_pub is None:
+            return
+        msg = String()
+        msg.data = reason
+        self._voice_manual_override_pub.publish(msg)
 
     @staticmethod
     def _normalize_panel_command_text(message: str) -> str:
@@ -1878,6 +1888,7 @@ class PanelBridge:
 
     def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
+        self._publish_voice_manual_override(f"panel:{direction}")
         self.follow_enabled = False
         self._publish_follow_state(False)
         self.cancel_navigation()

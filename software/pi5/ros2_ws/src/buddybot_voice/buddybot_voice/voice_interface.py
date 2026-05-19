@@ -47,9 +47,13 @@ class VoiceInterface(Node):
         self.declare_parameter("recognition_language", "ko-KR")
         self.declare_parameter("phrase_time_limit", 2.6)
         self.declare_parameter("wake_timeout_sec", 10.0)
-        self.declare_parameter("pause_threshold", 0.45)
+        self.declare_parameter("pause_threshold", 0.55)
         self.declare_parameter("non_speaking_duration", 0.25)
-        self.declare_parameter("dynamic_energy_threshold", True)
+        self.declare_parameter("dynamic_energy_threshold", False)
+        self.declare_parameter("energy_threshold", 180.0)
+        self.declare_parameter("max_energy_threshold", 450.0)
+        self.declare_parameter("ambient_adjust_duration", 0.4)
+        self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter(
             "wake_words",
             ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
@@ -77,6 +81,10 @@ class VoiceInterface(Node):
         self.pause_threshold = float(self.get_parameter("pause_threshold").value)
         self.non_speaking_duration = float(self.get_parameter("non_speaking_duration").value)
         self.dynamic_energy_threshold = bool(self.get_parameter("dynamic_energy_threshold").value)
+        self.energy_threshold = float(self.get_parameter("energy_threshold").value)
+        self.max_energy_threshold = float(self.get_parameter("max_energy_threshold").value)
+        self.ambient_adjust_duration = float(self.get_parameter("ambient_adjust_duration").value)
+        self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
         self.wake_words = [
             item.strip().lower()
             for item in self.get_parameter("wake_words").value
@@ -109,6 +117,7 @@ class VoiceInterface(Node):
         self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, status_qos)
         self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, status_qos)
         self.create_subscription(String, "/voice/server_url", self.voice_server_url_callback, status_qos)
+        self.create_subscription(String, "/voice/manual_override", self.manual_override_callback, 10)
         self.create_subscription(String, "/voice/response", self.voice_response_callback, 10)
         self.create_subscription(String, "/system/command_status", self.system_status_callback, 10)
         self.create_subscription(String, "/nav/navigation_status", self.navigation_status_callback, 10)
@@ -120,11 +129,13 @@ class VoiceInterface(Node):
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
         self._last_wake_time = 0.0
+        self._manual_override_until = 0.0
         self._system_status = "idle"
         self._navigation_status = "idle"
 
         self._recognizer = sr.Recognizer() if sr is not None else None
         if self._recognizer is not None:
+            self._recognizer.energy_threshold = self.energy_threshold
             self._recognizer.pause_threshold = self.pause_threshold
             self._recognizer.non_speaking_duration = self.non_speaking_duration
             self._recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
@@ -144,7 +155,9 @@ class VoiceInterface(Node):
         self.get_logger().info(
             f"Recognition: backend={self.recognition_backend}, language={self.recognition_language}, "
             f"online={'enabled' if self.allow_online_recognition else 'disabled'}, "
-            f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s"
+            f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
+            f"energy={self.energy_threshold:.0f}, max_energy={self.max_energy_threshold:.0f}, "
+            f"dynamic_energy={self.dynamic_energy_threshold}"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
         self.get_logger().info(
@@ -177,6 +190,8 @@ class VoiceInterface(Node):
 
     def voice_enabled_callback(self, msg: Bool) -> None:
         self.command_enabled = bool(msg.data)
+        if not self.command_enabled:
+            self._clear_manual_motion()
         state = "enabled" if self.command_enabled else "disabled"
         self._publish_status(f"voice_mode:{state}")
         self.get_logger().info(f"Voice command processing {state}")
@@ -194,6 +209,12 @@ class VoiceInterface(Node):
             return
         self.buddybot_ai_url = server_url
         self._publish_status(f"voice_server_url:{server_url}")
+
+    def manual_override_callback(self, msg: String) -> None:
+        reason = msg.data.strip() or "manual"
+        self._manual_override_until = time.time() + max(0.0, self.manual_override_ignore_sec)
+        self._clear_manual_motion()
+        self._publish_status(f"manual_override:{reason}")
 
     def system_status_callback(self, msg: String) -> None:
         self._system_status = msg.data
@@ -218,6 +239,10 @@ class VoiceInterface(Node):
 
         if not self.command_enabled:
             self._publish_status(f"ignored:{source}:voice_disabled")
+            return
+
+        if source == "microphone" and time.time() < self._manual_override_until:
+            self._publish_status(f"ignored:{source}:manual_override")
             return
 
         self._publish_status(f"heard:{source}:{cleaned}")
@@ -420,8 +445,11 @@ class VoiceInterface(Node):
 
         try:
             with microphone as source:
-                recognizer.adjust_for_ambient_noise(source, duration=1.0)
-                self._publish_status("microphone_ready")
+                if self.ambient_adjust_duration > 0.0:
+                    recognizer.adjust_for_ambient_noise(source, duration=self.ambient_adjust_duration)
+                    if self.max_energy_threshold > 0.0 and recognizer.energy_threshold > self.max_energy_threshold:
+                        recognizer.energy_threshold = self.max_energy_threshold
+                self._publish_status(f"microphone_ready:energy={recognizer.energy_threshold:.0f}")
                 while not self._audio_stop.is_set():
                     try:
                         audio = recognizer.listen(
@@ -461,6 +489,8 @@ class VoiceInterface(Node):
                 except Exception as exc:
                     self._publish_status(f"google_recognition_failed:{exc}")
                     self.get_logger().warn(f"Google recognition failed: {exc}")
+                    if backend == "google":
+                        return ""
 
         if backend in ("sphinx", "auto"):
             try:
