@@ -62,6 +62,7 @@ class VoiceInterface(Node):
         self.declare_parameter("speaker_voice_ko", "ko")
         self.declare_parameter("speaker_voice_en", "en-us")
         self.declare_parameter("speaker_rate_wpm", 180)
+        self.declare_parameter("speak_command_responses", False)
         self.declare_parameter("buddybot_ai_url", "http://127.0.0.1:8000")
 
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
@@ -89,6 +90,7 @@ class VoiceInterface(Node):
         self.speaker_voice_ko = str(self.get_parameter("speaker_voice_ko").value).strip() or "ko"
         self.speaker_voice_en = str(self.get_parameter("speaker_voice_en").value).strip() or "en-us"
         self.speaker_rate_wpm = int(self.get_parameter("speaker_rate_wpm").value)
+        self.speak_command_responses = bool(self.get_parameter("speak_command_responses").value)
         self.buddybot_ai_url = str(self.get_parameter("buddybot_ai_url").value).rstrip("/")
 
         status_qos = QoSProfile(
@@ -132,6 +134,7 @@ class VoiceInterface(Node):
         self._speaker_queue: "queue.Queue[str]" = queue.Queue()
         self._speaker_backend_command = ""
         self._speaker_warned_missing_backend = False
+        self._local_speech_allowlist = {"네.", "말씀하세요."}
 
         mode = "offline-local" if self.offline_mode else "ai-bridge"
         self.get_logger().info(f"Voice interface ready in {mode} mode")
@@ -144,6 +147,9 @@ class VoiceInterface(Node):
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
+        self.get_logger().info(
+            f"Local command speech: {'enabled' if self.speak_command_responses else 'wake-only'}"
+        )
 
         if self.enable_microphone:
             self.start_microphone_listener()
@@ -160,6 +166,12 @@ class VoiceInterface(Node):
     def voice_response_callback(self, msg: String) -> None:
         text = msg.data.strip()
         if not text:
+            return
+        if (
+            not self.server_assistant_enabled
+            and not self.speak_command_responses
+            and text not in self._local_speech_allowlist
+        ):
             return
         self.enqueue_speech(text)
 

@@ -149,6 +149,7 @@ VOICE_PAUSE_THRESHOLD="${BUDDYBOT_VOICE_PAUSE_THRESHOLD:-0.45}"
 VOICE_NON_SPEAKING_DURATION="${BUDDYBOT_VOICE_NON_SPEAKING_DURATION:-0.25}"
 VOICE_MANUAL_SPEED="${BUDDYBOT_VOICE_MANUAL_SPEED:-0.44}"
 VOICE_SPEAKER_RATE_WPM="${BUDDYBOT_VOICE_SPEAKER_RATE_WPM:-180}"
+VOICE_SPEAK_COMMAND_RESPONSES_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_SPEAK_COMMAND_RESPONSES:-0}")"
 VOICE_MIC_PARAM="$(bool_param_value "$ENABLE_MIC_LISTENER")"
 VOICE_SPEAKER_PARAM="$(bool_param_value "$ENABLE_PI_SPEAKER")"
 
@@ -182,6 +183,9 @@ pause_before_node() {
 cleanup() {
   echo
   echo "[mapping] stopping nodes"
+  if declare -F stop_lidar_node >/dev/null 2>&1; then
+    stop_lidar_node
+  fi
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" 2>/dev/null || true
   done
@@ -253,14 +257,27 @@ set_speaker_volume() {
   echo "[mapping] warning: could not clamp Pi speaker volume to ${volume}%"
 }
 
+stop_stale_lidar_processes() {
+  pkill -TERM -f "ros2 launch sllidar_ros2" >/dev/null 2>&1 || true
+  pkill -TERM -f "sllidar_node" >/dev/null 2>&1 || true
+}
+
 stop_lidar_node() {
   if [[ -n "$LIDAR_PID" ]] && kill -0 "$LIDAR_PID" 2>/dev/null; then
     kill "$LIDAR_PID" 2>/dev/null || true
     wait "$LIDAR_PID" 2>/dev/null || true
   fi
+  stop_stale_lidar_processes
   LIDAR_PID=""
   LIDAR_STARTED=0
   LIDAR_STARTED_BAUDRATE=""
+}
+
+show_lidar_log_tail() {
+  if [[ -s "$LOG_DIR/lidar.log" ]]; then
+    echo "[mapping] lidar.log tail:"
+    tail -n 80 "$LOG_DIR/lidar.log" | sed 's/^/[lidar] /'
+  fi
 }
 
 start_lidar_if_available() {
@@ -307,6 +324,8 @@ start_lidar_if_available() {
     return
   fi
 
+  stop_stale_lidar_processes
+  sleep 1
   start_node lidar ros2 launch sllidar_ros2 "$launch_file" serial_port:="$serial_port" serial_baudrate:="$serial_baudrate"
   LIDAR_STARTED=1
   LIDAR_STARTED_BAUDRATE="$serial_baudrate"
@@ -321,12 +340,14 @@ ensure_lidar_stream() {
   echo "[mapping] warning: /scan is not receiving live messages after $reason"
   if [[ "$LIDAR_STARTED" -ne 1 ]]; then
     echo "[mapping] check: tail -n 120 $LOG_DIR/lidar.log"
+    show_lidar_log_tail
     return 1
   fi
 
   if [[ "$LIDAR_RECOVERY_ATTEMPTED" -eq 1 ]]; then
     echo "[mapping] warning: LiDAR recovery already attempted once"
     echo "[mapping] check: tail -n 120 $LOG_DIR/lidar.log"
+    show_lidar_log_tail
     return 1
   fi
 
@@ -358,6 +379,7 @@ ensure_lidar_stream() {
 
   echo "[mapping] warning: /scan is still missing after lidar restart"
   echo "[mapping] check: tail -n 120 $LOG_DIR/lidar.log"
+  show_lidar_log_tail
   return 1
 }
 
@@ -377,7 +399,7 @@ echo "[mapping] pico disabled: ${DISABLE_PICO}"
 echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
-echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} tts_rate ${VOICE_SPEAKER_RATE_WPM}"
+echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} tts_rate ${VOICE_SPEAKER_RATE_WPM} command_speech ${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
 if [[ "$VOICE_RECOGNITION_BACKEND" == "google" || "$VOICE_RECOGNITION_BACKEND" == "auto" ]]; then
   if ! command -v flac >/dev/null 2>&1; then
     echo "[mapping] warning: google voice recognition needs flac; install with: sudo apt install -y flac"
@@ -411,7 +433,7 @@ start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 if is_truthy "$ENABLE_OFFLINE_VOICE"; then
   set_speaker_volume "$SPEAKER_VOLUME_PERCENT"
-  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}"
+  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}" -p speak_command_responses:="${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
 fi
 if is_truthy "$DISABLE_CAMERA"; then
   echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"
@@ -434,6 +456,7 @@ sleep 3
 if ! scan_streaming 8; then
   echo "[mapping] warning: /scan is not being published yet"
   echo "[mapping] start your LiDAR driver first, then rerun this script"
+  show_lidar_log_tail
 fi
 
 if ! is_truthy "$DISABLE_CAMERA" && ! camera_streaming 8; then
