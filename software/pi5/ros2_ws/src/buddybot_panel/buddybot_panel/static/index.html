@@ -734,6 +734,9 @@
       const status = data.voice_command_status || "waiting";
       const age = data.voice_command_age_sec;
       const suffix = age == null ? "" : ` · ${age}s`;
+      if(status === "waiting" || status === "idle"){
+        return `대기 중${suffix}`;
+      }
       if(status.startsWith("recognized:google:") || status.startsWith("recognized:sphinx:")){
         return `인식됨: ${status.split(":").slice(2).join(":")}${suffix}`;
       }
@@ -750,7 +753,14 @@
         return `Sphinx 인식 실패${suffix}`;
       }
       if(status.includes("microphone_ready")){
-        return `마이크 준비${suffix}`;
+        const energy = status.match(/energy=([0-9.]+)/);
+        return energy ? `마이크 준비 · 감도 ${energy[1]}${suffix}` : `마이크 준비${suffix}`;
+      }
+      if(status.startsWith("ignored:microphone:manual_override")){
+        return `수동 조작 우선${suffix}`;
+      }
+      if(status.startsWith("manual_override:")){
+        return `수동 조작 우선${suffix}`;
       }
       if(status.includes("microphone_unavailable") || status.includes("microphone_open_failed")){
         return `마이크 오류${suffix}`;

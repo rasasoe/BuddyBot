@@ -78,6 +78,7 @@ LIDAR_STARTED=0
 LIDAR_PID=""
 LIDAR_STARTED_BAUDRATE=""
 LIDAR_RECOVERY_ATTEMPTED=0
+LIDAR_STREAM_CONFIRMED=0
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-10}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-10}"
 CAMERA_WIDTH="${BUDDYBOT_CAMERA_WIDTH:-320}"
@@ -338,6 +339,7 @@ start_lidar_if_available() {
 ensure_lidar_stream() {
   local reason="$1"
   if scan_streaming 8; then
+    LIDAR_STREAM_CONFIRMED=1
     return 0
   fi
 
@@ -362,6 +364,7 @@ ensure_lidar_stream() {
   start_lidar_if_available
   if scan_streaming 10; then
     echo "[mapping] lidar scan recovered"
+    LIDAR_STREAM_CONFIRMED=1
     return 0
   fi
 
@@ -376,6 +379,7 @@ ensure_lidar_stream() {
       start_lidar_if_available "$alt_baudrate"
       if scan_streaming 10; then
         echo "[mapping] lidar scan recovered at baud ${alt_baudrate}"
+        LIDAR_STREAM_CONFIRMED=1
         return 0
       fi
     done
@@ -457,7 +461,7 @@ start_node slam ros2 launch slam_toolbox online_async_launch.py
 start_node panel ros2 run buddybot_panel panel_server
 
 sleep 3
-if ! scan_streaming 8; then
+if [[ "$LIDAR_STREAM_CONFIRMED" -ne 1 ]] && ! scan_streaming 8 && ! scan_available; then
   echo "[mapping] warning: /scan is not being published yet"
   echo "[mapping] start your LiDAR driver first, then rerun this script"
   show_lidar_log_tail
