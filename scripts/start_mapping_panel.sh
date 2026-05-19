@@ -76,6 +76,7 @@ export BUDDYBOT_WAYPOINT_FILE="${BUDDYBOT_WAYPOINT_FILE:-$ROOT_DIR/software/pi5/
 PIDS=()
 LIDAR_STARTED=0
 LIDAR_PID=""
+LIDAR_STARTED_BAUDRATE=""
 LIDAR_RECOVERY_ATTEMPTED=0
 CAMERA_START_DELAY="${BUDDYBOT_CAMERA_START_DELAY:-10}"
 LIDAR_SETTLE_DELAY="${BUDDYBOT_LIDAR_SETTLE_DELAY:-10}"
@@ -136,14 +137,18 @@ FORCE_LIDAR_START="${BUDDYBOT_FORCE_LIDAR_START:-0}"
 ENABLE_OFFLINE_VOICE="${BUDDYBOT_ENABLE_OFFLINE_VOICE:-1}"
 ENABLE_MIC_LISTENER="${BUDDYBOT_ENABLE_MIC_LISTENER:-${MIC_AVAILABLE:-0}}"
 ENABLE_PI_SPEAKER="${BUDDYBOT_ENABLE_PI_SPEAKER:-1}"
-SPEAKER_VOLUME_PERCENT="${BUDDYBOT_SPEAKER_VOLUME_PERCENT:-35}"
+SPEAKER_VOLUME_PERCENT="${BUDDYBOT_SPEAKER_VOLUME_PERCENT:-60}"
 VOICE_COMMAND_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_COMMAND_ENABLED:-1}")"
 VOICE_AI_URL="${BUDDYBOT_AI_URL:-http://100.115.246.76:8000}"
 VOICE_RECOGNITION_BACKEND="${BUDDYBOT_VOICE_RECOGNITION_BACKEND:-google}"
 VOICE_ALLOW_ONLINE_RECOGNITION_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_ALLOW_ONLINE_RECOGNITION:-1}")"
 VOICE_RECOGNITION_LANGUAGE="${BUDDYBOT_VOICE_RECOGNITION_LANGUAGE:-ko-KR}"
-VOICE_PHRASE_TIME_LIMIT="${BUDDYBOT_VOICE_PHRASE_TIME_LIMIT:-4.0}"
+VOICE_PHRASE_TIME_LIMIT="${BUDDYBOT_VOICE_PHRASE_TIME_LIMIT:-2.6}"
 VOICE_WAKE_TIMEOUT="${BUDDYBOT_VOICE_WAKE_TIMEOUT:-10.0}"
+VOICE_PAUSE_THRESHOLD="${BUDDYBOT_VOICE_PAUSE_THRESHOLD:-0.45}"
+VOICE_NON_SPEAKING_DURATION="${BUDDYBOT_VOICE_NON_SPEAKING_DURATION:-0.25}"
+VOICE_MANUAL_SPEED="${BUDDYBOT_VOICE_MANUAL_SPEED:-0.44}"
+VOICE_SPEAKER_RATE_WPM="${BUDDYBOT_VOICE_SPEAKER_RATE_WPM:-180}"
 VOICE_MIC_PARAM="$(bool_param_value "$ENABLE_MIC_LISTENER")"
 VOICE_SPEAKER_PARAM="$(bool_param_value "$ENABLE_PI_SPEAKER")"
 
@@ -255,11 +260,12 @@ stop_lidar_node() {
   fi
   LIDAR_PID=""
   LIDAR_STARTED=0
+  LIDAR_STARTED_BAUDRATE=""
 }
 
 start_lidar_if_available() {
   local serial_port="${BUDDYBOT_LIDAR_PORT:-${LIDAR_PORT:-}}"
-  local serial_baudrate="${BUDDYBOT_LIDAR_BAUDRATE:-115200}"
+  local serial_baudrate="${1:-${BUDDYBOT_LIDAR_BAUDRATE:-115200}}"
   local pkg_prefix=""
   local pkg_share=""
   local launch_file=""
@@ -303,6 +309,7 @@ start_lidar_if_available() {
 
   start_node lidar ros2 launch sllidar_ros2 "$launch_file" serial_port:="$serial_port" serial_baudrate:="$serial_baudrate"
   LIDAR_STARTED=1
+  LIDAR_STARTED_BAUDRATE="$serial_baudrate"
 }
 
 ensure_lidar_stream() {
@@ -333,6 +340,22 @@ ensure_lidar_stream() {
     return 0
   fi
 
+  if [[ -z "${BUDDYBOT_LIDAR_BAUDRATE:-}" ]]; then
+    for alt_baudrate in 256000 115200; do
+      if [[ "$alt_baudrate" == "$LIDAR_STARTED_BAUDRATE" ]]; then
+        continue
+      fi
+      echo "[mapping] trying lidar baud ${alt_baudrate}"
+      stop_lidar_node
+      sleep 2
+      start_lidar_if_available "$alt_baudrate"
+      if scan_streaming 10; then
+        echo "[mapping] lidar scan recovered at baud ${alt_baudrate}"
+        return 0
+      fi
+    done
+  fi
+
   echo "[mapping] warning: /scan is still missing after lidar restart"
   echo "[mapping] check: tail -n 120 $LOG_DIR/lidar.log"
   return 1
@@ -354,7 +377,7 @@ echo "[mapping] pico disabled: ${DISABLE_PICO}"
 echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
-echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s wake ${VOICE_WAKE_TIMEOUT}s"
+echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} tts_rate ${VOICE_SPEAKER_RATE_WPM}"
 if [[ "$VOICE_RECOGNITION_BACKEND" == "google" || "$VOICE_RECOGNITION_BACKEND" == "auto" ]]; then
   if ! command -v flac >/dev/null 2>&1; then
     echo "[mapping] warning: google voice recognition needs flac; install with: sudo apt install -y flac"
@@ -388,7 +411,7 @@ start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 if is_truthy "$ENABLE_OFFLINE_VOICE"; then
   set_speaker_volume "$SPEAKER_VOLUME_PERCENT"
-  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}"
+  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}"
 fi
 if is_truthy "$DISABLE_CAMERA"; then
   echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"

@@ -45,20 +45,23 @@ class VoiceInterface(Node):
         self.declare_parameter("allow_online_recognition", True)
         self.declare_parameter("recognition_backend", "google")
         self.declare_parameter("recognition_language", "ko-KR")
-        self.declare_parameter("phrase_time_limit", 4.0)
+        self.declare_parameter("phrase_time_limit", 2.6)
         self.declare_parameter("wake_timeout_sec", 10.0)
+        self.declare_parameter("pause_threshold", 0.45)
+        self.declare_parameter("non_speaking_duration", 0.25)
+        self.declare_parameter("dynamic_energy_threshold", True)
         self.declare_parameter(
             "wake_words",
             ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
         )
-        self.declare_parameter("manual_speed", 0.35)
+        self.declare_parameter("manual_speed", 0.44)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")
         self.declare_parameter("speaker_voice_en", "en-us")
-        self.declare_parameter("speaker_rate_wpm", 160)
+        self.declare_parameter("speaker_rate_wpm", 180)
         self.declare_parameter("buddybot_ai_url", "http://127.0.0.1:8000")
 
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
@@ -70,6 +73,9 @@ class VoiceInterface(Node):
         self.recognition_language = str(self.get_parameter("recognition_language").value).strip()
         self.phrase_time_limit = float(self.get_parameter("phrase_time_limit").value)
         self.wake_timeout_sec = float(self.get_parameter("wake_timeout_sec").value)
+        self.pause_threshold = float(self.get_parameter("pause_threshold").value)
+        self.non_speaking_duration = float(self.get_parameter("non_speaking_duration").value)
+        self.dynamic_energy_threshold = bool(self.get_parameter("dynamic_energy_threshold").value)
         self.wake_words = [
             item.strip().lower()
             for item in self.get_parameter("wake_words").value
@@ -116,6 +122,10 @@ class VoiceInterface(Node):
         self._navigation_status = "idle"
 
         self._recognizer = sr.Recognizer() if sr is not None else None
+        if self._recognizer is not None:
+            self._recognizer.pause_threshold = self.pause_threshold
+            self._recognizer.non_speaking_duration = self.non_speaking_duration
+            self._recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
         self._audio_thread: Optional[threading.Thread] = None
         self._audio_stop = threading.Event()
         self._speaker_thread: Optional[threading.Thread] = None
@@ -130,7 +140,8 @@ class VoiceInterface(Node):
         self.get_logger().info(f"Microphone listener: {'enabled' if self.enable_microphone else 'disabled'}")
         self.get_logger().info(
             f"Recognition: backend={self.recognition_backend}, language={self.recognition_language}, "
-            f"online={'enabled' if self.allow_online_recognition else 'disabled'}"
+            f"online={'enabled' if self.allow_online_recognition else 'disabled'}, "
+            f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
 
@@ -237,57 +248,57 @@ class VoiceInterface(Node):
             return ""
 
         if not command_text:
-            return "네, 말씀하세요."
+            return "말씀하세요."
 
         if any(keyword in command_text for keyword in ("stop", "halt", "brake", "정지", "멈춰", "스톱")):
             self._set_follow_enabled(False)
             self._clear_manual_motion()
             self._cancel_navigation()
-            return "정지합니다."
+            return "정지."
 
         if any(keyword in command_text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self._start_manual_motion(self.manual_speed, 0.0, 0.0)
-            return "앞으로 이동합니다."
+            return "전진."
 
         if any(keyword in command_text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
             self._start_manual_motion(-self.manual_speed, 0.0, 0.0)
-            return "뒤로 이동합니다."
+            return "후진."
 
         if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로")):
             self._start_manual_motion(0.0, self.strafe_speed, 0.0)
-            return "왼쪽으로 이동합니다."
+            return "왼쪽."
 
         if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로")):
             self._start_manual_motion(0.0, -self.strafe_speed, 0.0)
-            return "오른쪽으로 이동합니다."
+            return "오른쪽."
 
         if any(keyword in command_text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):
             self._start_manual_motion(0.0, 0.0, self.rotate_speed)
-            return "좌회전합니다."
+            return "좌회전."
 
         if any(keyword in command_text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
             self._start_manual_motion(0.0, 0.0, -self.rotate_speed)
-            return "우회전합니다."
+            return "우회전."
 
         if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
             self._set_follow_enabled(False)
-            return "사용자 추종을 중지했습니다."
+            return "추종 중지."
 
         if any(keyword in command_text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
             self._set_follow_enabled(True)
-            return "사용자 추종을 시작했습니다."
+            return "추종 시작."
 
         if "kitchen" in command_text or "주방" in command_text or "부엌" in command_text:
             self._send_waypoint("kitchen")
-            return "주방으로 이동 요청을 보냈습니다."
+            return "주방 이동."
 
         if "living room" in command_text or "거실" in command_text:
             self._send_waypoint("living_room_center")
-            return "거실로 이동 요청을 보냈습니다."
+            return "거실 이동."
 
         if "charge" in command_text or "충전" in command_text or "도킹" in command_text:
             self._send_waypoint("charging_station")
-            return "충전 스테이션으로 이동 요청을 보냈습니다."
+            return "충전 이동."
 
         if any(keyword in command_text for keyword in ("status", "state", "상태", "지금 상태")):
             return self._build_status_response()
@@ -314,7 +325,7 @@ class VoiceInterface(Node):
             movement = "추종 중"
         if self._navigation_status not in ("", "idle"):
             movement = f"내비게이션 {self._navigation_status}"
-        return f"현재 동작은 {movement}이고, 시스템 상태는 {self._system_status}입니다."
+        return f"동작 {movement}. 상태 {self._system_status}."
 
     def _start_manual_motion(self, linear_x: float, linear_y: float, angular_z: float) -> None:
         self._set_follow_enabled(False)
