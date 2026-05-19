@@ -47,12 +47,12 @@ class VoiceInterface(Node):
         self.declare_parameter("recognition_language", "ko-KR")
         self.declare_parameter("phrase_time_limit", 2.6)
         self.declare_parameter("wake_timeout_sec", 10.0)
-        self.declare_parameter("pause_threshold", 0.55)
+        self.declare_parameter("pause_threshold", 0.45)
         self.declare_parameter("non_speaking_duration", 0.25)
         self.declare_parameter("dynamic_energy_threshold", False)
-        self.declare_parameter("energy_threshold", 180.0)
-        self.declare_parameter("max_energy_threshold", 450.0)
-        self.declare_parameter("ambient_adjust_duration", 0.4)
+        self.declare_parameter("energy_threshold", 80.0)
+        self.declare_parameter("max_energy_threshold", 220.0)
+        self.declare_parameter("ambient_adjust_duration", 0.2)
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter(
             "wake_words",
@@ -447,8 +447,10 @@ class VoiceInterface(Node):
             with microphone as source:
                 if self.ambient_adjust_duration > 0.0:
                     recognizer.adjust_for_ambient_noise(source, duration=self.ambient_adjust_duration)
-                    if self.max_energy_threshold > 0.0 and recognizer.energy_threshold > self.max_energy_threshold:
-                        recognizer.energy_threshold = self.max_energy_threshold
+                if not self.dynamic_energy_threshold:
+                    min_energy = max(1.0, self.energy_threshold)
+                    max_energy = self.max_energy_threshold if self.max_energy_threshold > 0.0 else min_energy
+                    recognizer.energy_threshold = min(max(recognizer.energy_threshold, min_energy), max_energy)
                 self._publish_status(f"microphone_ready:energy={recognizer.energy_threshold:.0f}")
                 while not self._audio_stop.is_set():
                     try:
