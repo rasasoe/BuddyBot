@@ -236,6 +236,13 @@ class VoiceInterface(Node):
         if not cleaned:
             return
 
+        if self._is_stop_command(cleaned):
+            self._publish_status(f"heard:{source}:{cleaned}")
+            answer = self._stop_robot()
+            self._publish_response(answer)
+            self.get_logger().info(f"Voice safety stop ({source}): {cleaned} -> {answer}")
+            return
+
         if not self.command_enabled:
             self._publish_status(f"ignored:{source}:voice_disabled")
             return
@@ -286,11 +293,8 @@ class VoiceInterface(Node):
         if not command_text:
             return "말씀하세요."
 
-        if any(keyword in command_text for keyword in ("stop", "halt", "brake", "정지", "멈춰", "스톱")):
-            self._set_follow_enabled(False)
-            self._clear_manual_motion()
-            self._cancel_navigation()
-            return "정지."
+        if self._is_stop_command(command_text):
+            return self._stop_robot()
 
         if any(keyword in command_text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self._start_manual_motion(self.manual_speed, 0.0, 0.0)
@@ -300,11 +304,11 @@ class VoiceInterface(Node):
             self._start_manual_motion(-self.manual_speed, 0.0, 0.0)
             return "후진."
 
-        if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로")):
+        if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로", "좌측 이동", "좌측으로")):
             self._start_manual_motion(0.0, self.strafe_speed, 0.0)
             return "왼쪽."
 
-        if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로")):
+        if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로", "우측 이동", "우측으로")):
             self._start_manual_motion(0.0, -self.strafe_speed, 0.0)
             return "오른쪽."
 
@@ -352,6 +356,16 @@ class VoiceInterface(Node):
                 cleaned = cleaned[len(prefix):].strip()
         cleaned = " ".join(cleaned.split())
         return cleaned
+
+    def _is_stop_command(self, text: str) -> bool:
+        normalized = self._normalize_text(text)
+        return any(keyword in normalized for keyword in ("stop", "halt", "brake", "정지", "멈춰", "멈춤", "스톱", "중지"))
+
+    def _stop_robot(self) -> str:
+        self._set_follow_enabled(False)
+        self._clear_manual_motion()
+        self._cancel_navigation()
+        return "정지."
 
     def _build_status_response(self) -> str:
         movement = "정지"
