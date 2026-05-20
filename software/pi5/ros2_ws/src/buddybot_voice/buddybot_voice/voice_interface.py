@@ -49,10 +49,8 @@ class VoiceInterface(Node):
         self.declare_parameter("wake_timeout_sec", 10.0)
         self.declare_parameter("pause_threshold", 0.45)
         self.declare_parameter("non_speaking_duration", 0.25)
-        self.declare_parameter("dynamic_energy_threshold", False)
-        self.declare_parameter("energy_threshold", 80.0)
-        self.declare_parameter("max_energy_threshold", 220.0)
-        self.declare_parameter("ambient_adjust_duration", 0.2)
+        self.declare_parameter("dynamic_energy_threshold", True)
+        self.declare_parameter("ambient_adjust_duration", 1.0)
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter(
             "wake_words",
@@ -81,8 +79,6 @@ class VoiceInterface(Node):
         self.pause_threshold = float(self.get_parameter("pause_threshold").value)
         self.non_speaking_duration = float(self.get_parameter("non_speaking_duration").value)
         self.dynamic_energy_threshold = bool(self.get_parameter("dynamic_energy_threshold").value)
-        self.energy_threshold = float(self.get_parameter("energy_threshold").value)
-        self.max_energy_threshold = float(self.get_parameter("max_energy_threshold").value)
         self.ambient_adjust_duration = float(self.get_parameter("ambient_adjust_duration").value)
         self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
         self.wake_words = [
@@ -135,7 +131,6 @@ class VoiceInterface(Node):
 
         self._recognizer = sr.Recognizer() if sr is not None else None
         if self._recognizer is not None:
-            self._recognizer.energy_threshold = self.energy_threshold
             self._recognizer.pause_threshold = self.pause_threshold
             self._recognizer.non_speaking_duration = self.non_speaking_duration
             self._recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
@@ -156,8 +151,7 @@ class VoiceInterface(Node):
             f"Recognition: backend={self.recognition_backend}, language={self.recognition_language}, "
             f"online={'enabled' if self.allow_online_recognition else 'disabled'}, "
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
-            f"energy={self.energy_threshold:.0f}, max_energy={self.max_energy_threshold:.0f}, "
-            f"dynamic_energy={self.dynamic_energy_threshold}"
+            f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
         self.get_logger().info(
@@ -447,10 +441,6 @@ class VoiceInterface(Node):
             with microphone as source:
                 if self.ambient_adjust_duration > 0.0:
                     recognizer.adjust_for_ambient_noise(source, duration=self.ambient_adjust_duration)
-                if not self.dynamic_energy_threshold:
-                    min_energy = max(1.0, self.energy_threshold)
-                    max_energy = self.max_energy_threshold if self.max_energy_threshold > 0.0 else min_energy
-                    recognizer.energy_threshold = min(max(recognizer.energy_threshold, min_energy), max_energy)
                 self._publish_status(f"microphone_ready:energy={recognizer.energy_threshold:.0f}")
                 while not self._audio_stop.is_set():
                     try:

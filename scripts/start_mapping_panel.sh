@@ -148,10 +148,6 @@ VOICE_PHRASE_TIME_LIMIT="${BUDDYBOT_VOICE_PHRASE_TIME_LIMIT:-2.6}"
 VOICE_WAKE_TIMEOUT="${BUDDYBOT_VOICE_WAKE_TIMEOUT:-10.0}"
 VOICE_PAUSE_THRESHOLD="${BUDDYBOT_VOICE_PAUSE_THRESHOLD:-0.45}"
 VOICE_NON_SPEAKING_DURATION="${BUDDYBOT_VOICE_NON_SPEAKING_DURATION:-0.25}"
-VOICE_DYNAMIC_ENERGY_THRESHOLD_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_DYNAMIC_ENERGY_THRESHOLD:-0}")"
-VOICE_ENERGY_THRESHOLD="${BUDDYBOT_VOICE_ENERGY_THRESHOLD:-80}"
-VOICE_MAX_ENERGY_THRESHOLD="${BUDDYBOT_VOICE_MAX_ENERGY_THRESHOLD:-220}"
-VOICE_AMBIENT_ADJUST_DURATION="${BUDDYBOT_VOICE_AMBIENT_ADJUST_DURATION:-0.2}"
 VOICE_MANUAL_SPEED="${BUDDYBOT_VOICE_MANUAL_SPEED:-0.44}"
 VOICE_SPEAKER_RATE_WPM="${BUDDYBOT_VOICE_SPEAKER_RATE_WPM:-180}"
 VOICE_SPEAK_COMMAND_RESPONSES_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_SPEAK_COMMAND_RESPONSES:-0}")"
@@ -407,7 +403,7 @@ echo "[mapping] pico disabled: ${DISABLE_PICO}"
 echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
-echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s energy ${VOICE_ENERGY_THRESHOLD}/${VOICE_MAX_ENERGY_THRESHOLD} dynamic_energy ${VOICE_DYNAMIC_ENERGY_THRESHOLD_PARAM} ambient ${VOICE_AMBIENT_ADJUST_DURATION}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} tts_rate ${VOICE_SPEAKER_RATE_WPM} command_speech ${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
+echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} tts_rate ${VOICE_SPEAKER_RATE_WPM} command_speech ${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
 if [[ "$VOICE_RECOGNITION_BACKEND" == "google" || "$VOICE_RECOGNITION_BACKEND" == "auto" ]]; then
   if ! command -v flac >/dev/null 2>&1; then
     echo "[mapping] warning: google voice recognition needs flac; install with: sudo apt install -y flac"
@@ -441,7 +437,7 @@ start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 if is_truthy "$ENABLE_OFFLINE_VOICE"; then
   set_speaker_volume "$SPEAKER_VOLUME_PERCENT"
-  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p dynamic_energy_threshold:="${VOICE_DYNAMIC_ENERGY_THRESHOLD_PARAM}" -p energy_threshold:="${VOICE_ENERGY_THRESHOLD}" -p max_energy_threshold:="${VOICE_MAX_ENERGY_THRESHOLD}" -p ambient_adjust_duration:="${VOICE_AMBIENT_ADJUST_DURATION}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}" -p speak_command_responses:="${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
+  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}" -p speak_command_responses:="${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
 fi
 if is_truthy "$DISABLE_CAMERA"; then
   echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"
