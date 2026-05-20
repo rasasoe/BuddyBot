@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import queue
 import shutil
+import socket
 import subprocess
 import threading
 import time
@@ -51,6 +52,7 @@ class VoiceInterface(Node):
         self.declare_parameter("non_speaking_duration", 0.25)
         self.declare_parameter("dynamic_energy_threshold", True)
         self.declare_parameter("ambient_adjust_duration", 1.0)
+        self.declare_parameter("google_timeout_sec", 1.8)
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter(
             "wake_words",
@@ -80,6 +82,7 @@ class VoiceInterface(Node):
         self.non_speaking_duration = float(self.get_parameter("non_speaking_duration").value)
         self.dynamic_energy_threshold = bool(self.get_parameter("dynamic_energy_threshold").value)
         self.ambient_adjust_duration = float(self.get_parameter("ambient_adjust_duration").value)
+        self.google_timeout_sec = float(self.get_parameter("google_timeout_sec").value)
         self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
         self.wake_words = [
             item.strip().lower()
@@ -134,6 +137,7 @@ class VoiceInterface(Node):
             self._recognizer.pause_threshold = self.pause_threshold
             self._recognizer.non_speaking_duration = self.non_speaking_duration
             self._recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
+            self._recognizer.operation_timeout = max(0.5, self.google_timeout_sec)
         self._audio_thread: Optional[threading.Thread] = None
         self._audio_stop = threading.Event()
         self._speaker_thread: Optional[threading.Thread] = None
@@ -151,7 +155,8 @@ class VoiceInterface(Node):
             f"Recognition: backend={self.recognition_backend}, language={self.recognition_language}, "
             f"online={'enabled' if self.allow_online_recognition else 'disabled'}, "
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
-            f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s"
+            f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s, "
+            f"google_timeout={self.google_timeout_sec}s"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
         self.get_logger().info(
@@ -473,16 +478,26 @@ class VoiceInterface(Node):
                 if backend == "google":
                     return ""
             else:
+                started_at = time.monotonic()
+                previous_socket_timeout = socket.getdefaulttimeout()
                 try:
+                    socket.setdefaulttimeout(max(0.5, self.google_timeout_sec))
                     transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
                     if transcript:
                         self._publish_status(f"recognized:google:{transcript}")
                     return transcript
                 except Exception as exc:
-                    self._publish_status(f"google_recognition_failed:{exc}")
-                    self.get_logger().warn(f"Google recognition failed: {exc}")
+                    elapsed = time.monotonic() - started_at
+                    if elapsed >= max(0.5, self.google_timeout_sec) * 0.9:
+                        self._publish_status(f"google_recognition_timeout:{elapsed:.2f}s")
+                        self.get_logger().warn(f"Google recognition timed out after {elapsed:.2f}s: {exc}")
+                    else:
+                        self._publish_status(f"google_recognition_failed:{exc}")
+                        self.get_logger().warn(f"Google recognition failed: {exc}")
                     if backend == "google":
                         return ""
+                finally:
+                    socket.setdefaulttimeout(previous_socket_timeout)
 
         if backend in ("sphinx", "auto"):
             try:

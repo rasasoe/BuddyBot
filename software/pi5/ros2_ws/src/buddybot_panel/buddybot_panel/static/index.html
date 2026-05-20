@@ -746,6 +746,9 @@
       if(status.startsWith("google_recognition_failed")){
         return `Google 인식 실패${suffix}`;
       }
+      if(status.startsWith("google_recognition_timeout")){
+        return `Google 응답 지연${suffix}`;
+      }
       if(status.startsWith("google_recognition_missing_flac")){
         return `flac 설치 필요${suffix}`;
       }
