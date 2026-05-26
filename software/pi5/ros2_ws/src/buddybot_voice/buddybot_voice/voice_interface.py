@@ -47,6 +47,7 @@ class VoiceInterface(Node):
         self.declare_parameter("recognition_backend", "google")
         self.declare_parameter("recognition_language", "ko-KR")
         self.declare_parameter("phrase_time_limit", 2.6)
+        self.declare_parameter("moving_phrase_time_limit", 1.2)
         self.declare_parameter("wake_timeout_sec", 10.0)
         self.declare_parameter("pause_threshold", 0.45)
         self.declare_parameter("non_speaking_duration", 0.25)
@@ -54,6 +55,7 @@ class VoiceInterface(Node):
         self.declare_parameter("ambient_adjust_duration", 1.0)
         self.declare_parameter("google_timeout_sec", 1.8)
         self.declare_parameter("manual_override_ignore_sec", 2.0)
+        self.declare_parameter("manual_command_timeout_sec", 2.0)
         self.declare_parameter(
             "wake_words",
             ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
@@ -77,6 +79,7 @@ class VoiceInterface(Node):
         self.recognition_backend = str(self.get_parameter("recognition_backend").value).strip().lower()
         self.recognition_language = str(self.get_parameter("recognition_language").value).strip()
         self.phrase_time_limit = float(self.get_parameter("phrase_time_limit").value)
+        self.moving_phrase_time_limit = float(self.get_parameter("moving_phrase_time_limit").value)
         self.wake_timeout_sec = float(self.get_parameter("wake_timeout_sec").value)
         self.pause_threshold = float(self.get_parameter("pause_threshold").value)
         self.non_speaking_duration = float(self.get_parameter("non_speaking_duration").value)
@@ -84,6 +87,7 @@ class VoiceInterface(Node):
         self.ambient_adjust_duration = float(self.get_parameter("ambient_adjust_duration").value)
         self.google_timeout_sec = float(self.get_parameter("google_timeout_sec").value)
         self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
+        self.manual_command_timeout_sec = float(self.get_parameter("manual_command_timeout_sec").value)
         self.wake_words = [
             item.strip().lower()
             for item in self.get_parameter("wake_words").value
@@ -127,6 +131,7 @@ class VoiceInterface(Node):
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._manual_until = 0.0
         self._last_wake_time = 0.0
         self._manual_override_until = 0.0
         self._system_status = "idle"
@@ -225,6 +230,11 @@ class VoiceInterface(Node):
         if not self._manual_active:
             return
 
+        if self._manual_until > 0.0 and time.time() >= self._manual_until:
+            self._clear_manual_motion()
+            self._publish_status("manual_auto_stop")
+            return
+
         twist = Twist()
         twist.linear.x = self._manual_linear_x
         twist.linear.y = self._manual_linear_y
@@ -297,27 +307,27 @@ class VoiceInterface(Node):
             return self._stop_robot()
 
         if any(keyword in command_text for keyword in ("forward", "go ahead", "앞으로", "전진")):
-            self._start_manual_motion(self.manual_speed, 0.0, 0.0)
+            self._start_manual_motion(self.manual_speed, 0.0, 0.0, self.manual_command_timeout_sec)
             return "전진."
 
         if any(keyword in command_text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
-            self._start_manual_motion(-self.manual_speed, 0.0, 0.0)
+            self._start_manual_motion(-self.manual_speed, 0.0, 0.0, self.manual_command_timeout_sec)
             return "후진."
 
         if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로", "좌측 이동", "좌측으로")):
-            self._start_manual_motion(0.0, self.strafe_speed, 0.0)
+            self._start_manual_motion(0.0, self.strafe_speed, 0.0, self.manual_command_timeout_sec)
             return "왼쪽."
 
         if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로", "우측 이동", "우측으로")):
-            self._start_manual_motion(0.0, -self.strafe_speed, 0.0)
+            self._start_manual_motion(0.0, -self.strafe_speed, 0.0, self.manual_command_timeout_sec)
             return "오른쪽."
 
         if any(keyword in command_text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):
-            self._start_manual_motion(0.0, 0.0, self.rotate_speed)
+            self._start_manual_motion(0.0, 0.0, self.rotate_speed, self.manual_command_timeout_sec)
             return "좌회전."
 
         if any(keyword in command_text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
-            self._start_manual_motion(0.0, 0.0, -self.rotate_speed)
+            self._start_manual_motion(0.0, 0.0, -self.rotate_speed, self.manual_command_timeout_sec)
             return "우회전."
 
         if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
@@ -359,7 +369,25 @@ class VoiceInterface(Node):
 
     def _is_stop_command(self, text: str) -> bool:
         normalized = self._normalize_text(text)
-        return any(keyword in normalized for keyword in ("stop", "halt", "brake", "정지", "멈춰", "멈춤", "스톱", "중지"))
+        return any(
+            keyword in normalized
+            for keyword in (
+                "stop",
+                "halt",
+                "brake",
+                "cancel",
+                "정지",
+                "정지해",
+                "멈춰",
+                "멈춤",
+                "멈추",
+                "스톱",
+                "스탑",
+                "중지",
+                "취소",
+                "그만",
+            )
+        )
 
     def _stop_robot(self) -> str:
         self._set_follow_enabled(False)
@@ -377,19 +405,27 @@ class VoiceInterface(Node):
             movement = f"내비게이션 {self._navigation_status}"
         return f"동작 {movement}. 상태 {self._system_status}."
 
-    def _start_manual_motion(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+    def _start_manual_motion(
+        self,
+        linear_x: float,
+        linear_y: float,
+        angular_z: float,
+        duration_sec: float = 0.0,
+    ) -> None:
         self._set_follow_enabled(False)
         self._cancel_navigation()
         self._manual_active = True
         self._manual_linear_x = linear_x
         self._manual_linear_y = linear_y
         self._manual_angular_z = angular_z
+        self._manual_until = time.time() + duration_sec if duration_sec > 0.0 else 0.0
 
     def _clear_manual_motion(self) -> None:
         self._manual_active = False
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._manual_until = 0.0
         self.manual_pub.publish(Twist())
 
     def _set_follow_enabled(self, enabled: bool) -> None:
@@ -463,10 +499,13 @@ class VoiceInterface(Node):
                 self._publish_status(f"microphone_ready:energy={recognizer.energy_threshold:.0f}")
                 while not self._audio_stop.is_set():
                     try:
+                        phrase_limit = self.phrase_time_limit
+                        if self._manual_active or self.follow_enabled:
+                            phrase_limit = min(self.phrase_time_limit, self.moving_phrase_time_limit)
                         audio = recognizer.listen(
                             source,
                             timeout=1.0,
-                            phrase_time_limit=self.phrase_time_limit,
+                            phrase_time_limit=phrase_limit,
                         )
                     except sr.WaitTimeoutError:
                         continue
