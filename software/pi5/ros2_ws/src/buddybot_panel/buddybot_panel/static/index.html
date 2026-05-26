@@ -743,6 +743,33 @@
       if(status.startsWith("heard:")){
         return `들은 말: ${status.split(":").slice(2).join(":")}${suffix}`;
       }
+      if(status === "voice_manual:nudge_forward"){
+        return `짧은 전진 실행${suffix}`;
+      }
+      if(status === "voice_manual:continuous_forward"){
+        return `지속 전진 중${suffix}`;
+      }
+      if(status === "voice_manual:stop"){
+        return `정지 명령 수신${suffix}`;
+      }
+      if(status === "voice_manual:continuous_safety_stop"){
+        return `지속 주행 안전 정지${suffix}`;
+      }
+      if(status === "voice_manual:nudge_auto_stop"){
+        return `짧은 이동 자동 정지${suffix}`;
+      }
+      if(status === "voice_manual:blocked_ambiguous"){
+        return `음성 명령 애매함 · 이동 차단${suffix}`;
+      }
+      if(status === "voice_manual:blocked_negative"){
+        return `부정 명령 · 이동 차단${suffix}`;
+      }
+      if(status.startsWith("voice_manual:nudge_")){
+        return `짧은 이동 실행${suffix}`;
+      }
+      if(status.startsWith("voice_manual:continuous_")){
+        return `지속 이동 중${suffix}`;
+      }
       if(status.startsWith("google_recognition_failed")){
         return `Google 인식 실패${suffix}`;
       }

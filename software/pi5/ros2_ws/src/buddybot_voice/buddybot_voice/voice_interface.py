@@ -56,6 +56,9 @@ class VoiceInterface(Node):
         self.declare_parameter("google_timeout_sec", 1.8)
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter("manual_command_timeout_sec", 2.0)
+        self.declare_parameter("nudge_duration_sec", 2.5)
+        self.declare_parameter("continuous_command_max_sec", 10.0)
+        self.declare_parameter("zero_burst_count", 4)
         self.declare_parameter(
             "wake_words",
             ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
@@ -88,6 +91,9 @@ class VoiceInterface(Node):
         self.google_timeout_sec = float(self.get_parameter("google_timeout_sec").value)
         self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
         self.manual_command_timeout_sec = float(self.get_parameter("manual_command_timeout_sec").value)
+        self.nudge_duration_sec = float(self.get_parameter("nudge_duration_sec").value)
+        self.continuous_command_max_sec = float(self.get_parameter("continuous_command_max_sec").value)
+        self.zero_burst_count = max(1, int(self.get_parameter("zero_burst_count").value))
         self.wake_words = [
             item.strip().lower()
             for item in self.get_parameter("wake_words").value
@@ -132,6 +138,8 @@ class VoiceInterface(Node):
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
         self._manual_until = 0.0
+        self._manual_command_mode = "idle"
+        self._manual_intent = "idle"
         self._last_wake_time = 0.0
         self._manual_override_until = 0.0
         self._system_status = "idle"
@@ -231,8 +239,12 @@ class VoiceInterface(Node):
             return
 
         if self._manual_until > 0.0 and time.time() >= self._manual_until:
+            command_mode = self._manual_command_mode
             self._clear_manual_motion()
-            self._publish_status("manual_auto_stop")
+            if command_mode == "continuous":
+                self._publish_status("voice_manual:continuous_safety_stop")
+            else:
+                self._publish_status("voice_manual:nudge_auto_stop")
             return
 
         twist = Twist()
@@ -248,6 +260,14 @@ class VoiceInterface(Node):
 
         if self._is_stop_command(cleaned):
             self._publish_status(f"heard:{source}:{cleaned}")
+            self._log_voice_classification(
+                raw_text=cleaned,
+                normalized_text=self._normalize_text(cleaned),
+                matched_intent="stop",
+                matched_keywords=self._matched_keywords(self._strip_wake_prefix(cleaned), self.STOP_WORDS),
+                command_mode="stop",
+                stop_priority_applied=True,
+            )
             answer = self._stop_robot()
             self._publish_response(answer)
             self.get_logger().info(f"Voice safety stop ({source}): {cleaned} -> {answer}")
@@ -304,30 +324,89 @@ class VoiceInterface(Node):
             return "말씀하세요."
 
         if self._is_stop_command(command_text):
+            self._log_voice_classification(
+                raw_text=message,
+                normalized_text=text,
+                matched_intent="stop",
+                matched_keywords=self._matched_keywords(command_text, self.STOP_WORDS),
+                command_mode="stop",
+                stop_priority_applied=True,
+            )
             return self._stop_robot()
 
-        if any(keyword in command_text for keyword in ("forward", "go ahead", "앞으로", "전진")):
-            self._start_manual_motion(self.manual_speed, 0.0, 0.0, self.manual_command_timeout_sec)
+        if self._is_motion_negation(command_text):
+            self._publish_status("voice_manual:blocked_negative")
+            self._log_voice_classification(
+                raw_text=message,
+                normalized_text=text,
+                matched_intent="blocked_negative",
+                matched_keywords=self._matched_keywords(command_text, self.MOTION_WORDS),
+                command_mode="ignored",
+                stop_priority_applied=False,
+            )
+            return "이동하지 않겠습니다."
+
+        if self._is_explanation_request(command_text) and self._has_motion_word(command_text):
+            self._publish_status("voice_manual:blocked_ambiguous")
+            self._log_voice_classification(
+                raw_text=message,
+                normalized_text=text,
+                matched_intent="blocked_explanation",
+                matched_keywords=self._matched_keywords(command_text, self.MOTION_WORDS),
+                command_mode="ignored",
+                stop_priority_applied=False,
+            )
+            return "" if not allow_help else "설명 요청으로 판단해서 이동하지 않았습니다."
+
+        if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
+            self._log_voice_classification(
+                raw_text=message,
+                normalized_text=text,
+                matched_intent="forward",
+                matched_keywords=self._matched_keywords(command_text, self.CONTINUOUS_FORWARD_WORDS),
+                command_mode="continuous",
+                stop_priority_applied=False,
+            )
+            self._start_manual_motion(
+                self.manual_speed,
+                0.0,
+                0.0,
+                self.continuous_command_max_sec,
+                mode="continuous",
+                intent="forward",
+            )
+            return "지속 전진."
+
+        if self._matches_any(command_text, self.FORWARD_WORDS):
+            self._log_voice_classification(
+                raw_text=message,
+                normalized_text=text,
+                matched_intent="forward",
+                matched_keywords=self._matched_keywords(command_text, self.FORWARD_WORDS),
+                command_mode="nudge",
+                stop_priority_applied=False,
+            )
+            self._start_manual_motion(self.manual_speed, 0.0, 0.0, self.nudge_duration_sec, mode="nudge", intent="forward")
             return "전진."
 
         if any(keyword in command_text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
-            self._start_manual_motion(-self.manual_speed, 0.0, 0.0, self.manual_command_timeout_sec)
+            self._start_manual_motion(-self.manual_speed, 0.0, 0.0, self.nudge_duration_sec, mode="nudge", intent="backward")
             return "후진."
 
         if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로", "좌측 이동", "좌측으로")):
-            self._start_manual_motion(0.0, self.strafe_speed, 0.0, self.manual_command_timeout_sec)
+            self._start_manual_motion(0.0, self.strafe_speed, 0.0, self.nudge_duration_sec, mode="nudge", intent="strafe_left")
             return "왼쪽."
 
         if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로", "우측 이동", "우측으로")):
-            self._start_manual_motion(0.0, -self.strafe_speed, 0.0, self.manual_command_timeout_sec)
+            self._start_manual_motion(0.0, -self.strafe_speed, 0.0, self.nudge_duration_sec, mode="nudge", intent="strafe_right")
             return "오른쪽."
 
         if any(keyword in command_text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):
-            self._start_manual_motion(0.0, 0.0, self.rotate_speed, self.manual_command_timeout_sec)
+            self._start_manual_motion(0.0, 0.0, self.rotate_speed, self.nudge_duration_sec, mode="nudge", intent="rotate_left")
             return "좌회전."
 
         if any(keyword in command_text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
-            self._start_manual_motion(0.0, 0.0, -self.rotate_speed, self.manual_command_timeout_sec)
+            self._start_manual_motion(0.0, 0.0, -self.rotate_speed, self.nudge_duration_sec, mode="nudge", intent="rotate_right")
             return "우회전."
 
         if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
@@ -367,32 +446,154 @@ class VoiceInterface(Node):
         cleaned = " ".join(cleaned.split())
         return cleaned
 
-    def _is_stop_command(self, text: str) -> bool:
+    FORWARD_WORDS = (
+        "forward",
+        "go ahead",
+        "전진",
+        "앞으로",
+        "앞으로 가",
+        "가자",
+        "직진",
+    )
+    CONTINUOUS_FORWARD_WORDS = (
+        "continue forward",
+        "keep going",
+        "계속 전진",
+        "계속 앞으로",
+        "앞으로 계속",
+        "앞으로 계속 가",
+        "주행 시작",
+        "계속 가",
+        "쭉 가",
+        "쭉 전진",
+        "계속 직진",
+    )
+    STOP_WORDS = (
+        "stop",
+        "halt",
+        "brake",
+        "cancel",
+        "정지",
+        "정지해",
+        "멈춰",
+        "멈추어",
+        "멈춰라",
+        "멈춤",
+        "멈추",
+        "스톱",
+        "스탑",
+        "중지",
+        "취소",
+        "그만",
+        "세워",
+    )
+    NEGATION_WORDS = (
+        "하지 마",
+        "하지마",
+        "가지 마",
+        "가지마",
+        "움직이지 마",
+        "움직이지마",
+        "이동하지 마",
+        "이동하지마",
+        "하지 말",
+        "가지 말",
+        "움직이지 말",
+        "이동하지 말",
+        "don't",
+        "do not",
+    )
+    EXPLANATION_WORDS = (
+        "방법",
+        "설명",
+        "알려",
+        "알려줘",
+        "뭐야",
+        "무엇",
+        "뜻",
+        "코드",
+        "어떻게",
+        "how",
+        "what",
+        "explain",
+    )
+    MOTION_WORDS = FORWARD_WORDS + CONTINUOUS_FORWARD_WORDS + STOP_WORDS + (
+        "후진",
+        "뒤로",
+        "좌회전",
+        "우회전",
+        "왼쪽",
+        "오른쪽",
+        "이동",
+        "움직",
+    )
+
+    def _strip_wake_prefix(self, text: str) -> str:
         normalized = self._normalize_text(text)
-        return any(
-            keyword in normalized
-            for keyword in (
-                "stop",
-                "halt",
-                "brake",
-                "cancel",
-                "정지",
-                "정지해",
-                "멈춰",
-                "멈춤",
-                "멈추",
-                "스톱",
-                "스탑",
-                "중지",
-                "취소",
-                "그만",
-            )
+        for wake_word in self.wake_words:
+            if normalized == wake_word:
+                return ""
+            if normalized.startswith(f"{wake_word} "):
+                return normalized[len(wake_word):].strip()
+            if normalized.startswith(wake_word) and len(normalized) > len(wake_word):
+                return normalized[len(wake_word):].strip()
+        return normalized
+
+    @staticmethod
+    def _matches_any(text: str, words) -> bool:
+        return any(word in text for word in words)
+
+    def _matched_keywords(self, text: str, words) -> List[str]:
+        normalized = self._normalize_text(text)
+        return [word for word in words if word in normalized]
+
+    def _has_motion_word(self, text: str) -> bool:
+        return self._matches_any(text, self.MOTION_WORDS)
+
+    def _is_motion_negation(self, text: str) -> bool:
+        return self._has_motion_word(text) and self._matches_any(text, self.NEGATION_WORDS)
+
+    def _is_explanation_request(self, text: str) -> bool:
+        return self._matches_any(text, self.EXPLANATION_WORDS)
+
+    def _is_continuous_forward(self, text: str) -> bool:
+        has_forward = self._matches_any(text, ("forward", "전진", "앞으로", "직진", "가자"))
+        has_continue = self._matches_any(text, ("continue", "keep", "계속", "쭉", "주행 시작"))
+        return has_forward and has_continue
+
+    def _is_stop_command(self, text: str) -> bool:
+        normalized = self._strip_wake_prefix(text)
+        if not self._matches_any(normalized, self.STOP_WORDS):
+            return False
+        if self._is_motion_negation(normalized):
+            return False
+        if self._is_explanation_request(normalized):
+            return False
+        return True
+
+    def _log_voice_classification(
+        self,
+        *,
+        raw_text: str,
+        normalized_text: str,
+        matched_intent: str,
+        matched_keywords: List[str],
+        command_mode: str,
+        stop_priority_applied: bool,
+    ) -> None:
+        keyword_text = ",".join(matched_keywords) if matched_keywords else "-"
+        self.get_logger().info(
+            "voice_classification "
+            f"raw_stt_text={raw_text!r} normalized_text={normalized_text!r} "
+            f"matched_intent={matched_intent} matched_keywords={keyword_text} "
+            f"command_mode={command_mode} stop_priority_applied={stop_priority_applied}"
         )
 
     def _stop_robot(self) -> str:
         self._set_follow_enabled(False)
         self._clear_manual_motion()
         self._cancel_navigation()
+        self._publish_status("voice_manual:stop")
         return "정지."
 
     def _build_status_response(self) -> str:
@@ -411,6 +612,9 @@ class VoiceInterface(Node):
         linear_y: float,
         angular_z: float,
         duration_sec: float = 0.0,
+        *,
+        mode: str = "nudge",
+        intent: str = "manual",
     ) -> None:
         self._set_follow_enabled(False)
         self._cancel_navigation()
@@ -419,6 +623,9 @@ class VoiceInterface(Node):
         self._manual_linear_y = linear_y
         self._manual_angular_z = angular_z
         self._manual_until = time.time() + duration_sec if duration_sec > 0.0 else 0.0
+        self._manual_command_mode = mode
+        self._manual_intent = intent
+        self._publish_status(f"voice_manual:{mode}_{intent}")
 
     def _clear_manual_motion(self) -> None:
         self._manual_active = False
@@ -426,7 +633,10 @@ class VoiceInterface(Node):
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
         self._manual_until = 0.0
-        self.manual_pub.publish(Twist())
+        self._manual_command_mode = "idle"
+        self._manual_intent = "idle"
+        for _ in range(self.zero_burst_count):
+            self.manual_pub.publish(Twist())
 
     def _set_follow_enabled(self, enabled: bool) -> None:
         self.follow_enabled = enabled
@@ -569,7 +779,6 @@ class VoiceInterface(Node):
         msg = String()
         msg.data = text
         self.response_pub.publish(msg)
-        self._publish_status("response_published")
 
     def start_speaker_output(self) -> None:
         if self._speaker_thread is not None:
