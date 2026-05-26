@@ -178,7 +178,7 @@
               <button class="secondary manual-button" id="btn-strafe_left" data-toggle-direction="strafe_left">
                 <span class="glyph">←</span><span class="label">왼쪽 이동</span>
               </button>
-              <button class="danger manual-stop" onclick="stopManualToggle()">
+              <button class="danger manual-stop" onclick="stopManualNow()">
                 <span class="glyph">■</span><span class="label">정지</span>
               </button>
               <button class="secondary manual-button" id="btn-strafe_right" data-toggle-direction="strafe_right">
@@ -1027,7 +1027,7 @@
           stopManualToggle(false);
           showError(error);
         });
-      }, 150);
+      }, 450);
     }
 
     function stopManualToggle(sendStop = true){
@@ -1035,15 +1035,28 @@
         window.clearInterval(manualToggleTimer);
         manualToggleTimer = null;
       }
-      const wasActive = manualToggleDirection;
       manualToggleDirection = null;
       updateToggleButtonStyles();
-      if(sendStop && wasActive){
+      if(sendStop){
         manualSilent("stop").catch(showError);
         window.setTimeout(() => {
           manualSilent("stop").catch(() => {});
         }, 120);
+        window.setTimeout(() => {
+          manualSilent("stop").catch(() => {});
+        }, 260);
       }
+    }
+
+    async function stopManualNow(){
+      stopManualToggle(false);
+      await manual("stop");
+      window.setTimeout(() => {
+        manualSilent("stop").catch(() => {});
+      }, 120);
+      window.setTimeout(() => {
+        manualSilent("stop").catch(() => {});
+      }, 260);
     }
 
     async function toggleManualAvoidance(){

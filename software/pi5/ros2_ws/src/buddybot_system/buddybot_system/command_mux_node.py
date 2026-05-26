@@ -13,7 +13,7 @@ from std_msgs.msg import Bool, String
 class CommandMuxNode(Node):
     def __init__(self):
         super().__init__("command_mux_node")
-        self.declare_parameter("command_timeout", 0.5)
+        self.declare_parameter("command_timeout", 1.2)
         self.declare_parameter("safety_check_rate", 10.0)
         self.command_timeout = self.get_parameter("command_timeout").value
         self.safety_check_rate = self.get_parameter("safety_check_rate").value

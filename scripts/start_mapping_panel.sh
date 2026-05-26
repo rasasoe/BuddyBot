@@ -156,6 +156,7 @@ VOICE_SPEAKER_RATE_WPM="${BUDDYBOT_VOICE_SPEAKER_RATE_WPM:-180}"
 VOICE_SPEAK_COMMAND_RESPONSES_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_SPEAK_COMMAND_RESPONSES:-0}")"
 VOICE_MIC_PARAM="$(bool_param_value "$ENABLE_MIC_LISTENER")"
 VOICE_SPEAKER_PARAM="$(bool_param_value "$ENABLE_PI_SPEAKER")"
+COMMAND_TIMEOUT="$(float_param_value "${BUDDYBOT_COMMAND_TIMEOUT:-1.2}")"
 
 start_node() {
   local name="$1"
@@ -407,6 +408,7 @@ echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
 echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s moving_phrase ${VOICE_MOVING_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s google_timeout ${VOICE_GOOGLE_TIMEOUT_SEC}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} manual_timeout ${VOICE_MANUAL_TIMEOUT_SEC}s tts_rate ${VOICE_SPEAKER_RATE_WPM} command_speech ${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
+echo "[mapping] command mux timeout: ${COMMAND_TIMEOUT}s"
 if [[ "$VOICE_RECOGNITION_BACKEND" == "google" || "$VOICE_RECOGNITION_BACKEND" == "auto" ]]; then
   if ! command -v flac >/dev/null 2>&1; then
     echo "[mapping] warning: google voice recognition needs flac; install with: sudo apt install -y flac"
@@ -434,7 +436,7 @@ else
   fi
 fi
 start_node encoder_odom ros2 run buddybot_base encoder_odom_node
-start_node command_mux ros2 run buddybot_system command_mux_node
+start_node command_mux ros2 run buddybot_system command_mux_node --ros-args -p command_timeout:="${COMMAND_TIMEOUT}"
 start_node mode_manager ros2 run buddybot_system mode_manager_node
 start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node

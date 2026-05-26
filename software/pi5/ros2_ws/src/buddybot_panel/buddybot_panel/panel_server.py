@@ -219,6 +219,10 @@ class PanelBridge:
         )
         self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.05"))
         self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.05"))
+        self._manual_hold_timeout_sec = float(os.getenv("BUDDYBOT_MANUAL_HOLD_TIMEOUT_SEC", "1.2"))
+        self._manual_publish_period_sec = max(0.02, float(os.getenv("BUDDYBOT_MANUAL_PUBLISH_PERIOD_SEC", "0.05")))
+        self._manual_stop_inhibit_sec = float(os.getenv("BUDDYBOT_MANUAL_STOP_INHIBIT_SEC", "1.5"))
+        self._manual_zero_burst_count = max(1, int(os.getenv("BUDDYBOT_MANUAL_ZERO_BURST_COUNT", "3")))
         self.last_command = "idle"
         self.ros2_connected = False
 
@@ -283,6 +287,7 @@ class PanelBridge:
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
         self._manual_updated_at = 0.0
+        self._manual_stop_inhibit_until = 0.0
         self._manual_request_count = 0
         self._last_manual_request_signature: Optional[str] = None
         self._last_manual_request_log_at = 0.0
@@ -374,7 +379,7 @@ class PanelBridge:
             self._destination_save_pub = self._node.create_publisher(String, "/nav/destination_save", command_qos)
             self._destination_delete_pub = self._node.create_publisher(String, "/nav/destination_delete", command_qos)
             self._nav_cancel_pub = self._node.create_publisher(String, "/nav/cancel", command_qos)
-            self._node.create_timer(0.1, self._manual_publish_timer)
+            self._node.create_timer(self._manual_publish_period_sec, self._manual_publish_timer)
             self._node.create_timer(0.2, self._mini_map_timer)
             self._publish_manual_avoidance_state()
             self._publish_voice_mode_state()
@@ -473,9 +478,12 @@ class PanelBridge:
             self._navigation_status_updates += 1
 
     def _voice_command_status_callback(self, msg: String) -> None:
+        should_clear_manual = self._voice_status_requests_stop(msg.data)
         with self._lock:
             self._voice_command_status = msg.data
             self._voice_command_status_stamp = time.time()
+        if should_clear_manual:
+            self._clear_manual_motion(inhibit_sec=self._manual_stop_inhibit_sec)
 
     def _safety_status_callback(self, msg: String) -> None:
         self._safety_status = msg.data
@@ -1370,6 +1378,27 @@ class PanelBridge:
             self._manual_linear_y = float(linear_y)
             self._manual_angular_z = float(angular_z)
             self._manual_updated_at = time.time()
+        self._publish_manual_twist(linear_x, linear_y, angular_z)
+
+    @staticmethod
+    def _voice_status_requests_stop(status: str) -> bool:
+        lowered = (status or "").lower()
+        if not lowered.startswith("heard:"):
+            return False
+        stop_keywords = (
+            "stop",
+            "halt",
+            "brake",
+            "cancel",
+            "\uc815\uc9c0",
+            "\uba48\ucdb0",
+            "\uba48\ucd94",
+            "\uc2a4\ud1b1",
+            "\uc2a4\ud0d1",
+            "\uc911\uc9c0",
+            "\uadf8\ub9cc",
+        )
+        return any(keyword in lowered for keyword in stop_keywords)
 
     @staticmethod
     def _clamp_manual_speed(speed: float, limit: float) -> float:
@@ -1560,15 +1589,28 @@ class PanelBridge:
         msg.data = bool(enabled)
         self._follow_pub.publish(msg)
 
-    def _clear_manual_motion(self, publish_zero: bool = True) -> None:
+    def _publish_manual_twist(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+        if not self.ros2_connected or self._manual_pub is None:
+            return
+        twist = Twist()
+        twist.linear.x = float(linear_x)
+        twist.linear.y = float(linear_y)
+        twist.angular.z = float(angular_z)
+        self._manual_pub.publish(twist)
+
+    def _clear_manual_motion(self, publish_zero: bool = True, inhibit_sec: float = 0.0) -> None:
+        now = time.time()
         with self._lock:
             self._manual_active = False
             self._manual_linear_x = 0.0
             self._manual_linear_y = 0.0
             self._manual_angular_z = 0.0
-            self._manual_updated_at = time.time()
-        if publish_zero and self.ros2_connected and self._manual_pub is not None:
-            self._manual_pub.publish(Twist())
+            self._manual_updated_at = now
+            if inhibit_sec > 0.0:
+                self._manual_stop_inhibit_until = max(self._manual_stop_inhibit_until, now + float(inhibit_sec))
+        if publish_zero:
+            for _ in range(self._manual_zero_burst_count):
+                self._publish_manual_twist(0.0, 0.0, 0.0)
 
     def _logger(self):
         if self._node is not None:
@@ -1666,20 +1708,18 @@ class PanelBridge:
         self._publish_follow_state(self.follow_enabled)
 
     def _manual_publish_timer(self) -> None:
-        if not self.ros2_connected or self._manual_pub is None:
-            return
         with self._lock:
             active = self._manual_active
             linear_x = self._manual_linear_x
             linear_y = self._manual_linear_y
             angular_z = self._manual_angular_z
+            updated_at = self._manual_updated_at
         if not active:
             return
-        twist = Twist()
-        twist.linear.x = linear_x
-        twist.linear.y = linear_y
-        twist.angular.z = angular_z
-        self._manual_pub.publish(twist)
+        if self._manual_hold_timeout_sec > 0.0 and (time.time() - updated_at) > self._manual_hold_timeout_sec:
+            self._clear_manual_motion()
+            return
+        self._publish_manual_twist(linear_x, linear_y, angular_z)
 
     def get_map_payload(self) -> Dict[str, Any]:
         if self._latest_map is None and (
@@ -1927,6 +1967,15 @@ class PanelBridge:
             with self._lock:
                 self._manual_request_count += 1
             self._log_manual_request(direction, speed, 0.0, 0.0, 0.0, note="clear_manual_motion")
+            self._clear_manual_motion(inhibit_sec=self._manual_stop_inhibit_sec)
+            return
+
+        with self._lock:
+            stop_inhibited = time.time() < self._manual_stop_inhibit_until
+        if stop_inhibited:
+            with self._lock:
+                self._manual_request_count += 1
+            self._log_manual_request(direction, speed, linear_x, linear_y, angular_z, note="ignored_after_stop")
             self._clear_manual_motion()
             return
 
