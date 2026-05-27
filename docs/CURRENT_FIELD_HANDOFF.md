@@ -117,7 +117,7 @@ Why this matters:
 
 Latest motion/Pico note:
 - Replacement Pico was used after USB-C pad damage.
-- Current firmware baseline uses `MOTOR_DIRECTION_SIGNS["right"] = -1`.
+- New replacement-Pico field test showed gross forward/rotate/strafe mixing, so the current firmware trial baseline uses `MOTOR_DIRECTION_SIGNS["right"] = 1` and disables manual/follow yaw trim by default.
 - If firmware is recopied, copy the full Pico firmware set, not only `main.py`.
 
 Pi5 standard restart:

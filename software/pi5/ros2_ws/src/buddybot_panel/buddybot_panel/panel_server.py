@@ -217,8 +217,8 @@ class PanelBridge:
                 f"{self._manual_angular_limit * self._manual_right_turn_boost:.3f}",
             )
         )
-        self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.05"))
-        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.05"))
+        self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "0.0"))
+        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "0.0"))
         self._manual_hold_timeout_sec = float(os.getenv("BUDDYBOT_MANUAL_HOLD_TIMEOUT_SEC", "1.2"))
         self._manual_publish_period_sec = max(0.02, float(os.getenv("BUDDYBOT_MANUAL_PUBLISH_PERIOD_SEC", "0.05")))
         self._manual_stop_inhibit_sec = float(os.getenv("BUDDYBOT_MANUAL_STOP_INHIBIT_SEC", "1.5"))

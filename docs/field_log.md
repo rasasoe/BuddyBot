@@ -1441,6 +1441,31 @@ Validation:
   - `버디봇 정지` -> manual stop/follow off
   - `버디봇 주방 이동` -> requests `kitchen` checkpoint if it exists
 
+## 2026-05-27 Replacement Pico motion remap
+
+Field feedback after the replacement Pico was reflashed and brought online:
+- Panel buttons were responsive again, but gross motion mapping was wrong:
+  - `forward` turned left
+  - rotation commands mixed with forward/backward movement
+  - strafe commands moved sideways while also rotating
+- Interpretation:
+  - This is no longer the small yaw-trim case. It indicates the replacement Pico wiring/polarity no longer matches the previous `right=-1` field correction.
+
+Changes:
+- `firmware/pico_motor_controller/config.py`
+  - set `MOTOR_DIRECTION_SIGNS["right"]` back to `1`
+- `buddybot_panel`
+  - default manual forward/backward yaw trims to `0.0`
+- `scripts/start_mapping_panel.sh`, `scripts/start_presentation_mode.sh`
+  - default follow forward yaw trim to `0.0`
+- Added `scripts/test_pico_motors.sh` for single-wheel mapping checks if the gross motion is still wrong after reflashing.
+
+Required Pi action:
+- `git pull`
+- `bash scripts/flash_pico.sh`
+- rebuild `buddybot_panel`
+- restart presentation mode and retest panel manual `forward`, `rotate_left`, `rotate_right`, `strafe_left`, `strafe_right`, `stop`
+
 Pi5 rebuild for this slice:
 
 ```bash

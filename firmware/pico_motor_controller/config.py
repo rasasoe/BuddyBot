@@ -55,7 +55,7 @@ COMMAND_ZERO_DEADBAND = 0.02
 # kinematics layer rather than by flipping one wheel ad hoc.
 MOTOR_DIRECTION_SIGNS = {
     'left': 1,
-    'right': -1,  # field-corrected 2026-04: right motor physically reversed
+    'right': 1,
     'back': 1,
 }
 
