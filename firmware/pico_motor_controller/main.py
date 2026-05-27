@@ -83,6 +83,7 @@ def control_loop(pid_controllers, applied_outputs):
         uart_protocol.send_ack('BRAKE')
         uart_protocol.send_safety_event('brake_command')
     elif command_type == 'CLEAR':
+        watchdog.feed()
         safety_system.clear_emergency_stop()
         uart_protocol.send_ack('CLEAR')
     elif command_type is None and params is None:
