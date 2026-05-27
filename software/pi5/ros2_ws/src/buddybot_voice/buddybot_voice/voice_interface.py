@@ -66,7 +66,7 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_speed", 0.44)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
-        self.declare_parameter("forward_yaw_trim", -0.03)
+        self.declare_parameter("forward_yaw_trim", 0.0)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")

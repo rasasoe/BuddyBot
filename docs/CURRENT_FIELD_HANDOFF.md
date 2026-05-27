@@ -438,3 +438,9 @@ source install/setup.bash
 cd ~/BuddyBot
 BUDDYBOT_FORCE_LIDAR_START=1 bash scripts/start_presentation_mode.sh mapping
 ```
+
+Correction after field test:
+- The `-0.03` trim was too aggressive and caused hard right drift.
+- Open-loop Pico drive increased pulsing.
+- Latest code keeps continuous `BuddyBot forward`, but restores Pico P-only correction and resets all default forward yaw trims to `0.0`.
+- If a small left drift remains, test runtime trim in tiny steps, for example `-0.005`.

@@ -20,17 +20,17 @@ UART_BAUDRATE = 115200
 WATCHDOG_TIMEOUT_MS = 1000
 
 # Demo-first motor control gains.
-# The replacement Pico/encoder path can report brief RPM spikes in the field,
-# which made the motors pulse during steady manual driving. Keep the firmware
-# open-loop by default; higher ROS layers still own command timeouts and stops.
-PID_KP = 0.0
+# Keep BuddyBot on P-only control for now because the current field setup
+# still has noisy/limited encoder feedback, and I/D terms caused stop lag
+# and oscillation risks during live testing. This is smoother than fully
+# open-loop drive on the replacement Pico field setup.
+PID_KP = 0.3
 PID_KI = 0.0
 PID_KD = 0.0
 
-# Legacy closed-loop tuning from the pre-ROS Pico controller. Keep the estimate
-# for diagnostics, but clamp correction to zero unless closed-loop is retuned.
+# Legacy closed-loop tuning from the pre-ROS Pico controller.
 MAX_RPM_EST = 60.0
-PID_CORR_MAX = 0.0
+PID_CORR_MAX = 0.30
 
 # Motor speed limits (-1.0 to 1.0)
 MAX_MOTOR_SPEED = 1.0

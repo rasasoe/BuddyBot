@@ -1511,3 +1511,23 @@ Pi action:
 - Reflash Pico firmware because `config.py` changed.
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Restart presentation mode.
+
+## 2026-05-27 Revert aggressive trim/open-loop after field test
+
+Field feedback after `8eb067c`:
+- Forward now drifts hard right instead of slightly left.
+- Fully open-loop Pico drive made the stop-go pulsing worse.
+
+Correction:
+- Kept the desired voice behavior: `BuddyBot forward` is still continuous until stop.
+- Restored Pico P-only correction:
+  - `PID_KP=0.3`
+  - `PID_CORR_MAX=0.30`
+- Reset default forward yaw trim back to `0.0` for:
+  - panel manual forward
+  - voice forward
+  - follow forward
+
+Next field calibration:
+- Retest with zero trim first.
+- If it still drifts slightly left, use a much smaller runtime trim such as `-0.005`, not `-0.03`.
