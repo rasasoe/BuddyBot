@@ -223,6 +223,8 @@ class PanelBridge:
         self._manual_publish_period_sec = max(0.02, float(os.getenv("BUDDYBOT_MANUAL_PUBLISH_PERIOD_SEC", "0.05")))
         self._manual_stop_inhibit_sec = float(os.getenv("BUDDYBOT_MANUAL_STOP_INHIBIT_SEC", "1.5"))
         self._manual_zero_burst_count = max(1, int(os.getenv("BUDDYBOT_MANUAL_ZERO_BURST_COUNT", "3")))
+        self._scan_cli_timeout_sec = max(0.2, float(os.getenv("BUDDYBOT_SCAN_CLI_TIMEOUT_SEC", "0.8")))
+        self._scan_cli_min_interval_sec = max(1.0, float(os.getenv("BUDDYBOT_SCAN_CLI_MIN_INTERVAL_SEC", "8.0")))
         self.last_command = "idle"
         self.ros2_connected = False
 
@@ -938,7 +940,9 @@ class PanelBridge:
             "cells": [0] * (width * height),
         }
 
-    def _poll_scan_from_cli(self, min_interval_sec: float = 2.0) -> bool:
+    def _poll_scan_from_cli(self, min_interval_sec: Optional[float] = None) -> bool:
+        if min_interval_sec is None:
+            min_interval_sec = self._scan_cli_min_interval_sec
         now = time.time()
         if (now - self._last_cli_scan_attempt) < min_interval_sec:
             return self._latest_scan_map is not None
@@ -949,7 +953,7 @@ class PanelBridge:
                 result = subprocess.run(
                     [
                         "timeout",
-                        "3s",
+                        f"{self._scan_cli_timeout_sec:.2f}s",
                         "ros2",
                         "topic",
                         "echo",
@@ -1000,7 +1004,7 @@ class PanelBridge:
             self._last_scan_error = repr(exc)
             return False
 
-    def status(self) -> Dict[str, Any]:
+    def status(self, *, refresh_server: bool = False, allow_scan_probe: bool = False) -> Dict[str, Any]:
         pose = self.current_pose()
         with self._lock:
             navigation_status = self._navigation_status
@@ -1023,7 +1027,7 @@ class PanelBridge:
             "navigation_status": navigation_status,
             "ros2_connected": self.ros2_connected,
             "server_url": self.server_url,
-            "server_connected": self._cached_server_connected(),
+            "server_connected": self._cached_server_connected() if refresh_server else bool(self._server_connected),
             "last_command": self.last_command,
             "system_status": self._system_status,
             "voice_command_status": voice_command_status,
@@ -1035,7 +1039,7 @@ class PanelBridge:
             "camera_age_sec": self.camera_age_sec(),
             "detector_status": self.detector_status(),
             "follow_status": self.follow_status(),
-            "scan_available": self.scan_available(),
+            "scan_available": self.scan_available(allow_probe=allow_scan_probe),
             "scan_age_sec": self.scan_age_sec(),
             "scan_frames_received": self.scan_frames_received(),
             "scan_summary": self.scan_summary(),
@@ -1055,7 +1059,7 @@ class PanelBridge:
             "person_age_sec": self.person_age_sec(),
             "person_bbox": self.person_bbox(),
             "person_frames_received": self.person_frames_received(),
-            "sensor_fusion": self.sensor_fusion_summary(),
+            "sensor_fusion": self.sensor_fusion_summary(allow_scan_probe=allow_scan_probe),
             "minimap": self.mini_map_status(),
         }
 
@@ -1081,12 +1085,12 @@ class PanelBridge:
                 return None
             return round(max(0.0, time.time() - self._latest_camera_stamp), 2)
 
-    def scan_available(self) -> bool:
+    def scan_available(self, *, allow_probe: bool = False) -> bool:
         needs_probe = False
         with self._lock:
             needs_probe = self._latest_scan_map is None or self._latest_scan_stamp is None or (time.time() - self._latest_scan_stamp) >= 3.0
-        if needs_probe:
-            self._poll_scan_from_cli(min_interval_sec=3.0)
+        if allow_probe and needs_probe:
+            self._poll_scan_from_cli()
         with self._lock:
             return self._latest_scan_map is not None and self._latest_scan_stamp is not None and (time.time() - self._latest_scan_stamp) < 3.0
 
@@ -1217,9 +1221,9 @@ class PanelBridge:
         with self._lock:
             return int(self._person_frames_received)
 
-    def sensor_fusion_summary(self) -> Dict[str, Any]:
+    def sensor_fusion_summary(self, *, allow_scan_probe: bool = False) -> Dict[str, Any]:
         pose_ready = self.current_pose() is not None
-        lidar_live = self.scan_available()
+        lidar_live = self.scan_available(allow_probe=allow_scan_probe)
         camera_live = self.camera_available()
         map_live = self.map_available()
         person_live = self.person_detected()
