@@ -57,7 +57,7 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter("manual_command_timeout_sec", 2.0)
         self.declare_parameter("nudge_duration_sec", 2.5)
-        self.declare_parameter("continuous_command_max_sec", 10.0)
+        self.declare_parameter("continuous_command_max_sec", 0.0)
         self.declare_parameter("zero_burst_count", 4)
         self.declare_parameter(
             "wake_words",
@@ -66,6 +66,7 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_speed", 0.44)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
+        self.declare_parameter("forward_yaw_trim", -0.03)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")
@@ -102,6 +103,7 @@ class VoiceInterface(Node):
         self.manual_speed = float(self.get_parameter("manual_speed").value)
         self.strafe_speed = float(self.get_parameter("strafe_speed").value)
         self.rotate_speed = float(self.get_parameter("rotate_speed").value)
+        self.forward_yaw_trim = float(self.get_parameter("forward_yaw_trim").value)
         self.enable_speaker_output = bool(self.get_parameter("enable_speaker_output").value)
         self.speaker_backend = str(self.get_parameter("speaker_backend").value).strip().lower()
         self.speaker_voice_ko = str(self.get_parameter("speaker_voice_ko").value).strip() or "ko"
@@ -170,6 +172,10 @@ class VoiceInterface(Node):
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
             f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s, "
             f"google_timeout={self.google_timeout_sec}s"
+        )
+        self.get_logger().info(
+            f"Motion voice: manual_speed={self.manual_speed}, forward_yaw_trim={self.forward_yaw_trim}, "
+            f"continuous_max={self.continuous_command_max_sec}s"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
         self.get_logger().info(
@@ -370,7 +376,7 @@ class VoiceInterface(Node):
             self._start_manual_motion(
                 self.manual_speed,
                 0.0,
-                0.0,
+                self.forward_yaw_trim,
                 self.continuous_command_max_sec,
                 mode="continuous",
                 intent="forward",
@@ -383,10 +389,17 @@ class VoiceInterface(Node):
                 normalized_text=text,
                 matched_intent="forward",
                 matched_keywords=self._matched_keywords(command_text, self.FORWARD_WORDS),
-                command_mode="nudge",
+                command_mode="continuous",
                 stop_priority_applied=False,
             )
-            self._start_manual_motion(self.manual_speed, 0.0, 0.0, self.nudge_duration_sec, mode="nudge", intent="forward")
+            self._start_manual_motion(
+                self.manual_speed,
+                0.0,
+                self.forward_yaw_trim,
+                self.continuous_command_max_sec,
+                mode="continuous",
+                intent="forward",
+            )
             return "전진."
 
         if any(keyword in command_text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
@@ -473,6 +486,12 @@ class VoiceInterface(Node):
         "halt",
         "brake",
         "cancel",
+        "멈춰줘",
+        "멈춰 줘",
+        "멈추세요",
+        "멈춰주세요",
+        "그만해",
+        "세워줘",
         "정지",
         "정지해",
         "멈춰",

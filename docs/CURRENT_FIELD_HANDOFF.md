@@ -407,3 +407,34 @@ Suggested scope:
   - `rotation_radius_m`
 - Retry short local checkpoint movement.
 - Update this document and `docs/field_log.md` after field validation.
+
+## 2026-05-27 Current Field Delta
+
+Latest field state:
+- Replacement Pico firmware is online and manual direction mapping is now correct.
+- Remaining field symptoms were steady-drive stutter, slight left drift during forward motion, and STT confusion between short Korean commands.
+
+Latest code changes:
+- Pico firmware motor PID correction is disabled by default (`PID_KP=0.0`, `PID_CORR_MAX=0.0`) to avoid encoder-noise pulsing during steady manual drive.
+- Default forward yaw trim is now `-0.03` for panel manual forward, voice forward, and follow forward.
+- Voice command policy now treats plain `BuddyBot forward` as continuous forward.
+- Voice continuous max default is `0.0`, meaning it keeps moving until panel stop, voice stop, safety, or process shutdown.
+- Stop aliases were expanded; recommend using `멈춰`, `스톱`, or `그만` in the field instead of relying on `정지`.
+
+Important STT note:
+- Current voice recognition backend is online Google Web Speech through Python `speech_recognition`.
+- It is not an onboard/offline Google model. Local control happens after the recognized text returns to the Pi.
+
+Required Pi update:
+
+```bash
+cd ~/BuddyBot
+git pull origin main
+bash scripts/flash_pico.sh
+cd software/pi5/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select buddybot_voice buddybot_panel
+source install/setup.bash
+cd ~/BuddyBot
+BUDDYBOT_FORCE_LIDAR_START=1 bash scripts/start_presentation_mode.sh mapping
+```

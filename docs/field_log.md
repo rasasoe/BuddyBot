@@ -1476,3 +1476,38 @@ source install/setup.bash
 cd ~/BuddyBot
 BUDDYBOT_FORCE_LIDAR_START=1 bash scripts/start_presentation_mode.sh mapping
 ```
+
+## 2026-05-27 Open-loop Pico and continuous forward voice
+
+Field feedback:
+- Manual directions are now mapped correctly after the replacement Pico polarity reset.
+- Remaining issues:
+  - steady manual driving pulses/stutters
+  - forward/continuous-forward slowly drifts left
+  - Google STT confuses short Korean words such as `forward`/`stop`
+  - desired behavior changed to `BuddyBot forward` = keep driving until panel stop or voice stop.
+
+Changes:
+- Pico firmware defaults to open-loop motor output:
+  - `PID_KP=0.0`
+  - `PID_CORR_MAX=0.0`
+  - This removes encoder-derived correction spikes from steady manual motion.
+- Forward yaw trim defaults to a small right correction:
+  - panel manual: `BUDDYBOT_MANUAL_FORWARD_YAW_TRIM=-0.03`
+  - voice forward: `BUDDYBOT_VOICE_FORWARD_YAW_TRIM=-0.03`
+  - follow forward: `BUDDYBOT_FOLLOW_FORWARD_YAW_TRIM=-0.03`
+- Voice continuous behavior:
+  - normal forward aliases now start continuous forward, not a short nudge
+  - `BUDDYBOT_VOICE_CONTINUOUS_MAX_SEC=0.0` means no voice auto-stop by default
+  - stop still clears follow/navigation/manual and sends a zero burst
+- Stop aliases were expanded for clearer Korean stop phrases such as `멈춰줘`, `멈추세요`, `그만해`, `세워줘`.
+
+Operational note:
+- The current Google recognizer is online Google Web Speech via the Python `speech_recognition` package, not an onboard/offline Google model.
+- In the noisy robot environment, prefer `멈춰`, `스톱`, or `그만` over `정지` because `정지` and `전진` are short and easier for STT to confuse.
+
+Pi action:
+- Pull main.
+- Reflash Pico firmware because `config.py` changed.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
