@@ -288,6 +288,7 @@ class PanelBridge:
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
         self._manual_angular_z = 0.0
+        self._manual_direction = "stop"
         self._manual_updated_at = 0.0
         self._manual_stop_inhibit_until = 0.0
         self._manual_request_count = 0
@@ -1375,12 +1376,13 @@ class PanelBridge:
             return True
         return elapsed >= self._mini_map_target_duration_sec and known_cells >= max(1800, self._mini_map_completion_goal_cells // 3)
 
-    def _set_manual_motion(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+    def _set_manual_motion(self, linear_x: float, linear_y: float, angular_z: float, *, direction: str = "manual") -> None:
         with self._lock:
             self._manual_active = True
             self._manual_linear_x = float(linear_x)
             self._manual_linear_y = float(linear_y)
             self._manual_angular_z = float(angular_z)
+            self._manual_direction = direction
             self._manual_updated_at = time.time()
         self._publish_manual_twist(linear_x, linear_y, angular_z)
 
@@ -1609,6 +1611,7 @@ class PanelBridge:
             self._manual_linear_x = 0.0
             self._manual_linear_y = 0.0
             self._manual_angular_z = 0.0
+            self._manual_direction = "stop"
             self._manual_updated_at = now
             if inhibit_sec > 0.0:
                 self._manual_stop_inhibit_until = max(self._manual_stop_inhibit_until, now + float(inhibit_sec))
@@ -1932,10 +1935,17 @@ class PanelBridge:
 
     def manual_command(self, direction: str, speed: float) -> None:
         self.last_command = f"manual:{direction}"
-        self._publish_voice_manual_override(f"panel:{direction}")
-        self.follow_enabled = False
-        self._publish_follow_state(False)
-        self.cancel_navigation()
+        with self._lock:
+            manual_override_needed = (
+                direction == "stop"
+                or not self._manual_active
+                or self._manual_direction != direction
+            )
+        if manual_override_needed:
+            self._publish_voice_manual_override(f"panel:{direction}")
+            self.follow_enabled = False
+            self._publish_follow_state(False)
+            self.cancel_navigation()
         magnitude = max(0.0, abs(float(speed)))
         linear_x = 0.0
         linear_y = 0.0
@@ -1992,7 +2002,7 @@ class PanelBridge:
         with self._lock:
             self._manual_request_count += 1
         self._log_manual_request(direction, speed, linear_x, linear_y, angular_z)
-        self._set_manual_motion(linear_x, linear_y, angular_z)
+        self._set_manual_motion(linear_x, linear_y, angular_z, direction=direction)
 
     def go_waypoint(self, name: str) -> Dict[str, Any]:
         cleaned_name = name.strip()

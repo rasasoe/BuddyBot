@@ -449,3 +449,11 @@ Latest follow-up:
 - Zero trim still left-drifts slightly, and forward still pauses/resumes.
 - Current code now uses tiny trim `-0.006`, softer Pico P correction (`PID_KP=0.12`, `PID_CORR_MAX=0.12`), a 2.0s Pico watchdog, 2.0s command mux timeout, 3.0s panel hold timeout, 250ms panel manual refresh, and 50ms voice manual publishing.
 - Pico must be reflashed again for this change.
+
+Manual stutter root cause and latest fix:
+- Follow was smooth while panel manual stuttered, so the remaining stutter was isolated to `/cmd_vel_manual`.
+- Panel held-button refreshes were publishing `/voice/manual_override` every 250 ms.
+- `buddybot_voice` responded to each override with a zero burst on `/cmd_vel_manual`, fighting the panel manual command.
+- Latest code sends panel manual override only on start/stop/direction change.
+- `buddybot_voice` now sends a zero burst on manual override only when a voice-started manual motion was active.
+- Pico reflash is not required for this latest patch; rebuild `buddybot_voice` and `buddybot_panel` only.

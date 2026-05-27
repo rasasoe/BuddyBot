@@ -1558,3 +1558,25 @@ Required Pi action:
 - Pull main.
 - Reflash Pico firmware because `config.py` changed.
 - Rebuild `buddybot_voice` and `buddybot_panel`.
+
+## 2026-05-27 Stop panel manual stutter from voice zero bursts
+
+Field feedback:
+- User following is smooth, but panel manual drive still pauses/resumes.
+- This points away from Pico motor control and toward the `/cmd_vel_manual` path.
+
+Root cause found:
+- The panel refreshes a held manual button every 250 ms.
+- Every refresh also published `/voice/manual_override`.
+- `buddybot_voice` handled each override by sending a zero burst on `/cmd_vel_manual`.
+- Result: panel publishes forward, voice publishes zero, panel publishes forward again.
+
+Changes:
+- Panel now sends `/voice/manual_override` only when a manual session starts, stops, or changes direction.
+- Repeated same-direction hold refreshes only refresh the actual manual twist.
+- Voice no longer sends zero bursts for panel overrides unless a voice-initiated manual motion was actually active.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Pico reflash is not required for this patch.

@@ -231,7 +231,10 @@ class VoiceInterface(Node):
     def manual_override_callback(self, msg: String) -> None:
         reason = msg.data.strip() or "manual"
         self._manual_override_until = time.time() + max(0.0, self.manual_override_ignore_sec)
-        self._clear_manual_motion()
+        if self._manual_active:
+            self._clear_manual_motion()
+        else:
+            self._reset_manual_motion_state()
         self._publish_status(f"manual_override:{reason}")
 
     def system_status_callback(self, msg: String) -> None:
@@ -647,6 +650,11 @@ class VoiceInterface(Node):
         self._publish_status(f"voice_manual:{mode}_{intent}")
 
     def _clear_manual_motion(self) -> None:
+        self._reset_manual_motion_state()
+        for _ in range(self.zero_burst_count):
+            self.manual_pub.publish(Twist())
+
+    def _reset_manual_motion_state(self) -> None:
         self._manual_active = False
         self._manual_linear_x = 0.0
         self._manual_linear_y = 0.0
@@ -654,8 +662,6 @@ class VoiceInterface(Node):
         self._manual_until = 0.0
         self._manual_command_mode = "idle"
         self._manual_intent = "idle"
-        for _ in range(self.zero_burst_count):
-            self.manual_pub.publish(Twist())
 
     def _set_follow_enabled(self, enabled: bool) -> None:
         self.follow_enabled = enabled
