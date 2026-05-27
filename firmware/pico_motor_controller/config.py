@@ -17,20 +17,18 @@ UART_BAUDRATE = 115200
 # The Pico firmware communicates via USB serial interface
 
 # Watchdog timeout (ms)
-WATCHDOG_TIMEOUT_MS = 1000
+WATCHDOG_TIMEOUT_MS = 2000
 
 # Demo-first motor control gains.
-# Keep BuddyBot on P-only control for now because the current field setup
-# still has noisy/limited encoder feedback, and I/D terms caused stop lag
-# and oscillation risks during live testing. This is smoother than fully
-# open-loop drive on the replacement Pico field setup.
-PID_KP = 0.3
+# Keep a gentle P-only correction. Fully open-loop drive pulsed in the field,
+# but the previous stronger P gain overreacted to noisy encoder samples.
+PID_KP = 0.12
 PID_KI = 0.0
 PID_KD = 0.0
 
 # Legacy closed-loop tuning from the pre-ROS Pico controller.
 MAX_RPM_EST = 60.0
-PID_CORR_MAX = 0.30
+PID_CORR_MAX = 0.12
 
 # Motor speed limits (-1.0 to 1.0)
 MAX_MOTOR_SPEED = 1.0
@@ -39,8 +37,8 @@ MIN_MOTOR_SPEED = -1.0
 # Limit how quickly wheel output can change between control-loop ticks. This
 # reduces current spikes when the operator jumps between forward/reverse/turn
 # commands and helps keep the Pico USB bridge alive under load.
-MOTOR_OUTPUT_SLEW_UP = 0.06
-MOTOR_OUTPUT_SLEW_DOWN = 0.14
+MOTOR_OUTPUT_SLEW_UP = 0.05
+MOTOR_OUTPUT_SLEW_DOWN = 0.05
 MOTOR_OUTPUT_SLEW_REVERSAL = 0.05
 
 # Treat very small command magnitudes as an explicit stop so the firmware

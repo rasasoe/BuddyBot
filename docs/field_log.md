@@ -1531,3 +1531,30 @@ Correction:
 Next field calibration:
 - Retest with zero trim first.
 - If it still drifts slightly left, use a much smaller runtime trim such as `-0.005`, not `-0.03`.
+
+## 2026-05-27 Smooth continuous forward hold
+
+Field feedback:
+- With zero trim, forward still drifts slightly left.
+- Forward motion still stutters: it advances, pauses, then advances again.
+
+Changes:
+- Applied only a tiny right-yaw correction:
+  - panel manual forward: `BUDDYBOT_MANUAL_FORWARD_YAW_TRIM=-0.006`
+  - voice forward: `BUDDYBOT_VOICE_FORWARD_YAW_TRIM=-0.006`
+  - follow forward: `BUDDYBOT_FOLLOW_FORWARD_YAW_TRIM=-0.006`
+- Reduced Pico encoder correction aggression instead of disabling it:
+  - `PID_KP=0.12`
+  - `PID_CORR_MAX=0.12`
+  - motor output down-slew reduced to `0.05` so noisy correction cannot drop output as sharply.
+- Increased Pico watchdog timeout from 1.0s to 2.0s to avoid brief serial stalls looking like stop/start.
+- Increased command hold margins:
+  - panel manual hold timeout default: 3.0s
+  - command mux timeout default: 2.0s
+  - panel manual refresh interval: 250ms
+  - voice manual publish timer: 50ms
+
+Required Pi action:
+- Pull main.
+- Reflash Pico firmware because `config.py` changed.
+- Rebuild `buddybot_voice` and `buddybot_panel`.

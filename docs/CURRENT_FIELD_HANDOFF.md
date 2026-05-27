@@ -444,3 +444,8 @@ Correction after field test:
 - Open-loop Pico drive increased pulsing.
 - Latest code keeps continuous `BuddyBot forward`, but restores Pico P-only correction and resets all default forward yaw trims to `0.0`.
 - If a small left drift remains, test runtime trim in tiny steps, for example `-0.005`.
+
+Latest follow-up:
+- Zero trim still left-drifts slightly, and forward still pauses/resumes.
+- Current code now uses tiny trim `-0.006`, softer Pico P correction (`PID_KP=0.12`, `PID_CORR_MAX=0.12`), a 2.0s Pico watchdog, 2.0s command mux timeout, 3.0s panel hold timeout, 250ms panel manual refresh, and 50ms voice manual publishing.
+- Pico must be reflashed again for this change.

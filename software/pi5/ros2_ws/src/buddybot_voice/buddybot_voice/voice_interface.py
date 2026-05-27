@@ -66,7 +66,7 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_speed", 0.44)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
-        self.declare_parameter("forward_yaw_trim", 0.0)
+        self.declare_parameter("forward_yaw_trim", -0.006)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")
@@ -132,7 +132,7 @@ class VoiceInterface(Node):
         self.create_subscription(String, "/voice/response", self.voice_response_callback, 10)
         self.create_subscription(String, "/system/command_status", self.system_status_callback, 10)
         self.create_subscription(String, "/nav/navigation_status", self.navigation_status_callback, 10)
-        self.manual_timer = self.create_timer(0.1, self.manual_publish_timer)
+        self.manual_timer = self.create_timer(0.05, self.manual_publish_timer)
 
         self.follow_enabled = False
         self._manual_active = False
