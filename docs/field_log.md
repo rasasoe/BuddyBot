@@ -1628,3 +1628,25 @@ Required Pi action:
 - Install `mpg123`.
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Pico reflash is not required.
+
+## 2026-06-01 Hybrid Whisper STT routing
+
+Goal:
+- Replace Google-first STT with server Whisper accuracy and Pi offline fallback.
+- Preserve Pi-local wake-word, local command classification, and emergency stop behavior.
+
+Changes:
+- Default recognition backend is now `hybrid`.
+- Pi local `faster-whisper` tiny detects wake-word while idle.
+- Command speech after wake-word uses BuddyBot-ai `POST /stt` first.
+- Pi local tiny is the first emergency-stop recognizer while moving or following.
+- Pi tiny is the fallback when server `/stt` fails.
+- Google Web Speech remains an optional last fallback.
+- Server failures trigger a 10s cooldown to avoid repeated microphone stalls.
+- Added `scripts/setup_pi5_whisper.sh` to install `faster-whisper` and preload the tiny model.
+
+Required Pi action:
+- Pull main.
+- Run `bash scripts/setup_pi5_whisper.sh` once.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Pico reflash is not required.

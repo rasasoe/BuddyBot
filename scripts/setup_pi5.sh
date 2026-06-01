@@ -45,6 +45,7 @@ sudo apt install -y \
 
 pip3 install --quiet --break-system-packages mpremote 2>/dev/null || pip3 install --quiet mpremote
 pip3 install --quiet --break-system-packages SpeechRecognition 2>/dev/null || pip3 install --quiet SpeechRecognition
+pip3 install --quiet --break-system-packages faster-whisper 2>/dev/null || pip3 install --quiet faster-whisper
 
 safe_source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 

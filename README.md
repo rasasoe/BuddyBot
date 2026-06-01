@@ -295,19 +295,53 @@ sudo apt install -y flac mpg123
 
 ### 11. 현재 STT 방식
 
-현재 기본 STT는 Pi에서 `speech_recognition` 패키지를 통해 사용하는 Google Web Speech입니다.
-온보드 오프라인 Google 모델은 아니므로 인터넷 상태에 따라 인식 시간이 달라질 수 있습니다.
+현재 기본 STT는 Whisper 하이브리드 구조입니다.
 
 ```text
-BUDDYBOT_VOICE_RECOGNITION_BACKEND=google
+대기 중 웨이크워드
+→ Pi faster-whisper tiny
+
+웨이크워드 이후 명령 문장
+→ BuddyBot-ai /stt 서버 Whisper 우선
+→ 실패하면 Pi faster-whisper tiny
+→ 실패하면 선택적 Google Web Speech fallback
+
+주행 중 긴급 정지
+→ Pi faster-whisper tiny 우선
+→ 서버 Whisper
+→ 선택적 Google Web Speech fallback
+```
+
+`버디봇 전진`처럼 웨이크워드와 명령을 한 번에 말하면 Pi가 먼저 웨이크워드를 확인하고, 같은 WAV를 서버 Whisper로 다시 보내 명령 정확도를 높입니다.
+서버가 잠시 응답하지 않으면 10초 동안 서버 재시도를 쉬고 Pi fallback을 우선 사용합니다.
+
+```text
+BUDDYBOT_VOICE_RECOGNITION_BACKEND=hybrid
+BUDDYBOT_VOICE_SERVER_STT_ENABLED=1
+BUDDYBOT_VOICE_SERVER_STT_TIMEOUT_SEC=4.0
+BUDDYBOT_VOICE_SERVER_STT_COOLDOWN_SEC=10.0
+BUDDYBOT_VOICE_LOCAL_WHISPER_ENABLED=1
+BUDDYBOT_VOICE_LOCAL_WHISPER_MODEL=tiny
+BUDDYBOT_VOICE_LOCAL_WHISPER_DEVICE=cpu
+BUDDYBOT_VOICE_LOCAL_WHISPER_COMPUTE_TYPE=int8
+BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=1
 BUDDYBOT_VOICE_RECOGNITION_LANGUAGE=ko-KR
 BUDDYBOT_VOICE_GOOGLE_TIMEOUT_SEC=1.8
 ```
 
-Google STT가 지연되면 약 1.8초 뒤 다음 음성을 다시 듣도록 복귀합니다.
-서버가 꺼져 있어도 로컬로 인식된 로봇 명령은 Pi에서 계속 처리합니다.
-다만 인터넷까지 끊기면 현재 기본 Google STT 경로는 음성을 텍스트로 바꿀 수 없으므로, 마이크 기반 음성 명령은 보장되지 않습니다.
-완전한 오프라인 음성 인식은 Pi용 faster-whisper 또는 별도 온보드 STT를 연결하는 후속 작업입니다.
+Pi에서 한 번만 설치하고 tiny 모델을 미리 내려받습니다.
+
+```bash
+cd ~/BuddyBot
+bash scripts/setup_pi5_whisper.sh
+```
+
+서버와 인터넷이 모두 끊겨도 Pi에 tiny 모델이 준비되어 있으면 기본 음성 제어를 계속 사용할 수 있습니다.
+Google Web Speech는 마지막 선택 fallback일 뿐이며, 끄고 싶으면 아래처럼 실행합니다.
+
+```bash
+BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0 bash scripts/start_presentation_mode.sh mapping
+```
 
 ### 12. 추천 시연 순서
 

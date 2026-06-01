@@ -24,7 +24,7 @@ BuddyBot의 음성 인터페이스 패키지.
 
 ```text
 Pi 마이크 또는 /voice/text
-→ wake-word 확인
+→ Pi faster-whisper tiny wake-word 확인
 → 정지 명령 최우선 검사
 → 이동 / 추종 / waypoint 로컬 명령 검사
 → /cmd_vel_manual, /follow/enabled, /nav/waypoint_goal
@@ -35,6 +35,34 @@ Pi 마이크 또는 /voice/text
 ```
 
 서버 AI가 모터 명령을 직접 발행하지는 않습니다.
+
+## STT 우선순위
+
+기본 backend는 `hybrid`입니다.
+
+```text
+대기 중:
+Pi faster-whisper tiny로 웨이크워드 감지
+
+웨이크워드 이후 명령:
+BuddyBot-ai /stt 서버 Whisper
+→ Pi faster-whisper tiny
+→ 선택적 Google Web Speech fallback
+
+주행 중:
+Pi faster-whisper tiny로 긴급 정지 우선 검사
+→ 서버 Whisper
+→ 선택적 Google Web Speech fallback
+```
+
+서버 `/stt`가 실패하면 일정 시간 cooldown을 적용해 네트워크 실패로 마이크 루프가 계속 지연되지 않게 합니다.
+
+Pi 설치 및 tiny 모델 사전 다운로드:
+
+```bash
+cd ~/BuddyBot
+bash scripts/setup_pi5_whisper.sh
+```
 
 ## 서버 대화 처리 흐름
 
@@ -73,6 +101,7 @@ Pi 마이크
 - 정지 처리 순서: 이동 해제, 추종 해제, 내비게이션 취소, zero velocity 발행, 음성 응답
 - 부정문과 설명 요청은 이동 명령으로 실행하지 않음
 - 서버가 꺼져 있어도 로컬 로봇 명령은 계속 처리
+- Pi tiny 모델이 준비되어 있으면 서버와 인터넷이 모두 끊겨도 기본 음성 제어 가능
 
 ## 음성 출력 우선순위
 

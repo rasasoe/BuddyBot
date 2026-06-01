@@ -128,6 +128,11 @@ if have_cmd mpg123; then
 else
   warn "mpg123 not installed; run: sudo apt install -y mpg123"
 fi
+if python3 -c "import faster_whisper" >/dev/null 2>&1; then
+  pass "faster-whisper found for local wake-word and STT fallback"
+else
+  warn "faster-whisper not installed; run: bash scripts/setup_pi5_whisper.sh"
+fi
 
 section "USB Devices"
 USB_OUTPUT="$(lsusb 2>/dev/null || true)"

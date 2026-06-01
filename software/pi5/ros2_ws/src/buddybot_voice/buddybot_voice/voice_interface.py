@@ -39,6 +39,11 @@ try:
 except ImportError:
     sr = None
 
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
+
 
 class VoiceInterface(Node):
     def __init__(self):
@@ -47,8 +52,17 @@ class VoiceInterface(Node):
         self.declare_parameter("command_enabled", True)
         self.declare_parameter("enable_microphone", False)
         self.declare_parameter("allow_online_recognition", True)
-        self.declare_parameter("recognition_backend", "google")
+        self.declare_parameter("recognition_backend", "hybrid")
         self.declare_parameter("recognition_language", "ko-KR")
+        self.declare_parameter("server_stt_enabled", True)
+        self.declare_parameter("server_stt_timeout_sec", 4.0)
+        self.declare_parameter("server_stt_cooldown_sec", 10.0)
+        self.declare_parameter("local_whisper_enabled", True)
+        self.declare_parameter("local_whisper_model_size", "tiny")
+        self.declare_parameter("local_whisper_device", "cpu")
+        self.declare_parameter("local_whisper_compute_type", "int8")
+        self.declare_parameter("local_whisper_language", "ko")
+        self.declare_parameter("google_fallback_enabled", True)
         self.declare_parameter("phrase_time_limit", 2.6)
         self.declare_parameter("moving_phrase_time_limit", 1.2)
         self.declare_parameter("wake_timeout_sec", 10.0)
@@ -93,6 +107,15 @@ class VoiceInterface(Node):
         self.allow_online_recognition = bool(self.get_parameter("allow_online_recognition").value)
         self.recognition_backend = str(self.get_parameter("recognition_backend").value).strip().lower()
         self.recognition_language = str(self.get_parameter("recognition_language").value).strip()
+        self.server_stt_enabled = bool(self.get_parameter("server_stt_enabled").value)
+        self.server_stt_timeout_sec = max(0.5, float(self.get_parameter("server_stt_timeout_sec").value))
+        self.server_stt_cooldown_sec = max(0.0, float(self.get_parameter("server_stt_cooldown_sec").value))
+        self.local_whisper_enabled = bool(self.get_parameter("local_whisper_enabled").value)
+        self.local_whisper_model_size = str(self.get_parameter("local_whisper_model_size").value).strip() or "tiny"
+        self.local_whisper_device = str(self.get_parameter("local_whisper_device").value).strip() or "cpu"
+        self.local_whisper_compute_type = str(self.get_parameter("local_whisper_compute_type").value).strip() or "int8"
+        self.local_whisper_language = str(self.get_parameter("local_whisper_language").value).strip() or "ko"
+        self.google_fallback_enabled = bool(self.get_parameter("google_fallback_enabled").value)
         self.phrase_time_limit = float(self.get_parameter("phrase_time_limit").value)
         self.moving_phrase_time_limit = float(self.get_parameter("moving_phrase_time_limit").value)
         self.wake_timeout_sec = float(self.get_parameter("wake_timeout_sec").value)
@@ -180,6 +203,11 @@ class VoiceInterface(Node):
         self._speaker_backend_command = ""
         self._audio_player_command = ""
         self._speaker_warned_missing_backend = False
+        self._local_whisper_model = None
+        self._local_whisper_lock = threading.Lock()
+        self._local_whisper_warned_missing = False
+        self._local_whisper_retry_after = 0.0
+        self._server_stt_retry_after = 0.0
         self._speech_category_lock = threading.Lock()
         self._speech_category_overrides: Dict[str, List[str]] = {}
         self._local_speech_allowlist = {
@@ -209,6 +237,13 @@ class VoiceInterface(Node):
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
             f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s, "
             f"google_timeout={self.google_timeout_sec}s"
+        )
+        self.get_logger().info(
+            f"Hybrid STT: server={'enabled' if self.server_stt_enabled else 'disabled'} "
+            f"timeout={self.server_stt_timeout_sec:.1f}s cooldown={self.server_stt_cooldown_sec:.1f}s, "
+            f"local_whisper={'enabled' if self.local_whisper_enabled else 'disabled'} "
+            f"model={self.local_whisper_model_size}/{self.local_whisper_device}/{self.local_whisper_compute_type}, "
+            f"google_fallback={'enabled' if self.google_fallback_enabled else 'disabled'}"
         )
         self.get_logger().info(
             f"Motion voice: manual_speed={self.manual_speed}, "
@@ -799,56 +834,191 @@ class VoiceInterface(Node):
                         self.get_logger().error(f"Microphone listen failed: {exc}")
                         break
 
-                    transcript = self._recognize_audio(recognizer, audio)
+                    recognition_phase = self._recognition_phase()
+                    transcript = self._recognize_audio(recognizer, audio, phase=recognition_phase)
                     if transcript:
                         self.handle_text(transcript, source="microphone")
         except Exception as exc:
             self._publish_status(f"microphone_loop_failed:{exc}")
             self.get_logger().error(f"Microphone loop failed: {exc}")
 
-    def _recognize_audio(self, recognizer, audio) -> str:
+    def _recognition_phase(self) -> str:
+        if self._manual_active or self.follow_enabled:
+            return "safety"
+        if time.time() - self._last_wake_time <= self.wake_timeout_sec:
+            return "command"
+        return "wake"
+
+    def _recognize_audio(self, recognizer, audio, *, phase: str = "command") -> str:
         backend = self.recognition_backend
 
-        if backend in ("google", "auto") and self.allow_online_recognition:
-            if shutil.which("flac") is None:
-                self._publish_status("google_recognition_missing_flac")
-                self.get_logger().warn("Google recognition needs the flac command line tool; install it with: sudo apt install -y flac")
-                if backend == "google":
-                    return ""
-            else:
-                started_at = time.monotonic()
-                previous_socket_timeout = socket.getdefaulttimeout()
-                try:
-                    socket.setdefaulttimeout(max(0.5, self.google_timeout_sec))
-                    transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
-                    if transcript:
-                        self._publish_status(f"recognized:google:{transcript}")
-                    return transcript
-                except Exception as exc:
-                    elapsed = time.monotonic() - started_at
-                    if elapsed >= max(0.5, self.google_timeout_sec) * 0.9:
-                        self._publish_status(f"google_recognition_timeout:{elapsed:.2f}s")
-                        self.get_logger().warn(f"Google recognition timed out after {elapsed:.2f}s: {exc}")
-                    else:
-                        self._publish_status(f"google_recognition_failed:{exc}")
-                        self.get_logger().warn(f"Google recognition failed: {exc}")
-                    if backend == "google":
-                        return ""
-                finally:
-                    socket.setdefaulttimeout(previous_socket_timeout)
-
-        if backend in ("sphinx", "auto"):
-            try:
-                transcript = recognizer.recognize_sphinx(audio).strip()
-                if transcript:
-                    self._publish_status(f"recognized:sphinx:{transcript}")
-                return transcript
-            except Exception as exc:
-                self._publish_status(f"sphinx_failed:{exc}")
-                self.get_logger().warn(f"Sphinx recognition failed: {exc}")
+        if backend in ("hybrid", "auto"):
+            return self._recognize_hybrid_audio(recognizer, audio, phase=phase)
+        if backend == "server_whisper":
+            return self._recognize_with_server_whisper(audio)
+        if backend == "local_whisper":
+            return self._recognize_with_local_whisper(audio)
+        if backend == "google":
+            return self._recognize_with_google(recognizer, audio)
+        if backend == "sphinx":
+            return self._recognize_with_sphinx(recognizer, audio)
 
         self._publish_status(f"recognition_backend_unavailable:{backend}")
         return ""
+
+    def _recognize_hybrid_audio(self, recognizer, audio, *, phase: str) -> str:
+        if phase == "wake":
+            local_transcript = self._recognize_with_local_whisper(audio)
+            if local_transcript:
+                if self._contains_wake_word(local_transcript) and self._strip_wake_prefix(local_transcript):
+                    return self._recognize_with_server_whisper(audio) or local_transcript
+                return local_transcript
+            return self._recognize_with_google_fallback(recognizer, audio)
+
+        if phase == "safety":
+            local_transcript = self._recognize_with_local_whisper(audio)
+            if local_transcript and self._is_stop_command(local_transcript):
+                self._publish_status(f"recognized:local_whisper_safety:{local_transcript}")
+                return local_transcript
+            return (
+                self._recognize_with_server_whisper(audio)
+                or local_transcript
+                or self._recognize_with_google_fallback(recognizer, audio)
+            )
+
+        return (
+            self._recognize_with_server_whisper(audio)
+            or self._recognize_with_local_whisper(audio)
+            or self._recognize_with_google_fallback(recognizer, audio)
+        )
+
+    def _recognize_with_server_whisper(self, audio) -> str:
+        if not self.server_stt_enabled or time.monotonic() < self._server_stt_retry_after:
+            return ""
+        started_at = time.monotonic()
+        try:
+            response = requests.post(
+                f"{self.buddybot_ai_url}/stt",
+                data=self._audio_wav_bytes(audio),
+                headers={"Content-Type": "audio/wav"},
+                timeout=(1.0, self.server_stt_timeout_sec),
+            )
+            response.raise_for_status()
+            transcript = str(response.json().get("text", "")).strip()
+            if transcript:
+                self._publish_status(f"recognized:server_whisper:{transcript}")
+            return transcript
+        except Exception as exc:
+            elapsed = time.monotonic() - started_at
+            self._server_stt_retry_after = time.monotonic() + self.server_stt_cooldown_sec
+            self._publish_status(f"server_stt_failed:{elapsed:.2f}s:{exc}")
+            self.get_logger().warn(
+                f"Server Whisper STT failed after {elapsed:.2f}s; "
+                f"using local fallback for {self.server_stt_cooldown_sec:.1f}s: {exc}"
+            )
+            return ""
+
+    def _recognize_with_local_whisper(self, audio) -> str:
+        if not self.local_whisper_enabled or time.monotonic() < self._local_whisper_retry_after:
+            return ""
+        if WhisperModel is None:
+            if not self._local_whisper_warned_missing:
+                self._local_whisper_warned_missing = True
+                self._publish_status("local_whisper_missing")
+                self.get_logger().warn(
+                    "Local faster-whisper is not installed; run: "
+                    "pip3 install --break-system-packages faster-whisper"
+                )
+            return ""
+
+        temp_path = self._write_temp_audio(self._audio_wav_bytes(audio), suffix=".wav")
+        try:
+            model = self._get_local_whisper_model()
+            segments, _ = model.transcribe(
+                str(temp_path),
+                language=self.local_whisper_language,
+                beam_size=1,
+                vad_filter=True,
+            )
+            transcript = "".join(segment.text for segment in segments).strip()
+            if transcript:
+                self._publish_status(f"recognized:local_whisper:{transcript}")
+            return transcript
+        except Exception as exc:
+            self._local_whisper_retry_after = time.monotonic() + self.server_stt_cooldown_sec
+            self._publish_status(f"local_whisper_failed:{exc}")
+            self.get_logger().warn(f"Local faster-whisper failed: {exc}")
+            return ""
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    def _get_local_whisper_model(self):
+        with self._local_whisper_lock:
+            if self._local_whisper_model is None:
+                self.get_logger().info(
+                    f"Loading local faster-whisper model {self.local_whisper_model_size} "
+                    f"on {self.local_whisper_device}/{self.local_whisper_compute_type}"
+                )
+                self._publish_status(f"local_whisper_loading:{self.local_whisper_model_size}")
+                self._local_whisper_model = WhisperModel(
+                    self.local_whisper_model_size,
+                    device=self.local_whisper_device,
+                    compute_type=self.local_whisper_compute_type,
+                )
+                self._publish_status(f"local_whisper_ready:{self.local_whisper_model_size}")
+            return self._local_whisper_model
+
+    def _recognize_with_google_fallback(self, recognizer, audio) -> str:
+        if not self.google_fallback_enabled:
+            return ""
+        return self._recognize_with_google(recognizer, audio)
+
+    def _recognize_with_google(self, recognizer, audio) -> str:
+        if not self.allow_online_recognition:
+            return ""
+        if shutil.which("flac") is None:
+            self._publish_status("google_recognition_missing_flac")
+            self.get_logger().warn("Google recognition needs the flac command line tool; install it with: sudo apt install -y flac")
+            return ""
+
+        started_at = time.monotonic()
+        previous_socket_timeout = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(max(0.5, self.google_timeout_sec))
+            transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
+            if transcript:
+                self._publish_status(f"recognized:google:{transcript}")
+            return transcript
+        except Exception as exc:
+            elapsed = time.monotonic() - started_at
+            if elapsed >= max(0.5, self.google_timeout_sec) * 0.9:
+                self._publish_status(f"google_recognition_timeout:{elapsed:.2f}s")
+                self.get_logger().warn(f"Google recognition timed out after {elapsed:.2f}s: {exc}")
+            else:
+                self._publish_status(f"google_recognition_failed:{exc}")
+                self.get_logger().warn(f"Google recognition failed: {exc}")
+            return ""
+        finally:
+            socket.setdefaulttimeout(previous_socket_timeout)
+
+    def _recognize_with_sphinx(self, recognizer, audio) -> str:
+        try:
+            transcript = recognizer.recognize_sphinx(audio).strip()
+            if transcript:
+                self._publish_status(f"recognized:sphinx:{transcript}")
+            return transcript
+        except Exception as exc:
+            self._publish_status(f"sphinx_failed:{exc}")
+            self.get_logger().warn(f"Sphinx recognition failed: {exc}")
+            return ""
+
+    @staticmethod
+    def _audio_wav_bytes(audio) -> bytes:
+        return audio.get_wav_data(convert_rate=16000, convert_width=2)
+
+    def _contains_wake_word(self, text: str) -> bool:
+        normalized = self._normalize_text(text)
+        return any(wake_word in normalized for wake_word in self.wake_words)
 
     def _publish_response(self, text: str, *, category: str = "system") -> None:
         self._remember_speech_category(text, category)

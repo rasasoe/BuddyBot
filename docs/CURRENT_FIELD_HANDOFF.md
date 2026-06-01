@@ -483,3 +483,18 @@ Manual stutter root cause and latest fix:
 - Stop processing remains local-first: motion is cleared before the emergency speech response is queued.
 - Install `mpg123` on the Pi for server MP3 playback.
 - This update only needs a `buddybot_voice` rebuild. Pico reflash is not required.
+
+## 2026-06-01 Hybrid Whisper STT routing
+
+- Default Pi recognition backend is now `hybrid`.
+- Waiting for wake-word:
+  - Pi local `faster-whisper` tiny first.
+- After wake-word:
+  - BuddyBot-ai `POST /stt` server Whisper first.
+  - Pi local `faster-whisper` tiny fallback.
+  - Optional Google Web Speech fallback last.
+- While moving or following:
+  - Pi local tiny checks emergency stop first so `stop` does not wait for the network.
+- A failed server STT call starts a 10s cooldown so repeated network failures do not stall the microphone loop.
+- Run `bash scripts/setup_pi5_whisper.sh` once on the Pi to install `faster-whisper` and preload the tiny model.
+- Rebuild `buddybot_voice` and `buddybot_panel`. Pico reflash is not required.

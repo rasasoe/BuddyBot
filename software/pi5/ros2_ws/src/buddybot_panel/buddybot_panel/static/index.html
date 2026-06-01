@@ -782,6 +782,21 @@
       if(status.startsWith("sphinx_failed")){
         return `Sphinx 인식 실패${suffix}`;
       }
+      if(status.startsWith("server_stt_failed")){
+        return `서버 Whisper 실패 · Pi 로컬 전환${suffix}`;
+      }
+      if(status.startsWith("local_whisper_loading")){
+        return `Pi Whisper 모델 준비 중${suffix}`;
+      }
+      if(status.startsWith("local_whisper_ready")){
+        return `Pi Whisper 준비 완료${suffix}`;
+      }
+      if(status.startsWith("local_whisper_missing")){
+        return `Pi Whisper 설치 필요${suffix}`;
+      }
+      if(status.startsWith("local_whisper_failed")){
+        return `Pi Whisper 인식 실패${suffix}`;
+      }
       if(status.includes("microphone_ready")){
         const energy = status.match(/energy=([0-9.]+)/);
         return energy ? `마이크 준비 · 감도 ${energy[1]}${suffix}` : `마이크 준비${suffix}`;
