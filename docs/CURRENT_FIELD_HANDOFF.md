@@ -498,3 +498,13 @@ Manual stutter root cause and latest fix:
 - A failed server STT call starts a 10s cooldown so repeated network failures do not stall the microphone loop.
 - Run `bash scripts/setup_pi5_whisper.sh` once on the Pi to install `faster-whisper` and preload the tiny model.
 - Rebuild `buddybot_voice` and `buddybot_panel`. Pico reflash is not required.
+
+## 2026-06-01 Voice mode default-off and wake-word retry
+
+- Presentation mode now actually starts with `BUDDYBOT_VOICE_COMMAND_ENABLED=0`.
+- The panel and voice node defaults are also OFF, so the panel `음성모드 켜기` button is required before wake-word and normal command handling.
+- While voice mode is OFF, Pi local tiny only preserves emergency-stop recognition. It does not forward idle audio to server STT.
+- While waiting for wake-word, a Pi tiny miss is retried through server Whisper and optional Google fallback.
+- When Pi confirms a wake-word but server Whisper drops the wake prefix, the Pi restores the confirmed prefix before local command classification.
+- Added spaced Whisper wake-word variants: `버디 봇`, `버디 봇아`.
+- Rebuild `buddybot_voice` and `buddybot_panel`. Pico reflash is not required.

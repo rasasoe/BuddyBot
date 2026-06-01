@@ -1609,6 +1609,25 @@ Required Pi action:
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Pico reflash is not required.
 
+## 2026-06-01 Voice mode default-off and wake-word retry
+
+Field feedback:
+- Calling `버디봇` did not produce a response reliably after the hybrid STT switch.
+- Presentation startup still enabled voice commands even though the intended panel workflow was opt-in.
+
+Changes:
+- Defaulted presentation, mapping panel, panel bridge, and voice node command mode to OFF.
+- Kept Pi-local emergency stop listening while voice mode is OFF, without forwarding idle speech to server STT.
+- Retried wake-word misses through server Whisper and optional Google fallback.
+- Preserved a Pi-confirmed wake prefix when server Whisper returns only the command suffix.
+- Added spaced Whisper wake-word variants: `버디 봇`, `버디 봇아`.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Start presentation mode and press `음성모드 켜기` before calling `버디봇`.
+- Pico reflash is not required.
+
 ## 2026-06-01 Hybrid TTS routing
 
 Goal:

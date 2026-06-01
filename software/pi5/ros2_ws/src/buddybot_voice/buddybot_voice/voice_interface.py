@@ -49,7 +49,7 @@ class VoiceInterface(Node):
     def __init__(self):
         super().__init__("voice_interface")
         self.declare_parameter("offline_mode", True)
-        self.declare_parameter("command_enabled", True)
+        self.declare_parameter("command_enabled", False)
         self.declare_parameter("enable_microphone", False)
         self.declare_parameter("allow_online_recognition", True)
         self.declare_parameter("recognition_backend", "hybrid")
@@ -78,7 +78,7 @@ class VoiceInterface(Node):
         self.declare_parameter("zero_burst_count", 4)
         self.declare_parameter(
             "wake_words",
-            ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
+            ["버디봇", "버디봇아", "버디 봇", "버디 봇아", "버디", "buddybot", "buddy"],
         )
         self.declare_parameter("manual_speed", 0.46)
         self.declare_parameter("strafe_speed", 0.30)
@@ -292,6 +292,7 @@ class VoiceInterface(Node):
     def voice_enabled_callback(self, msg: Bool) -> None:
         self.command_enabled = bool(msg.data)
         if not self.command_enabled:
+            self._last_wake_time = 0.0
             self._clear_manual_motion()
         state = "enabled" if self.command_enabled else "disabled"
         self._publish_status(f"voice_mode:{state}")
@@ -843,6 +844,8 @@ class VoiceInterface(Node):
             self.get_logger().error(f"Microphone loop failed: {exc}")
 
     def _recognition_phase(self) -> str:
+        if not self.command_enabled:
+            return "disabled"
         if self._manual_active or self.follow_enabled:
             return "safety"
         if time.time() - self._last_wake_time <= self.wake_timeout_sec:
@@ -867,13 +870,38 @@ class VoiceInterface(Node):
         return ""
 
     def _recognize_hybrid_audio(self, recognizer, audio, *, phase: str) -> str:
+        if phase == "disabled":
+            local_transcript = self._recognize_with_local_whisper(audio)
+            if local_transcript and self._is_stop_command(local_transcript):
+                self._publish_status(f"recognized:local_whisper_disabled_safety:{local_transcript}")
+                return local_transcript
+            return ""
+
         if phase == "wake":
             local_transcript = self._recognize_with_local_whisper(audio)
             if local_transcript:
+                if self._is_stop_command(local_transcript):
+                    return local_transcript
                 if self._contains_wake_word(local_transcript) and self._strip_wake_prefix(local_transcript):
-                    return self._recognize_with_server_whisper(audio) or local_transcript
-                return local_transcript
-            return self._recognize_with_google_fallback(recognizer, audio)
+                    server_transcript = self._recognize_with_server_whisper(audio)
+                    return self._merge_confirmed_wake_transcript(local_transcript, server_transcript)
+                if self._contains_wake_word(local_transcript):
+                    return local_transcript
+
+            server_transcript = self._recognize_with_server_whisper(audio)
+            if server_transcript and (
+                self._is_stop_command(server_transcript)
+                or self._contains_wake_word(server_transcript)
+            ):
+                return server_transcript
+
+            google_transcript = self._recognize_with_google_fallback(recognizer, audio)
+            if google_transcript and (
+                self._is_stop_command(google_transcript)
+                or self._contains_wake_word(google_transcript)
+            ):
+                return google_transcript
+            return ""
 
         if phase == "safety":
             local_transcript = self._recognize_with_local_whisper(audio)
@@ -1019,6 +1047,18 @@ class VoiceInterface(Node):
     def _contains_wake_word(self, text: str) -> bool:
         normalized = self._normalize_text(text)
         return any(wake_word in normalized for wake_word in self.wake_words)
+
+    def _merge_confirmed_wake_transcript(self, local_transcript: str, server_transcript: str) -> str:
+        if not server_transcript:
+            return local_transcript
+        if self._contains_wake_word(server_transcript):
+            return server_transcript
+
+        normalized_local = self._normalize_text(local_transcript)
+        for wake_word in self.wake_words:
+            if wake_word in normalized_local:
+                return f"{wake_word} {server_transcript}".strip()
+        return local_transcript
 
     def _publish_response(self, text: str, *, category: str = "system") -> None:
         self._remember_speech_category(text, category)
