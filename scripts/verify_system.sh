@@ -123,6 +123,11 @@ if have_cmd espeak-ng; then
 else
   warn "espeak-ng not installed"
 fi
+if have_cmd mpg123; then
+  pass "mpg123 found for server Edge TTS playback"
+else
+  warn "mpg123 not installed; run: sudo apt install -y mpg123"
+fi
 
 section "USB Devices"
 USB_OUTPUT="$(lsusb 2>/dev/null || true)"

@@ -16,13 +16,16 @@ BuddyBot AI server as a secondary path.
 
 from __future__ import annotations
 
+import os
 import queue
 import shutil
 import socket
 import subprocess
+import tempfile
 import threading
 import time
-from typing import List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import requests
 import rclpy
@@ -76,6 +79,11 @@ class VoiceInterface(Node):
         self.declare_parameter("speaker_voice_en", "en-us")
         self.declare_parameter("speaker_rate_wpm", 180)
         self.declare_parameter("speak_command_responses", False)
+        self.declare_parameter("server_tts_enabled", True)
+        self.declare_parameter("server_tts_timeout_sec", 12.0)
+        self.declare_parameter("system_sound_dir", "")
+        self.declare_parameter("piper_model_path", "")
+        self.declare_parameter("audio_player", "auto")
         self.declare_parameter("buddybot_ai_url", "http://127.0.0.1:8000")
 
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
@@ -116,6 +124,12 @@ class VoiceInterface(Node):
         self.speaker_voice_en = str(self.get_parameter("speaker_voice_en").value).strip() or "en-us"
         self.speaker_rate_wpm = int(self.get_parameter("speaker_rate_wpm").value)
         self.speak_command_responses = bool(self.get_parameter("speak_command_responses").value)
+        self.server_tts_enabled = bool(self.get_parameter("server_tts_enabled").value)
+        self.server_tts_timeout_sec = max(1.0, float(self.get_parameter("server_tts_timeout_sec").value))
+        system_sound_dir = str(self.get_parameter("system_sound_dir").value).strip()
+        self.system_sound_dir: Optional[Path] = Path(system_sound_dir).expanduser() if system_sound_dir else None
+        self.piper_model_path = str(self.get_parameter("piper_model_path").value).strip()
+        self.audio_player = str(self.get_parameter("audio_player").value).strip().lower() or "auto"
         self.buddybot_ai_url = str(self.get_parameter("buddybot_ai_url").value).rstrip("/")
 
         status_qos = QoSProfile(
@@ -162,10 +176,27 @@ class VoiceInterface(Node):
         self._audio_thread: Optional[threading.Thread] = None
         self._audio_stop = threading.Event()
         self._speaker_thread: Optional[threading.Thread] = None
-        self._speaker_queue: "queue.Queue[str]" = queue.Queue()
+        self._speaker_queue: "queue.Queue[Tuple[str, str]]" = queue.Queue()
         self._speaker_backend_command = ""
+        self._audio_player_command = ""
         self._speaker_warned_missing_backend = False
-        self._local_speech_allowlist = {"네.", "말씀하세요."}
+        self._speech_category_lock = threading.Lock()
+        self._speech_category_overrides: Dict[str, List[str]] = {}
+        self._local_speech_allowlist = {
+            "네.",
+            "말씀하세요.",
+            "전진.",
+            "지속 전진.",
+            "후진.",
+            "왼쪽.",
+            "오른쪽.",
+            "좌회전.",
+            "우회전.",
+            "정지.",
+            "추종 시작.",
+            "추종 중지.",
+            "로컬 음성 명령만 사용할 수 있습니다.",
+        }
 
         mode = "offline-local" if self.offline_mode else "ai-bridge"
         self.get_logger().info(f"Voice interface ready in {mode} mode")
@@ -189,6 +220,11 @@ class VoiceInterface(Node):
         self.get_logger().info(
             f"Local command speech: {'enabled' if self.speak_command_responses else 'wake-only'}"
         )
+        self.get_logger().info(
+            f"Hybrid TTS: server={'enabled' if self.server_tts_enabled else 'disabled'}, "
+            f"system_sound_dir={self.system_sound_dir or '-'}, "
+            f"piper_model={'configured' if self.piper_model_path else 'unset'}"
+        )
 
         if self.enable_microphone:
             self.start_microphone_listener()
@@ -206,13 +242,17 @@ class VoiceInterface(Node):
         text = msg.data.strip()
         if not text:
             return
+        category = self._take_speech_category(text)
+        if category is None:
+            category = "ai" if self.server_assistant_enabled else "system"
         if (
-            not self.server_assistant_enabled
+            category == "system"
+            and not self.server_assistant_enabled
             and not self.speak_command_responses
             and text not in self._local_speech_allowlist
         ):
             return
-        self.enqueue_speech(text)
+        self.enqueue_speech(text, category=category)
 
     def voice_enabled_callback(self, msg: Bool) -> None:
         self.command_enabled = bool(msg.data)
@@ -286,7 +326,7 @@ class VoiceInterface(Node):
                 stop_priority_applied=True,
             )
             answer = self._stop_robot()
-            self._publish_response(answer)
+            self._publish_response(answer, category="emergency")
             self.get_logger().info(f"Voice safety stop ({source}): {cleaned} -> {answer}")
             return
 
@@ -304,11 +344,13 @@ class VoiceInterface(Node):
             allow_help=not self.server_assistant_enabled,
         )
 
+        category = "system"
         if not answer and self.server_assistant_enabled:
             answer = self._forward_to_ai(cleaned)
+            category = "ai"
 
         if answer:
-            self._publish_response(answer)
+            self._publish_response(answer, category=category)
             self.get_logger().info(f"Voice handled ({source}): {cleaned} -> {answer}")
 
     def _handle_offline_command(self, message: str, *, allow_help: bool = True) -> str:
@@ -808,29 +850,47 @@ class VoiceInterface(Node):
         self._publish_status(f"recognition_backend_unavailable:{backend}")
         return ""
 
-    def _publish_response(self, text: str) -> None:
+    def _publish_response(self, text: str, *, category: str = "system") -> None:
+        self._remember_speech_category(text, category)
         msg = String()
         msg.data = text
         self.response_pub.publish(msg)
+
+    def _remember_speech_category(self, text: str, category: str) -> None:
+        with self._speech_category_lock:
+            categories = self._speech_category_overrides.setdefault(text, [])
+            categories.append(category)
+
+    def _take_speech_category(self, text: str) -> Optional[str]:
+        with self._speech_category_lock:
+            categories = self._speech_category_overrides.get(text)
+            if not categories:
+                return None
+            category = categories.pop(0)
+            if not categories:
+                self._speech_category_overrides.pop(text, None)
+            return category
 
     def start_speaker_output(self) -> None:
         if self._speaker_thread is not None:
             return
 
         backend = self._detect_speaker_backend()
-        if not backend:
+        audio_player = self._detect_audio_player()
+        if not backend and not audio_player:
             self.enable_speaker_output = False
             if not self._speaker_warned_missing_backend:
                 self._speaker_warned_missing_backend = True
-                self.get_logger().warn("No local TTS backend found; USB speaker output disabled")
+                self.get_logger().warn("No local TTS or audio playback backend found; USB speaker output disabled")
                 self._publish_status("speaker_backend_missing")
             return
 
         self._speaker_backend_command = backend
+        self._audio_player_command = audio_player
         self._speaker_thread = threading.Thread(target=self._speaker_loop, daemon=True)
         self._speaker_thread.start()
-        self.get_logger().info(f"Speaker output ready via {backend}")
-        self._publish_status(f"speaker_ready:{backend}")
+        self.get_logger().info(f"Speaker output ready via local={backend or '-'}, player={audio_player or '-'}")
+        self._publish_status(f"speaker_ready:local={backend or '-'}:player={audio_player or '-'}")
 
     def _detect_speaker_backend(self) -> str:
         if self.speaker_backend and self.speaker_backend != "auto":
@@ -840,7 +900,15 @@ class VoiceInterface(Node):
                 return candidate
         return ""
 
-    def enqueue_speech(self, text: str) -> None:
+    def _detect_audio_player(self) -> str:
+        if self.audio_player and self.audio_player != "auto":
+            return self.audio_player if shutil.which(self.audio_player) else ""
+        for candidate in ("mpg123", "ffplay", "mpv", "paplay", "aplay"):
+            if shutil.which(candidate):
+                return candidate
+        return ""
+
+    def enqueue_speech(self, text: str, *, category: str = "system") -> None:
         if not self.enable_speaker_output:
             return
         cleaned = text.strip()
@@ -851,26 +919,141 @@ class VoiceInterface(Node):
                 self._speaker_queue.get_nowait()
             except queue.Empty:
                 break
-        self._speaker_queue.put(cleaned)
+        self._speaker_queue.put((category, cleaned))
 
     def _speaker_loop(self) -> None:
         while not self._audio_stop.is_set():
             try:
-                text = self._speaker_queue.get(timeout=0.5)
+                category, text = self._speaker_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
             if not text:
                 continue
             try:
-                self._speak_text(text)
+                self._speak_text(text, category=category)
             except Exception as exc:
                 self.get_logger().warn(f"Speaker playback failed: {exc}")
                 self._publish_status(f"speaker_failed:{exc}")
 
-    def _speak_text(self, text: str) -> None:
+    def _speak_text(self, text: str, *, category: str = "system") -> None:
+        if category == "ai" and self.server_assistant_enabled and self.server_tts_enabled:
+            try:
+                self._speak_with_server_tts(text)
+                self._publish_status("speaker_ai:server_tts")
+                return
+            except Exception as exc:
+                self.get_logger().warn(f"Server TTS failed, using local fallback: {exc}")
+                self._publish_status(f"speaker_ai_server_failed:{exc}")
+                text = "AI 서버 음성 연결이 원활하지 않습니다."
+
+        if category in {"system", "emergency"} and self._speak_system_sound(text):
+            self._publish_status(f"speaker_{category}:prerecorded")
+            return
+
+        if self._speak_with_piper(text):
+            self._publish_status(f"speaker_{category}:piper")
+            return
+
+        self._speak_with_local_backend(text)
+        self._publish_status(f"speaker_{category}:local_tts")
+
+    def _speak_with_server_tts(self, text: str) -> None:
+        if not self._audio_player_command:
+            raise RuntimeError("audio player is unavailable")
+        response = requests.post(
+            f"{self.buddybot_ai_url}/tts",
+            json={"text": text},
+            timeout=(2.0, self.server_tts_timeout_sec),
+        )
+        response.raise_for_status()
+        media_type = response.headers.get("content-type", "").lower()
+        suffix = ".wav" if "wav" in media_type else ".mp3"
+        temp_path = self._write_temp_audio(response.content, suffix=suffix)
+        try:
+            self._play_audio_file(temp_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    def _speak_system_sound(self, text: str) -> bool:
+        if self.system_sound_dir is None or not self._audio_player_command:
+            return False
+        sound_key = {
+            "네.": "yes",
+            "말씀하세요.": "ready",
+            "전진.": "forward",
+            "지속 전진.": "forward",
+            "후진.": "backward",
+            "왼쪽.": "strafe_left",
+            "오른쪽.": "strafe_right",
+            "좌회전.": "rotate_left",
+            "우회전.": "rotate_right",
+            "정지.": "stop",
+            "추종 시작.": "follow_start",
+            "추종 중지.": "follow_stop",
+            "로컬 음성 명령만 사용할 수 있습니다.": "server_offline",
+        }.get(text)
+        if not sound_key:
+            return False
+        for suffix in (".wav", ".mp3"):
+            path = self.system_sound_dir / f"{sound_key}{suffix}"
+            if path.is_file():
+                self._play_audio_file(path)
+                return True
+        return False
+
+    def _speak_with_piper(self, text: str) -> bool:
+        if not self.piper_model_path or not self._audio_player_command or shutil.which("piper") is None:
+            return False
+        temp_path = self._write_temp_audio(b"", suffix=".wav")
+        try:
+            completed = subprocess.run(
+                ["piper", "--model", self.piper_model_path, "--output_file", str(temp_path)],
+                input=text,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if completed.returncode != 0:
+                stderr = (completed.stderr or completed.stdout or "").strip()
+                raise RuntimeError(stderr or f"piper exited with {completed.returncode}")
+            self._play_audio_file(temp_path)
+            return True
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _write_temp_audio(payload: bytes, *, suffix: str) -> Path:
+        fd, temp_name = tempfile.mkstemp(prefix="buddybot_audio_", suffix=suffix)
+        os.close(fd)
+        temp_path = Path(temp_name)
+        temp_path.write_bytes(payload)
+        return temp_path
+
+    def _play_audio_file(self, path: Path) -> None:
+        player = self._audio_player_command
+        if not player:
+            raise RuntimeError("audio player is unavailable")
+        active_player = "aplay" if path.suffix.lower() == ".wav" and shutil.which("aplay") else player
+        if active_player == "mpg123":
+            command = [active_player, "-q", str(path)]
+        elif active_player == "ffplay":
+            command = [active_player, "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]
+        elif active_player == "mpv":
+            command = [active_player, "--no-video", "--really-quiet", str(path)]
+        elif active_player == "aplay":
+            command = [active_player, "-q", str(path)]
+        else:
+            command = [active_player, str(path)]
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
+        if completed.returncode != 0:
+            stderr = (completed.stderr or completed.stdout or "").strip()
+            raise RuntimeError(stderr or f"{active_player} exited with {completed.returncode}")
+
+    def _speak_with_local_backend(self, text: str) -> None:
         backend = self._speaker_backend_command
         if not backend:
-            return
+            raise RuntimeError("local TTS backend is unavailable")
 
         if backend == "spd-say":
             completed = subprocess.run(
@@ -919,7 +1102,7 @@ class VoiceInterface(Node):
     def destroy_node(self):
         self._audio_stop.set()
         if self._speaker_thread is not None:
-            self._speaker_queue.put("")
+            self._speaker_queue.put(("", ""))
         self._clear_manual_motion()
         super().destroy_node()
 

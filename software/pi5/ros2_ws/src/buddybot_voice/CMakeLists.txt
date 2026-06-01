@@ -21,4 +21,9 @@ install(PROGRAMS
   RENAME voice_interface
 )
 
+install(DIRECTORY
+  assets
+  DESTINATION share/${PROJECT_NAME}
+)
+
 ament_package()

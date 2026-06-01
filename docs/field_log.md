@@ -1608,3 +1608,23 @@ Required Pi action:
 - Pull main.
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Pico reflash is not required.
+
+## 2026-06-01 Hybrid TTS routing
+
+Goal:
+- Keep robot command feedback fast and available offline.
+- Use the server Edge TTS voice for AI conversation answers.
+
+Changes:
+- Added Pi playback of BuddyBot-ai `POST /tts` responses for AI answers.
+- Kept wake, movement, follow, offline, and emergency responses on the Pi.
+- Added optional prerecorded system audio assets and optional Piper fallback.
+- Kept `espeak-ng` as the last local fallback.
+- Added `mpg123` to Pi setup and verification scripts.
+- Emergency stop still clears motion before speech output is queued.
+
+Required Pi action:
+- Pull main.
+- Install `mpg123`.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Pico reflash is not required.

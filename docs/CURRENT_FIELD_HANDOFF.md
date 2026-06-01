@@ -471,3 +471,15 @@ Manual stutter root cause and latest fix:
   - strafe right `-0.003`
 - Follow tuning was intentionally left unchanged because follow behavior is smooth.
 - This update only needs `buddybot_voice` and `buddybot_panel` rebuilds; Pico reflash is not required.
+
+## 2026-06-01 Hybrid TTS routing
+
+- AI conversation answers now use the existing BuddyBot-ai `POST /tts` route and play the returned Edge TTS audio on the Pi.
+- Short system and emergency responses stay local on the Pi so server latency or outages do not block robot feedback.
+- Local speech priority:
+  1. optional prerecorded WAV/MP3 files in `buddybot_voice/assets/system_sounds`
+  2. optional Piper model when configured
+  3. existing `espeak-ng` fallback
+- Stop processing remains local-first: motion is cleared before the emergency speech response is queued.
+- Install `mpg123` on the Pi for server MP3 playback.
+- This update only needs a `buddybot_voice` rebuild. Pico reflash is not required.
