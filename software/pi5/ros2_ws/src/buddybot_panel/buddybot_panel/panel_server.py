@@ -217,8 +217,10 @@ class PanelBridge:
                 f"{self._manual_angular_limit * self._manual_right_turn_boost:.3f}",
             )
         )
-        self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.006"))
-        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "0.0"))
+        self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.003"))
+        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.003"))
+        self._manual_strafe_left_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LEFT_YAW_TRIM", "0.003"))
+        self._manual_strafe_right_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_RIGHT_YAW_TRIM", "-0.003"))
         self._manual_hold_timeout_sec = float(os.getenv("BUDDYBOT_MANUAL_HOLD_TIMEOUT_SEC", "3.0"))
         self._manual_publish_period_sec = max(0.02, float(os.getenv("BUDDYBOT_MANUAL_PUBLISH_PERIOD_SEC", "0.05")))
         self._manual_stop_inhibit_sec = float(os.getenv("BUDDYBOT_MANUAL_STOP_INHIBIT_SEC", "1.5"))
@@ -1890,10 +1892,10 @@ class PanelBridge:
             self.manual_command("stop", 0.0)
             return "버디봇을 정지했습니다."
         if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
-            self.manual_command("forward", 0.35)
+            self.manual_command("forward", 0.46)
             return "버디봇이 앞으로 이동합니다."
         if any(keyword in text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
-            self.manual_command("backward", 0.35)
+            self.manual_command("backward", 0.435)
             return "버디봇이 뒤로 이동합니다."
         if any(keyword in text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로")):
             self.manual_command("strafe_left", 0.3)
@@ -1967,8 +1969,18 @@ class PanelBridge:
             )
         elif direction == "strafe_left":
             linear_y = self._clamp_manual_speed(magnitude, self._manual_strafe_limit)
+            angular_z = self._scaled_trim(
+                self._manual_strafe_left_yaw_trim,
+                linear_y,
+                self._manual_strafe_limit,
+            )
         elif direction == "strafe_right":
             linear_y = -self._clamp_manual_speed(magnitude, self._manual_strafe_limit)
+            angular_z = self._scaled_trim(
+                self._manual_strafe_right_yaw_trim,
+                abs(linear_y),
+                self._manual_strafe_limit,
+            )
         elif direction == "rotate_left":
             angular_z = self._clamp_manual_speed(magnitude, self._manual_angular_limit)
         elif direction == "rotate_right":

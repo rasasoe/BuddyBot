@@ -485,8 +485,8 @@
     function manualSpeed(direction){
       const throttle = parseFloat(document.getElementById("speed-slider")?.value ?? 100) / 100;
       const profiles = {
-        forward: {offset:0.28, gain:0.12},
-        backward: {offset:0.27, gain:0.11},
+        forward: {offset:0.34, gain:0.12},
+        backward: {offset:0.325, gain:0.11},
         strafe_left: {offset:0.26, gain:0.14},
         strafe_right: {offset:0.26, gain:0.14},
         rotate_left: {offset:0.096, gain:0.112},

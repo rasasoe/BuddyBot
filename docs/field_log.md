@@ -1580,3 +1580,31 @@ Required Pi action:
 - Pull main.
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Pico reflash is not required for this patch.
+
+## 2026-06-01 Raise manual baseline and add directional trim
+
+Field feedback after the manual zero-burst fix:
+- Follow motion is smooth.
+- Panel manual forward/backward at 100% feels slow; the previous 150% slider position feels like the desired baseline.
+- Small residual yaw drift remains:
+  - forward: slightly clockwise
+  - backward: slightly counter-clockwise
+  - strafe left: slightly clockwise
+  - strafe right: slightly counter-clockwise
+
+Changes:
+- Panel 100% forward/backward speed now matches the previous 150% slider output:
+  - forward: `0.40 -> 0.46`
+  - backward: `0.38 -> 0.435`
+- Voice manual speed default: `0.44 -> 0.46`.
+- Manual and voice yaw trim defaults:
+  - forward: `-0.003`
+  - backward: `-0.003`
+  - strafe left: `0.003`
+  - strafe right: `-0.003`
+- Follow tuning remains unchanged because field follow behavior is already smooth.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Pico reflash is not required.

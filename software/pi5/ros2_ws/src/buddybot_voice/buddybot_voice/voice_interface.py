@@ -63,10 +63,13 @@ class VoiceInterface(Node):
             "wake_words",
             ["버디봇", "버디봇아", "버디", "buddybot", "buddy"],
         )
-        self.declare_parameter("manual_speed", 0.44)
+        self.declare_parameter("manual_speed", 0.46)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
-        self.declare_parameter("forward_yaw_trim", -0.006)
+        self.declare_parameter("forward_yaw_trim", -0.003)
+        self.declare_parameter("backward_yaw_trim", -0.003)
+        self.declare_parameter("strafe_left_yaw_trim", 0.003)
+        self.declare_parameter("strafe_right_yaw_trim", -0.003)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")
@@ -104,6 +107,9 @@ class VoiceInterface(Node):
         self.strafe_speed = float(self.get_parameter("strafe_speed").value)
         self.rotate_speed = float(self.get_parameter("rotate_speed").value)
         self.forward_yaw_trim = float(self.get_parameter("forward_yaw_trim").value)
+        self.backward_yaw_trim = float(self.get_parameter("backward_yaw_trim").value)
+        self.strafe_left_yaw_trim = float(self.get_parameter("strafe_left_yaw_trim").value)
+        self.strafe_right_yaw_trim = float(self.get_parameter("strafe_right_yaw_trim").value)
         self.enable_speaker_output = bool(self.get_parameter("enable_speaker_output").value)
         self.speaker_backend = str(self.get_parameter("speaker_backend").value).strip().lower()
         self.speaker_voice_ko = str(self.get_parameter("speaker_voice_ko").value).strip() or "ko"
@@ -174,7 +180,9 @@ class VoiceInterface(Node):
             f"google_timeout={self.google_timeout_sec}s"
         )
         self.get_logger().info(
-            f"Motion voice: manual_speed={self.manual_speed}, forward_yaw_trim={self.forward_yaw_trim}, "
+            f"Motion voice: manual_speed={self.manual_speed}, "
+            f"yaw_trim f/b/sl/sr={self.forward_yaw_trim}/{self.backward_yaw_trim}/"
+            f"{self.strafe_left_yaw_trim}/{self.strafe_right_yaw_trim}, "
             f"continuous_max={self.continuous_command_max_sec}s"
         )
         self.get_logger().info(f"Speaker output: {'enabled' if self.enable_speaker_output else 'disabled'}")
@@ -406,15 +414,15 @@ class VoiceInterface(Node):
             return "전진."
 
         if any(keyword in command_text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
-            self._start_manual_motion(-self.manual_speed, 0.0, 0.0, self.nudge_duration_sec, mode="nudge", intent="backward")
+            self._start_manual_motion(-self.manual_speed, 0.0, self.backward_yaw_trim, self.nudge_duration_sec, mode="nudge", intent="backward")
             return "후진."
 
         if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로", "좌측 이동", "좌측으로")):
-            self._start_manual_motion(0.0, self.strafe_speed, 0.0, self.nudge_duration_sec, mode="nudge", intent="strafe_left")
+            self._start_manual_motion(0.0, self.strafe_speed, self.strafe_left_yaw_trim, self.nudge_duration_sec, mode="nudge", intent="strafe_left")
             return "왼쪽."
 
         if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로", "우측 이동", "우측으로")):
-            self._start_manual_motion(0.0, -self.strafe_speed, 0.0, self.nudge_duration_sec, mode="nudge", intent="strafe_right")
+            self._start_manual_motion(0.0, -self.strafe_speed, self.strafe_right_yaw_trim, self.nudge_duration_sec, mode="nudge", intent="strafe_right")
             return "오른쪽."
 
         if any(keyword in command_text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):

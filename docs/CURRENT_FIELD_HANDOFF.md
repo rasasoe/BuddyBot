@@ -457,3 +457,17 @@ Manual stutter root cause and latest fix:
 - Latest code sends panel manual override only on start/stop/direction change.
 - `buddybot_voice` now sends a zero burst on manual override only when a voice-started manual motion was active.
 - Pico reflash is not required for this latest patch; rebuild `buddybot_voice` and `buddybot_panel` only.
+
+## 2026-06-01 Manual baseline and trim follow-up
+
+- Panel manual 100% forward/backward now matches the previous 150% slider feel:
+  - forward `0.46`
+  - backward `0.435`
+- Voice manual speed default is now `0.46`.
+- Small manual/voice yaw trims compensate residual field drift:
+  - forward `-0.003`
+  - backward `-0.003`
+  - strafe left `0.003`
+  - strafe right `-0.003`
+- Follow tuning was intentionally left unchanged because follow behavior is smooth.
+- This update only needs `buddybot_voice` and `buddybot_panel` rebuilds; Pico reflash is not required.
