@@ -1628,6 +1628,25 @@ Required Pi action:
 - If needed, isolate Pi-only behavior with `BUDDYBOT_VOICE_SERVER_STT_ENABLED=0 BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0`.
 - Pico reflash is not required.
 
+## 2026-06-02 Voice node startup fix
+
+Field evidence:
+- `/voice/enabled` and the voice node were absent even though the microphone and `faster_whisper` installation were present.
+- `voice.log` showed ROS argument parsing failed before node startup:
+  - `Couldn't parse parameter override rule: '-p piper_model_path:='`
+
+Root cause:
+- The optional Piper model environment variable was empty, but mapping startup always emitted `-p piper_model_path:=`.
+
+Fix:
+- Build optional Piper ROS arguments only when `BUDDYBOT_VOICE_PIPER_MODEL_PATH` is non-empty.
+- Verified shell syntax and empty/configured array expansion.
+
+Required Pi action:
+- Pull main.
+- Restart presentation mode.
+- No colcon rebuild or Pico reflash is required for this shell-only fix.
+
 ## 2026-06-01 Voice mode default-off and wake-word retry
 
 Field feedback:

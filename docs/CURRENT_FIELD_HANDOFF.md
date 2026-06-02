@@ -519,3 +519,12 @@ Manual stutter root cause and latest fix:
 - `voice.log` now records `stt_observation` lines with audio duration, raw transcript, normalized transcript, wake alias, command text, and local intent.
 - For an offline-only field check, start with `BUDDYBOT_VOICE_SERVER_STT_ENABLED=0 BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0`.
 - Rebuild `buddybot_voice`. Pico reflash is not required.
+
+## 2026-06-02 Voice node startup fix
+
+- Field log showed the voice node exited before creating ROS topics:
+  - `Couldn't parse parameter override rule: '-p piper_model_path:='`
+- `BUDDYBOT_VOICE_PIPER_MODEL_PATH` is optional, but the mapping startup script always emitted an empty ROS parameter override.
+- `scripts/start_mapping_panel.sh` now omits `piper_model_path` entirely when no Piper model is configured.
+- A configured Piper model path is still passed normally.
+- Rebuild is not required for this shell-only fix. Restart presentation mode after pulling main.
