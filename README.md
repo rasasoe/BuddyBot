@@ -316,8 +316,20 @@ sudo apt install -y flac mpg123
 
 `버디봇 전진`처럼 웨이크워드와 명령을 한 번에 말하면 Pi가 먼저 웨이크워드를 확인하고, 같은 WAV를 서버 Whisper로 다시 보내 명령 정확도를 높입니다.
 Pi tiny가 웨이크워드를 놓치거나 다른 단어로 인식하면 서버 Whisper와 선택적 Google fallback이 같은 WAV를 다시 확인합니다.
-Whisper가 띄어 써서 반환하는 `버디 봇`, `버디 봇아`도 웨이크워드로 인식합니다.
+Whisper가 흔히 반환하는 `버디 봇`, `버디 봇아`, `바디봇`, `버디보`, `버디보트`, `buddy bot`도 웨이크워드로 정규화합니다.
+Pi tiny가 로컬 로봇 명령을 이미 인식했다면 서버 왕복 없이 바로 실행합니다. 서버 Whisper는 호출어 누락 재확인과 AI 질문 정확도 향상에 사용합니다.
 서버가 잠시 응답하지 않으면 10초 동안 서버 재시도를 쉬고 Pi fallback을 우선 사용합니다.
+
+Pi 로컬 음성 제어만 분리해서 시험하려면 서버 및 Google STT fallback을 잠시 끌 수 있습니다.
+
+```bash
+BUDDYBOT_VOICE_SERVER_STT_ENABLED=0 \
+BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0 \
+BUDDYBOT_FORCE_LIDAR_START=1 \
+bash scripts/start_presentation_mode.sh mapping
+```
+
+`voice.log`에는 Pi tiny의 `raw_stt_text`, 정규화 결과, 웨이크워드 매칭 별칭, 분리된 명령, 로컬 intent가 기록됩니다.
 
 ```text
 BUDDYBOT_VOICE_RECOGNITION_BACKEND=hybrid

@@ -1609,6 +1609,25 @@ Required Pi action:
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Pico reflash is not required.
 
+## 2026-06-02 Pi-local wake-word recovery
+
+Goal:
+- Recover reliable Pi-only wake-word and robot-command handling before tuning server conversation.
+
+Changes:
+- Canonicalized common tiny Whisper wake variants including `버디 봇`, `바디봇`, `버디보`, `버디보트`, and `buddy bot`.
+- Sorted normalized wake aliases longest-first before command-prefix stripping.
+- Made known Pi-local robot commands return immediately without waiting for server `/stt`.
+- Kept server Whisper for wake misses and unmatched AI speech.
+- Added structured `stt_observation` logs for audio duration, raw STT text, normalized text, matched wake alias, command text, and local intent.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice`.
+- Start presentation mode, enable voice mode in the panel, and test `버디봇`, `버디봇 전진`, `멈춰`, `버디봇 따라와`.
+- If needed, isolate Pi-only behavior with `BUDDYBOT_VOICE_SERVER_STT_ENABLED=0 BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0`.
+- Pico reflash is not required.
+
 ## 2026-06-01 Voice mode default-off and wake-word retry
 
 Field feedback:

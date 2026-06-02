@@ -46,6 +46,20 @@ except ImportError:
 
 
 class VoiceInterface(Node):
+    WAKE_ALIAS_REPLACEMENTS = (
+        ("버디 봇아", "버디봇아"),
+        ("바디봇아", "버디봇아"),
+        ("바디 봇아", "버디봇아"),
+        ("버디보트", "버디봇"),
+        ("버디 보트", "버디봇"),
+        ("버디 봇", "버디봇"),
+        ("바디봇", "버디봇"),
+        ("바디 봇", "버디봇"),
+        ("버디보", "버디봇"),
+        ("버디 보", "버디봇"),
+        ("buddy bot", "buddybot"),
+    )
+
     def __init__(self):
         super().__init__("voice_interface")
         self.declare_parameter("offline_mode", True)
@@ -78,7 +92,21 @@ class VoiceInterface(Node):
         self.declare_parameter("zero_burst_count", 4)
         self.declare_parameter(
             "wake_words",
-            ["버디봇", "버디봇아", "버디 봇", "버디 봇아", "버디", "buddybot", "buddy"],
+            [
+                "버디봇아",
+                "버디봇",
+                "버디 봇아",
+                "버디 봇",
+                "바디봇",
+                "바디 봇",
+                "버디보",
+                "버디 보",
+                "버디보트",
+                "buddybot",
+                "buddy bot",
+                "버디",
+                "buddy",
+            ],
         )
         self.declare_parameter("manual_speed", 0.46)
         self.declare_parameter("strafe_speed", 0.30)
@@ -129,11 +157,12 @@ class VoiceInterface(Node):
         self.nudge_duration_sec = float(self.get_parameter("nudge_duration_sec").value)
         self.continuous_command_max_sec = float(self.get_parameter("continuous_command_max_sec").value)
         self.zero_burst_count = max(1, int(self.get_parameter("zero_burst_count").value))
-        self.wake_words = [
-            item.strip().lower()
+        normalized_wake_words = [
+            self._normalize_text(str(item))
             for item in self.get_parameter("wake_words").value
             if str(item).strip()
         ]
+        self.wake_words = list(dict.fromkeys(sorted(normalized_wake_words, key=len, reverse=True)))
         self.manual_speed = float(self.get_parameter("manual_speed").value)
         self.strafe_speed = float(self.get_parameter("strafe_speed").value)
         self.rotate_speed = float(self.get_parameter("rotate_speed").value)
@@ -511,7 +540,7 @@ class VoiceInterface(Node):
             self._start_manual_motion(0.0, 0.0, -self.rotate_speed, self.nudge_duration_sec, mode="nudge", intent="rotate_right")
             return "우회전."
 
-        if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
+        if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 정지", "추종 중지", "따라오지 마", "따라오지마", "그만 따라와", "추종 꺼")):
             self._set_follow_enabled(False)
             return "추종 중지."
 
@@ -538,7 +567,7 @@ class VoiceInterface(Node):
             return ""
         return "명령을 이해하지 못했습니다. 전진, 정지, 좌회전, 주방, 추종 시작처럼 말씀해 주세요."
 
-    def _normalize_text(self, text: str) -> str:
+    def _normalize_basic_text(self, text: str) -> str:
         cleaned = text.lower().strip()
         for mark in (",", ".", "?", "!", ":", ";", "，", "。", "？", "！", "、", "~", "…"):
             cleaned = cleaned.replace(mark, " ")
@@ -547,6 +576,12 @@ class VoiceInterface(Node):
                 cleaned = cleaned[len(prefix):].strip()
         cleaned = " ".join(cleaned.split())
         return cleaned
+
+    def _normalize_text(self, text: str) -> str:
+        cleaned = self._normalize_basic_text(text)
+        for alias, canonical in self.WAKE_ALIAS_REPLACEMENTS:
+            cleaned = cleaned.replace(alias, canonical)
+        return " ".join(cleaned.split())
 
     FORWARD_WORDS = (
         "forward",
@@ -678,6 +713,91 @@ class VoiceInterface(Node):
         if self._is_explanation_request(normalized):
             return False
         return True
+
+    def _preview_local_intent(self, text: str) -> str:
+        command_text = self._strip_wake_prefix(text)
+        if self._is_stop_command(command_text):
+            return "stop"
+        if self._is_motion_negation(command_text):
+            return "blocked_negative"
+        if self._is_explanation_request(command_text) and self._has_motion_word(command_text):
+            return "blocked_explanation"
+        if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
+            return "forward"
+        if self._matches_any(command_text, self.FORWARD_WORDS):
+            return "forward"
+        if any(keyword in command_text for keyword in ("backward", "reverse", "back", "뒤로", "후진")):
+            return "backward"
+        if any(keyword in command_text for keyword in ("strafe left", "slide left", "왼쪽 이동", "왼쪽으로", "좌측 이동", "좌측으로")):
+            return "strafe_left"
+        if any(keyword in command_text for keyword in ("strafe right", "slide right", "오른쪽 이동", "오른쪽으로", "우측 이동", "우측으로")):
+            return "strafe_right"
+        if any(keyword in command_text for keyword in ("turn left", "rotate left", "좌회전", "왼쪽 회전")):
+            return "rotate_left"
+        if any(keyword in command_text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
+            return "rotate_right"
+        if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 정지", "추종 중지", "따라오지 마", "따라오지마", "그만 따라와", "추종 꺼")):
+            return "follow_stop"
+        if any(keyword in command_text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
+            return "follow_start"
+        if "kitchen" in command_text or "주방" in command_text or "부엌" in command_text:
+            return "waypoint_kitchen"
+        if "living room" in command_text or "거실" in command_text:
+            return "waypoint_living_room"
+        if "charge" in command_text or "충전" in command_text or "도킹" in command_text:
+            return "waypoint_charging"
+        if any(keyword in command_text for keyword in ("status", "state", "상태", "지금 상태")):
+            return "status"
+        if not command_text and self._contains_wake_word(text):
+            return "wake"
+        return "unknown"
+
+    def _is_local_robot_command(self, text: str) -> bool:
+        return self._preview_local_intent(text) not in {"", "unknown", "wake"}
+
+    def _matched_wake_alias(self, text: str) -> str:
+        basic = self._normalize_basic_text(text)
+        aliases = [alias for alias, _ in self.WAKE_ALIAS_REPLACEMENTS]
+        aliases.extend(self.wake_words)
+        for alias in sorted(set(aliases), key=len, reverse=True):
+            if alias in basic:
+                return alias
+        normalized = self._normalize_text(text)
+        for wake_word in self.wake_words:
+            if wake_word in normalized:
+                return wake_word
+        return ""
+
+    @staticmethod
+    def _audio_duration_sec(audio) -> float:
+        frame_data = getattr(audio, "frame_data", b"")
+        sample_rate = max(1, int(getattr(audio, "sample_rate", 1)))
+        sample_width = max(1, int(getattr(audio, "sample_width", 1)))
+        return len(frame_data) / float(sample_rate * sample_width)
+
+    def _log_stt_observation(self, *, backend: str, phase: str, audio, transcript: str) -> None:
+        normalized = self._normalize_text(transcript)
+        wake_alias = self._matched_wake_alias(transcript)
+        wake_detected = bool(wake_alias)
+        command_text = self._strip_wake_prefix(transcript) if wake_detected else normalized
+        local_intent = self._preview_local_intent(transcript)
+        self.get_logger().info(
+            "stt_observation "
+            f"backend={backend} phase={phase} raw_audio_duration={self._audio_duration_sec(audio):.2f}s "
+            f"raw_stt_text={transcript!r} normalized_text={normalized!r} "
+            f"wake_detected={str(wake_detected).lower()} wake_matched_alias={wake_alias or '-'} "
+            f"command_text={command_text!r} local_intent={local_intent}"
+        )
+
+    def _recognize_local_observed(self, audio, *, phase: str) -> str:
+        transcript = self._recognize_with_local_whisper(audio)
+        self._log_stt_observation(
+            backend="local_whisper",
+            phase=phase,
+            audio=audio,
+            transcript=transcript,
+        )
+        return transcript
 
     def _log_voice_classification(
         self,
@@ -871,18 +991,20 @@ class VoiceInterface(Node):
 
     def _recognize_hybrid_audio(self, recognizer, audio, *, phase: str) -> str:
         if phase == "disabled":
-            local_transcript = self._recognize_with_local_whisper(audio)
+            local_transcript = self._recognize_local_observed(audio, phase=phase)
             if local_transcript and self._is_stop_command(local_transcript):
                 self._publish_status(f"recognized:local_whisper_disabled_safety:{local_transcript}")
                 return local_transcript
             return ""
 
         if phase == "wake":
-            local_transcript = self._recognize_with_local_whisper(audio)
+            local_transcript = self._recognize_local_observed(audio, phase=phase)
             if local_transcript:
                 if self._is_stop_command(local_transcript):
                     return local_transcript
                 if self._contains_wake_word(local_transcript) and self._strip_wake_prefix(local_transcript):
+                    if self._is_local_robot_command(local_transcript):
+                        return local_transcript
                     server_transcript = self._recognize_with_server_whisper(audio)
                     return self._merge_confirmed_wake_transcript(local_transcript, server_transcript)
                 if self._contains_wake_word(local_transcript):
@@ -904,9 +1026,11 @@ class VoiceInterface(Node):
             return ""
 
         if phase == "safety":
-            local_transcript = self._recognize_with_local_whisper(audio)
+            local_transcript = self._recognize_local_observed(audio, phase=phase)
             if local_transcript and self._is_stop_command(local_transcript):
                 self._publish_status(f"recognized:local_whisper_safety:{local_transcript}")
+                return local_transcript
+            if local_transcript and self._is_local_robot_command(local_transcript):
                 return local_transcript
             return (
                 self._recognize_with_server_whisper(audio)
@@ -914,9 +1038,12 @@ class VoiceInterface(Node):
                 or self._recognize_with_google_fallback(recognizer, audio)
             )
 
+        local_transcript = self._recognize_local_observed(audio, phase=phase)
+        if local_transcript and self._is_local_robot_command(local_transcript):
+            return local_transcript
         return (
             self._recognize_with_server_whisper(audio)
-            or self._recognize_with_local_whisper(audio)
+            or local_transcript
             or self._recognize_with_google_fallback(recognizer, audio)
         )
 

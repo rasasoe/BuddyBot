@@ -43,10 +43,12 @@ Pi 마이크 또는 /voice/text
 ```text
 대기 중:
 Pi faster-whisper tiny로 웨이크워드 감지
+→ 흔한 오인식 별칭 정규화
+→ 로컬 로봇 명령이면 서버 왕복 없이 즉시 처리
 
 웨이크워드 이후 명령:
-BuddyBot-ai /stt 서버 Whisper
-→ Pi faster-whisper tiny
+Pi faster-whisper tiny 로컬 명령 우선
+→ BuddyBot-ai /stt 서버 Whisper
 → 선택적 Google Web Speech fallback
 
 주행 중:
@@ -56,6 +58,7 @@ Pi faster-whisper tiny로 긴급 정지 우선 검사
 ```
 
 서버 `/stt`가 실패하면 일정 시간 cooldown을 적용해 네트워크 실패로 마이크 루프가 계속 지연되지 않게 합니다.
+`voice.log`의 `stt_observation` 줄에는 Pi tiny의 raw 텍스트, 정규화 결과, 웨이크워드 별칭, 분리된 명령, 로컬 intent가 기록됩니다.
 
 Pi 설치 및 tiny 모델 사전 다운로드:
 

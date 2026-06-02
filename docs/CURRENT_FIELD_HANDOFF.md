@@ -508,3 +508,14 @@ Manual stutter root cause and latest fix:
 - When Pi confirms a wake-word but server Whisper drops the wake prefix, the Pi restores the confirmed prefix before local command classification.
 - Added spaced Whisper wake-word variants: `버디 봇`, `버디 봇아`.
 - Rebuild `buddybot_voice` and `buddybot_panel`. Pico reflash is not required.
+
+## 2026-06-02 Pi-local wake-word recovery
+
+- Expanded local Whisper wake aliases and canonicalization:
+  - `버디봇`, `버디 봇`, `바디봇`, `바디 봇`, `버디보`, `버디 보`, `버디보트`, `buddybot`, `buddy bot`.
+- Wake aliases are normalized before prefix stripping so longer aliases such as `버디봇아` do not leave a stray suffix.
+- Pi tiny now wins immediately when it already recognizes a known local robot command.
+- Server `/stt` remains an accuracy fallback for wake misses and AI conversation rather than a required robot-command hop.
+- `voice.log` now records `stt_observation` lines with audio duration, raw transcript, normalized transcript, wake alias, command text, and local intent.
+- For an offline-only field check, start with `BUDDYBOT_VOICE_SERVER_STT_ENABLED=0 BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0`.
+- Rebuild `buddybot_voice`. Pico reflash is not required.
