@@ -42,8 +42,10 @@ Pi 마이크 또는 /voice/text
 
 ```text
 대기 중:
-Pi faster-whisper tiny로 웨이크워드 감지
+Pi faster-whisper tiny로 웨이크워드 감지, 짧은 호출어에서는 VAD 완화
 → 흔한 오인식 별칭 정규화
+→ 선택적 Google Web Speech fallback
+→ 그래도 놓치면 0.35~1.60초 짧은 음성을 호출 시도로만 인정
 → 로컬 로봇 명령이면 서버 왕복 없이 즉시 처리
 
 웨이크워드 이후 명령:
@@ -58,6 +60,8 @@ Pi faster-whisper tiny로 긴급 정지 우선 검사
 ```
 
 서버 `/stt`가 실패하면 일정 시간 cooldown을 적용해 네트워크 실패로 마이크 루프가 계속 지연되지 않게 합니다.
+짧은 웨이크워드는 서버 `/stt`를 기다리지 않습니다. 마지막 음성 fallback은 `네.` 응답과 다음 명령 창만 열고 모터 명령을 직접 만들지 않습니다.
+Pi 스피커 재생 중과 직후에는 C920 마이크 결과를 짧게 무시해 로봇 자신의 응답이 새 명령으로 재입력되지 않게 합니다.
 `voice.log`의 `stt_observation` 줄에는 Pi tiny의 raw 텍스트, 정규화 결과, 웨이크워드 별칭, 분리된 명령, 로컬 intent가 기록됩니다.
 
 Pi 설치 및 tiny 모델 사전 다운로드:

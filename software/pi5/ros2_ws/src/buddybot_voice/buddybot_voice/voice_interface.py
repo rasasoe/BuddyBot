@@ -80,6 +80,9 @@ class VoiceInterface(Node):
         self.declare_parameter("phrase_time_limit", 2.6)
         self.declare_parameter("moving_phrase_time_limit", 1.2)
         self.declare_parameter("wake_timeout_sec", 10.0)
+        self.declare_parameter("wake_audio_fallback_enabled", True)
+        self.declare_parameter("wake_audio_fallback_min_sec", 0.35)
+        self.declare_parameter("wake_audio_fallback_max_sec", 1.60)
         self.declare_parameter("pause_threshold", 0.45)
         self.declare_parameter("non_speaking_duration", 0.25)
         self.declare_parameter("dynamic_energy_threshold", True)
@@ -122,6 +125,7 @@ class VoiceInterface(Node):
         self.declare_parameter("speaker_voice_ko", "ko")
         self.declare_parameter("speaker_voice_en", "en-us")
         self.declare_parameter("speaker_rate_wpm", 180)
+        self.declare_parameter("speaker_echo_guard_sec", 0.35)
         self.declare_parameter("speak_command_responses", False)
         self.declare_parameter("server_tts_enabled", True)
         self.declare_parameter("server_tts_timeout_sec", 12.0)
@@ -149,6 +153,15 @@ class VoiceInterface(Node):
         self.phrase_time_limit = float(self.get_parameter("phrase_time_limit").value)
         self.moving_phrase_time_limit = float(self.get_parameter("moving_phrase_time_limit").value)
         self.wake_timeout_sec = float(self.get_parameter("wake_timeout_sec").value)
+        self.wake_audio_fallback_enabled = bool(self.get_parameter("wake_audio_fallback_enabled").value)
+        self.wake_audio_fallback_min_sec = max(
+            0.0,
+            float(self.get_parameter("wake_audio_fallback_min_sec").value),
+        )
+        self.wake_audio_fallback_max_sec = max(
+            self.wake_audio_fallback_min_sec,
+            float(self.get_parameter("wake_audio_fallback_max_sec").value),
+        )
         self.pause_threshold = float(self.get_parameter("pause_threshold").value)
         self.non_speaking_duration = float(self.get_parameter("non_speaking_duration").value)
         self.dynamic_energy_threshold = bool(self.get_parameter("dynamic_energy_threshold").value)
@@ -182,6 +195,7 @@ class VoiceInterface(Node):
         self.speaker_voice_ko = str(self.get_parameter("speaker_voice_ko").value).strip() or "ko"
         self.speaker_voice_en = str(self.get_parameter("speaker_voice_en").value).strip() or "en-us"
         self.speaker_rate_wpm = int(self.get_parameter("speaker_rate_wpm").value)
+        self.speaker_echo_guard_sec = max(0.0, float(self.get_parameter("speaker_echo_guard_sec").value))
         self.speak_command_responses = bool(self.get_parameter("speak_command_responses").value)
         self.server_tts_enabled = bool(self.get_parameter("server_tts_enabled").value)
         self.server_tts_timeout_sec = max(1.0, float(self.get_parameter("server_tts_timeout_sec").value))
@@ -236,6 +250,8 @@ class VoiceInterface(Node):
         self._audio_stop = threading.Event()
         self._speaker_thread: Optional[threading.Thread] = None
         self._speaker_queue: "queue.Queue[Tuple[str, str]]" = queue.Queue()
+        self._speaker_active = threading.Event()
+        self._microphone_ignore_until = 0.0
         self._speaker_backend_command = ""
         self._audio_player_command = ""
         self._speaker_warned_missing_backend = False
@@ -277,7 +293,9 @@ class VoiceInterface(Node):
             f"online={'enabled' if self.allow_online_recognition else 'disabled'}, "
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
             f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s, "
-            f"google_timeout={self.google_timeout_sec}s"
+            f"google_timeout={self.google_timeout_sec}s, "
+            f"wake_audio_fallback={self.wake_audio_fallback_enabled} "
+            f"{self.wake_audio_fallback_min_sec:.2f}-{self.wake_audio_fallback_max_sec:.2f}s"
         )
         self.get_logger().info(
             f"Hybrid STT: server={'enabled' if self.server_stt_enabled else 'disabled'} "
@@ -880,7 +898,7 @@ class VoiceInterface(Node):
         )
 
     def _recognize_local_observed(self, audio, *, phase: str) -> str:
-        transcript = self._recognize_with_local_whisper(audio)
+        transcript = self._recognize_with_local_whisper(audio, phase=phase)
         self._log_stt_observation(
             backend="local_whisper",
             phase=phase,
@@ -1056,6 +1074,10 @@ class VoiceInterface(Node):
                         self.get_logger().error(f"Microphone listen failed: {exc}")
                         break
 
+                    if self._speaker_active.is_set() or time.monotonic() < self._microphone_ignore_until:
+                        self._publish_status("ignored:microphone:speaker_echo")
+                        continue
+
                     recognition_phase = self._recognition_phase()
                     transcript = self._recognize_audio(recognizer, audio, phase=recognition_phase)
                     if transcript:
@@ -1081,7 +1103,7 @@ class VoiceInterface(Node):
         if backend == "server_whisper":
             return self._recognize_with_server_whisper(audio)
         if backend == "local_whisper":
-            return self._recognize_with_local_whisper(audio)
+            return self._recognize_with_local_whisper(audio, phase=phase)
         if backend == "google":
             return self._recognize_with_google(recognizer, audio)
         if backend == "sphinx":
@@ -1111,19 +1133,21 @@ class VoiceInterface(Node):
                 if self._contains_wake_word(local_transcript):
                     return local_transcript
 
-            server_transcript = self._recognize_with_server_whisper(audio)
-            if server_transcript and (
-                self._is_stop_command(server_transcript)
-                or self._contains_wake_word(server_transcript)
-            ):
-                return server_transcript
-
             google_transcript = self._recognize_with_google_fallback(recognizer, audio)
             if google_transcript and (
                 self._is_stop_command(google_transcript)
                 or self._contains_wake_word(google_transcript)
             ):
                 return google_transcript
+
+            if self._should_infer_wake_from_audio(audio):
+                duration = self._audio_duration_sec(audio)
+                self._publish_status(f"recognized:wake_audio_fallback:{duration:.2f}s")
+                self.get_logger().info(
+                    "Wake audio fallback accepted a short local phrase "
+                    f"({duration:.2f}s); opening command window without executing motion"
+                )
+                return "버디봇"
             return ""
 
         if phase == "safety":
@@ -1174,7 +1198,7 @@ class VoiceInterface(Node):
             )
             return ""
 
-    def _recognize_with_local_whisper(self, audio) -> str:
+    def _recognize_with_local_whisper(self, audio, *, phase: str = "command") -> str:
         if not self.local_whisper_enabled or time.monotonic() < self._local_whisper_retry_after:
             return ""
         if WhisperModel is None:
@@ -1194,7 +1218,9 @@ class VoiceInterface(Node):
                 str(temp_path),
                 language=self.local_whisper_language,
                 beam_size=1,
-                vad_filter=True,
+                vad_filter=phase != "wake",
+                condition_on_previous_text=False,
+                initial_prompt=self._local_whisper_prompt(phase),
             )
             transcript = "".join(segment.text for segment in segments).strip()
             if transcript:
@@ -1223,6 +1249,15 @@ class VoiceInterface(Node):
                 )
                 self._publish_status(f"local_whisper_ready:{self.local_whisper_model_size}")
             return self._local_whisper_model
+
+    @staticmethod
+    def _local_whisper_prompt(phase: str) -> str:
+        if phase == "wake":
+            return "버디봇. 버디 봇. 바디봇."
+        return (
+            "버디봇. 전진. 앞으로. 멈춰. 정지. 따라와. 추종 시작. 추종 정지. "
+            "좌회전. 우회전. 왼쪽 이동. 오른쪽 이동."
+        )
 
     def _recognize_with_google_fallback(self, recognizer, audio) -> str:
         if not self.google_fallback_enabled:
@@ -1275,6 +1310,12 @@ class VoiceInterface(Node):
     def _contains_wake_word(self, text: str) -> bool:
         normalized = self._normalize_text(text)
         return any(wake_word in normalized for wake_word in self.wake_words)
+
+    def _should_infer_wake_from_audio(self, audio) -> bool:
+        if not self.wake_audio_fallback_enabled:
+            return False
+        duration = self._audio_duration_sec(audio)
+        return self.wake_audio_fallback_min_sec <= duration <= self.wake_audio_fallback_max_sec
 
     def _merge_confirmed_wake_transcript(self, local_transcript: str, server_transcript: str) -> str:
         if not server_transcript:
@@ -1367,11 +1408,15 @@ class VoiceInterface(Node):
                 continue
             if not text:
                 continue
+            self._speaker_active.set()
             try:
                 self._speak_text(text, category=category)
             except Exception as exc:
                 self.get_logger().warn(f"Speaker playback failed: {exc}")
                 self._publish_status(f"speaker_failed:{exc}")
+            finally:
+                self._speaker_active.clear()
+                self._microphone_ignore_until = time.monotonic() + self.speaker_echo_guard_sec
 
     def _speak_text(self, text: str, *, category: str = "system") -> None:
         if category == "ai" and self.server_assistant_enabled and self.server_tts_enabled:

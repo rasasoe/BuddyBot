@@ -758,6 +758,9 @@
       if(status.startsWith("recognized:google:") || status.startsWith("recognized:sphinx:")){
         return `인식됨: ${status.split(":").slice(2).join(":")}${suffix}`;
       }
+      if(status.startsWith("recognized:wake_audio_fallback:")){
+        return `호출 음성 감지 · 명령 대기${suffix}`;
+      }
       if(status.startsWith("heard:")){
         return `들은 말: ${status.split(":").slice(2).join(":")}${suffix}`;
       }
@@ -821,6 +824,9 @@
       }
       if(status.startsWith("ignored:microphone:manual_override")){
         return `수동 조작 우선${suffix}`;
+      }
+      if(status.startsWith("ignored:microphone:speaker_echo")){
+        return `로봇 음성 재생 중${suffix}`;
       }
       if(status.startsWith("manual_override:")){
         return `수동 조작 우선${suffix}`;

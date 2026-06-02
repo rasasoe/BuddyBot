@@ -563,3 +563,18 @@ Manual stutter root cause and latest fix:
 - Forward, backward, pure rotation, and Pi-side lateral `wz=0.0` remain unchanged.
 - Voice mode now speaks `음성 모드 켜짐` when the panel ON command reaches the voice node.
 - Pull main, run `bash scripts/flash_pico.sh`, rebuild `buddybot_voice buddybot_panel`, and restart presentation mode.
+
+## 2026-06-02 Recover short wake audio
+
+- Field log confirmed that the panel ON command reaches the voice node and Pi speaker:
+  - `Voice command processing enabled`
+  - Pi says `음성 모드 켜짐`
+- The remaining wake failure was in STT:
+  - Pi tiny often returned an empty transcript for a `0.72s` `버디봇` utterance.
+  - BuddyBot-ai `/stt` returned HTTP 503.
+  - Google fallback also returned no transcript for the same short clip.
+- Wake-only recognition now disables Whisper VAD and supplies a small Korean wake prompt.
+- Standalone wake recognition no longer waits for server `/stt`.
+- After Pi tiny and optional Google both miss, a bounded `0.35-1.60s` local phrase opens the command window as a wake attempt only. It says `네` but never executes motion by itself.
+- Added a short speaker echo guard so Pi responses are not fed back into the C920 microphone as new commands.
+- Rebuild `buddybot_voice` and `buddybot_panel`; Pico reflash is not required for this voice-only patch.

@@ -1770,3 +1770,28 @@ Required Pi action:
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Restart presentation mode.
 - Pico reflash is not required.
+
+## 2026-06-02 Short Wake Audio Recovery
+
+Goal:
+- Restore reliable `버디봇` wake response after moving to hybrid Whisper STT.
+- Keep wake recognition local and prevent a broken server `/stt` endpoint from delaying a simple call.
+
+Field evidence:
+- Voice-mode ON reached the node and Pi speaker successfully.
+- Local tiny logged an empty transcript for a `0.72s` wake phrase.
+- Server `/stt` returned HTTP 503 and Google fallback also produced no transcript.
+
+Changes:
+- Disable faster-whisper VAD only for wake-only recognition.
+- Add a Korean wake prompt for local tiny.
+- Do not call server `/stt` for a standalone wake attempt.
+- If Pi tiny and optional Google both miss, accept a bounded `0.35-1.60s` local phrase as wake-only input.
+- The bounded audio fallback only opens the command window and cannot execute motor movement.
+- Ignore captured microphone audio while Pi speech is playing and for a short tail afterward.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
+- Pico reflash is not required.

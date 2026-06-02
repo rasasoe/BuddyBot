@@ -565,3 +565,12 @@ PRD 참조: PART 3 Cycle 5 실기검증 M3(사람추종), PRD Section 2.2 `/visi
 - Pico now applies `STRAFE_BACK_WHEEL_GAIN=1.30` only to the rear wheel's lateral component.
 - If field tuning is still needed, adjust that gain in small steps before changing wheel signs or global kinematics.
 - Voice mode stays OFF at presentation startup by design. When the panel ON command reaches the voice node, the Pi now says `음성 모드 켜짐`.
+
+## 2026-06-02 Short Wake Audio Note
+
+- The voice node and panel ON path were confirmed alive; the remaining failure was wake STT on a short C920 clip.
+- Local tiny returned empty text for a `0.72s` `버디봇` call, BuddyBot-ai `/stt` returned HTTP 503, and Google fallback also missed.
+- Wake-only local Whisper now runs without VAD and receives a short Korean wake prompt.
+- Standalone wake calls no longer wait for server `/stt`.
+- A bounded `0.35-1.60s` local audio fallback can say `네` and open the command window only. It cannot create a motor command.
+- Pi speaker playback now has a short microphone echo guard.
