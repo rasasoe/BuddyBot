@@ -1647,6 +1647,27 @@ Required Pi action:
 - Restart presentation mode.
 - No colcon rebuild or Pico reflash is required for this shell-only fix.
 
+## 2026-06-02 Remove lateral manual yaw injection
+
+Field feedback:
+- Strafe-left still rotated clockwise while moving left.
+- Strafe-right still rotated counter-clockwise while moving right.
+
+Root cause:
+- Panel and voice lateral commands intentionally injected small directional yaw trims:
+  - strafe left: `0.003`
+  - strafe right: `-0.003`
+
+Fix:
+- Set panel and voice strafe-left/strafe-right yaw trim defaults to `0.0`.
+- Keep forward/backward trims and Pico wheel kinematics unchanged.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
+- Pico reflash is not required.
+
 ## 2026-06-01 Voice mode default-off and wake-word retry
 
 Field feedback:

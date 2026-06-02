@@ -528,3 +528,13 @@ Manual stutter root cause and latest fix:
 - `scripts/start_mapping_panel.sh` now omits `piper_model_path` entirely when no Piper model is configured.
 - A configured Piper model path is still passed normally.
 - Rebuild is not required for this shell-only fix. Restart presentation mode after pulling main.
+
+## 2026-06-02 Remove lateral manual yaw injection
+
+- Field feedback showed residual rotation during lateral manual driving:
+  - strafe left still rotated clockwise while moving left
+  - strafe right still rotated counter-clockwise while moving right
+- The panel and voice paths still injected directional lateral yaw trims.
+- Default strafe-left and strafe-right yaw trims are now both `0.0`.
+- Forward/backward trims and Pico kinematics remain unchanged.
+- Rebuild `buddybot_voice` and `buddybot_panel`; Pico reflash is not required.
