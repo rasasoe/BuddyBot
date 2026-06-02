@@ -109,6 +109,8 @@ class VoiceInterface(Node):
             ],
         )
         self.declare_parameter("manual_speed", 0.46)
+        self.declare_parameter("diagonal_speed", 0.42)
+        self.declare_parameter("diagonal_component_scale", 0.7071)
         self.declare_parameter("strafe_speed", 0.30)
         self.declare_parameter("rotate_speed", 0.60)
         self.declare_parameter("forward_yaw_trim", -0.003)
@@ -164,6 +166,11 @@ class VoiceInterface(Node):
         ]
         self.wake_words = list(dict.fromkeys(sorted(normalized_wake_words, key=len, reverse=True)))
         self.manual_speed = float(self.get_parameter("manual_speed").value)
+        self.diagonal_speed = float(self.get_parameter("diagonal_speed").value)
+        self.diagonal_component_scale = max(
+            0.0,
+            min(1.0, float(self.get_parameter("diagonal_component_scale").value)),
+        )
         self.strafe_speed = float(self.get_parameter("strafe_speed").value)
         self.rotate_speed = float(self.get_parameter("rotate_speed").value)
         self.forward_yaw_trim = float(self.get_parameter("forward_yaw_trim").value)
@@ -276,6 +283,7 @@ class VoiceInterface(Node):
         )
         self.get_logger().info(
             f"Motion voice: manual_speed={self.manual_speed}, "
+            f"diagonal={self.diagonal_speed}@{self.diagonal_component_scale}, "
             f"yaw_trim f/b/sl/sr={self.forward_yaw_trim}/{self.backward_yaw_trim}/"
             f"{self.strafe_left_yaw_trim}/{self.strafe_right_yaw_trim}, "
             f"continuous_max={self.continuous_command_max_sec}s"
@@ -482,6 +490,22 @@ class VoiceInterface(Node):
             )
             return "" if not allow_help else "설명 요청으로 판단해서 이동하지 않았습니다."
 
+        if self._matches_any(command_text, self.FORWARD_LEFT_WORDS):
+            self._start_diagonal_motion(1.0, 1.0, "forward_left")
+            return "왼쪽 앞으로."
+
+        if self._matches_any(command_text, self.FORWARD_RIGHT_WORDS):
+            self._start_diagonal_motion(1.0, -1.0, "forward_right")
+            return "오른쪽 앞으로."
+
+        if self._matches_any(command_text, self.BACKWARD_LEFT_WORDS):
+            self._start_diagonal_motion(-1.0, 1.0, "backward_left")
+            return "왼쪽 뒤로."
+
+        if self._matches_any(command_text, self.BACKWARD_RIGHT_WORDS):
+            self._start_diagonal_motion(-1.0, -1.0, "backward_right")
+            return "오른쪽 뒤로."
+
         if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
             self._log_voice_classification(
                 raw_text=message,
@@ -592,6 +616,46 @@ class VoiceInterface(Node):
         "가자",
         "직진",
     )
+    FORWARD_LEFT_WORDS = (
+        "forward left",
+        "diagonal forward left",
+        "왼쪽 앞으로",
+        "좌측 앞으로",
+        "왼쪽 앞",
+        "좌측 앞",
+        "왼쪽 대각선 전진",
+        "좌측 대각선 전진",
+    )
+    FORWARD_RIGHT_WORDS = (
+        "forward right",
+        "diagonal forward right",
+        "오른쪽 앞으로",
+        "우측 앞으로",
+        "오른쪽 앞",
+        "우측 앞",
+        "오른쪽 대각선 전진",
+        "우측 대각선 전진",
+    )
+    BACKWARD_LEFT_WORDS = (
+        "backward left",
+        "diagonal backward left",
+        "왼쪽 뒤로",
+        "좌측 뒤로",
+        "왼쪽 뒤",
+        "좌측 뒤",
+        "왼쪽 대각선 후진",
+        "좌측 대각선 후진",
+    )
+    BACKWARD_RIGHT_WORDS = (
+        "backward right",
+        "diagonal backward right",
+        "오른쪽 뒤로",
+        "우측 뒤로",
+        "오른쪽 뒤",
+        "우측 뒤",
+        "오른쪽 대각선 후진",
+        "우측 대각선 후진",
+    )
     CONTINUOUS_FORWARD_WORDS = (
         "continue forward",
         "keep going",
@@ -660,15 +724,24 @@ class VoiceInterface(Node):
         "what",
         "explain",
     )
-    MOTION_WORDS = FORWARD_WORDS + CONTINUOUS_FORWARD_WORDS + STOP_WORDS + (
-        "후진",
-        "뒤로",
-        "좌회전",
-        "우회전",
-        "왼쪽",
-        "오른쪽",
-        "이동",
-        "움직",
+    MOTION_WORDS = (
+        FORWARD_LEFT_WORDS
+        + FORWARD_RIGHT_WORDS
+        + BACKWARD_LEFT_WORDS
+        + BACKWARD_RIGHT_WORDS
+        + FORWARD_WORDS
+        + CONTINUOUS_FORWARD_WORDS
+        + STOP_WORDS
+        + (
+            "후진",
+            "뒤로",
+            "좌회전",
+            "우회전",
+            "왼쪽",
+            "오른쪽",
+            "이동",
+            "움직",
+        )
     )
 
     def _strip_wake_prefix(self, text: str) -> str:
@@ -722,6 +795,14 @@ class VoiceInterface(Node):
             return "blocked_negative"
         if self._is_explanation_request(command_text) and self._has_motion_word(command_text):
             return "blocked_explanation"
+        if self._matches_any(command_text, self.FORWARD_LEFT_WORDS):
+            return "forward_left"
+        if self._matches_any(command_text, self.FORWARD_RIGHT_WORDS):
+            return "forward_right"
+        if self._matches_any(command_text, self.BACKWARD_LEFT_WORDS):
+            return "backward_left"
+        if self._matches_any(command_text, self.BACKWARD_RIGHT_WORDS):
+            return "backward_right"
         if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
             return "forward"
         if self._matches_any(command_text, self.FORWARD_WORDS):
@@ -854,6 +935,17 @@ class VoiceInterface(Node):
         self._manual_command_mode = mode
         self._manual_intent = intent
         self._publish_status(f"voice_manual:{mode}_{intent}")
+
+    def _start_diagonal_motion(self, linear_x_sign: float, linear_y_sign: float, intent: str) -> None:
+        component = self.diagonal_speed * self.diagonal_component_scale
+        self._start_manual_motion(
+            linear_x_sign * component,
+            linear_y_sign * component,
+            0.0,
+            self.nudge_duration_sec,
+            mode="nudge",
+            intent=intent,
+        )
 
     def _clear_manual_motion(self) -> None:
         self._reset_manual_motion_state()
@@ -1320,6 +1412,10 @@ class VoiceInterface(Node):
             "전진.": "forward",
             "지속 전진.": "forward",
             "후진.": "backward",
+            "왼쪽 앞으로.": "forward_left",
+            "오른쪽 앞으로.": "forward_right",
+            "왼쪽 뒤로.": "backward_left",
+            "오른쪽 뒤로.": "backward_right",
             "왼쪽.": "strafe_left",
             "오른쪽.": "strafe_right",
             "좌회전.": "rotate_left",

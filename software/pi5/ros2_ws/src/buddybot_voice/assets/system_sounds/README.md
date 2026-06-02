@@ -10,6 +10,10 @@ yes
 ready
 forward
 backward
+forward_left
+forward_right
+backward_left
+backward_right
 strafe_left
 strafe_right
 rotate_left

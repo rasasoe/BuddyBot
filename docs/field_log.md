@@ -1728,3 +1728,21 @@ Required Pi action:
 - Run `bash scripts/setup_pi5_whisper.sh` once.
 - Rebuild `buddybot_voice` and `buddybot_panel`.
 - Pico reflash is not required.
+
+## 2026-06-02 Add holonomic diagonal manual drive
+
+Goal:
+- Expose the kiwi-base holonomic diagonal motion that was missing from the panel and Pi-local voice commands.
+
+Changes:
+- Added forward-left, forward-right, backward-left, and backward-right panel directions.
+- Changed the panel pad to an eight-direction layout and moved rotate-left/rotate-right below it.
+- Added diagonal handling in the panel bridge and Pi voice node.
+- Diagonal velocity uses `x/y` components scaled by `0.7071`, with `wz=0.0`.
+- Added local voice aliases such as `버디봇 왼쪽 앞으로` and `버디봇 오른쪽 뒤로`.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
+- Pico reflash is not required.

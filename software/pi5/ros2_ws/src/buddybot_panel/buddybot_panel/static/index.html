@@ -164,16 +164,16 @@
               <button type="button" class="secondary" id="manual-avoidance-btn" onclick="toggleManualAvoidance()">수동 회피 OFF</button>
               <div id="manual-avoidance-note" style="padding:12px 14px;border:1px solid var(--line);border-radius:15px;background:#fffaf1;display:flex;align-items:center;font-size:.88rem;color:var(--muted);line-height:1.45">수동 조작에서는 회피를 끈 상태가 기본이고, 자율주행과 추종에서는 계속 LiDAR 회피를 사용합니다.</div>
             </div>
-            <div class="note">화살표를 누르면 계속 구동되고, 같은 버튼을 다시 누르거나 정지를 누르면 멈춥니다. 전진과 후진은 더 쉽게 출발하도록, 회전은 더 천천히 돌도록 자동 보정합니다.</div>
+            <div class="note">화살표를 누르면 계속 구동되고, 같은 버튼을 다시 누르거나 정지를 누르면 멈춥니다. 대각선 이동도 회전 없이 홀로노믹으로 구동되며, 회전은 아래 보조 버튼으로 분리했습니다.</div>
             <div class="manual-pad">
-              <button class="manual-button" id="btn-rotate_left" data-toggle-direction="rotate_left">
-                <span class="glyph">↺</span><span class="label">좌회전</span>
+              <button class="secondary manual-button" id="btn-forward_left" data-toggle-direction="forward_left">
+                <span class="glyph">↖</span><span class="label">왼쪽 앞</span>
               </button>
               <button class="secondary manual-button" id="btn-forward" data-toggle-direction="forward">
                 <span class="glyph">↑</span><span class="label">전진</span>
               </button>
-              <button class="manual-button" id="btn-rotate_right" data-toggle-direction="rotate_right">
-                <span class="glyph">↻</span><span class="label">우회전</span>
+              <button class="secondary manual-button" id="btn-forward_right" data-toggle-direction="forward_right">
+                <span class="glyph">↗</span><span class="label">오른쪽 앞</span>
               </button>
               <button class="secondary manual-button" id="btn-strafe_left" data-toggle-direction="strafe_left">
                 <span class="glyph">←</span><span class="label">왼쪽 이동</span>
@@ -184,18 +184,26 @@
               <button class="secondary manual-button" id="btn-strafe_right" data-toggle-direction="strafe_right">
                 <span class="glyph">→</span><span class="label">오른쪽 이동</span>
               </button>
-              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="secondary manual-button" id="btn-backward_left" data-toggle-direction="backward_left">
+                <span class="glyph">↙</span><span class="label">왼쪽 뒤</span>
+              </button>
               <button class="secondary manual-button" id="btn-backward" data-toggle-direction="backward">
                 <span class="glyph">↓</span><span class="label">후진</span>
               </button>
-              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="secondary manual-button" id="btn-backward_right" data-toggle-direction="backward_right">
+                <span class="glyph">↘</span><span class="label">오른쪽 뒤</span>
+              </button>
             </div>
             <div class="manual-aux">
-              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="manual-button" id="btn-rotate_left" data-toggle-direction="rotate_left">
+                <span class="glyph">↺</span><span class="label">좌회전</span>
+              </button>
               <button class="warn manual-button" onclick="cancelNavigation()">
                 <span class="glyph">×</span><span class="label">경로 취소</span>
               </button>
-              <div class="manual-spacer" aria-hidden="true"></div>
+              <button class="manual-button" id="btn-rotate_right" data-toggle-direction="rotate_right">
+                <span class="glyph">↻</span><span class="label">우회전</span>
+              </button>
             </div>
           </div>
         </div>
@@ -486,7 +494,11 @@
       const throttle = parseFloat(document.getElementById("speed-slider")?.value ?? 100) / 100;
       const profiles = {
         forward: {offset:0.34, gain:0.12},
+        forward_left: {offset:0.34, gain:0.12},
+        forward_right: {offset:0.34, gain:0.12},
         backward: {offset:0.325, gain:0.11},
+        backward_left: {offset:0.325, gain:0.11},
+        backward_right: {offset:0.325, gain:0.11},
         strafe_left: {offset:0.26, gain:0.14},
         strafe_right: {offset:0.26, gain:0.14},
         rotate_left: {offset:0.096, gain:0.112},
@@ -1029,7 +1041,11 @@
       try{
         const label = ({
           forward: "전진",
+          forward_left: "왼쪽 앞 이동",
+          forward_right: "오른쪽 앞 이동",
           backward: "후진",
+          backward_left: "왼쪽 뒤 이동",
+          backward_right: "오른쪽 뒤 이동",
           strafe_left: "왼쪽 이동",
           strafe_right: "오른쪽 이동",
           rotate_left: "좌회전",

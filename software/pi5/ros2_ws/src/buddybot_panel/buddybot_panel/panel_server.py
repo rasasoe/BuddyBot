@@ -221,6 +221,10 @@ class PanelBridge:
         self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.003"))
         self._manual_strafe_left_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LEFT_YAW_TRIM", "0.0"))
         self._manual_strafe_right_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_RIGHT_YAW_TRIM", "0.0"))
+        self._manual_diagonal_component_scale = max(
+            0.0,
+            min(1.0, float(os.getenv("BUDDYBOT_MANUAL_DIAGONAL_COMPONENT_SCALE", "0.7071"))),
+        )
         self._manual_hold_timeout_sec = float(os.getenv("BUDDYBOT_MANUAL_HOLD_TIMEOUT_SEC", "3.0"))
         self._manual_publish_period_sec = max(0.02, float(os.getenv("BUDDYBOT_MANUAL_PUBLISH_PERIOD_SEC", "0.05")))
         self._manual_stop_inhibit_sec = float(os.getenv("BUDDYBOT_MANUAL_STOP_INHIBIT_SEC", "1.5"))
@@ -1891,6 +1895,18 @@ class PanelBridge:
         if any(keyword in text for keyword in ("stop", "halt", "brake", "정지", "멈춰", "스톱")):
             self.manual_command("stop", 0.0)
             return "버디봇을 정지했습니다."
+        if any(keyword in text for keyword in ("forward left", "diagonal forward left", "왼쪽 앞으로", "좌측 앞으로", "왼쪽 앞", "좌측 앞", "왼쪽 대각선 전진", "좌측 대각선 전진")):
+            self.manual_command("forward_left", 0.46)
+            return "버디봇이 왼쪽 앞으로 이동합니다."
+        if any(keyword in text for keyword in ("forward right", "diagonal forward right", "오른쪽 앞으로", "우측 앞으로", "오른쪽 앞", "우측 앞", "오른쪽 대각선 전진", "우측 대각선 전진")):
+            self.manual_command("forward_right", 0.46)
+            return "버디봇이 오른쪽 앞으로 이동합니다."
+        if any(keyword in text for keyword in ("backward left", "diagonal backward left", "왼쪽 뒤로", "좌측 뒤로", "왼쪽 뒤", "좌측 뒤", "왼쪽 대각선 후진", "좌측 대각선 후진")):
+            self.manual_command("backward_left", 0.435)
+            return "버디봇이 왼쪽 뒤로 이동합니다."
+        if any(keyword in text for keyword in ("backward right", "diagonal backward right", "오른쪽 뒤로", "우측 뒤로", "오른쪽 뒤", "우측 뒤", "오른쪽 대각선 후진", "우측 대각선 후진")):
+            self.manual_command("backward_right", 0.435)
+            return "버디봇이 오른쪽 뒤로 이동합니다."
         if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self.manual_command("forward", 0.46)
             return "버디봇이 앞으로 이동합니다."
@@ -1953,7 +1969,15 @@ class PanelBridge:
         linear_y = 0.0
         angular_z = 0.0
 
-        if direction == "forward":
+        if direction in {"forward_left", "forward_right", "backward_left", "backward_right"}:
+            component_scale = self._manual_diagonal_component_scale
+            linear_x = self._clamp_manual_speed(magnitude, self._manual_linear_limit) * component_scale
+            linear_y = self._clamp_manual_speed(magnitude, self._manual_strafe_limit) * component_scale
+            if direction.startswith("backward"):
+                linear_x = -linear_x
+            if direction.endswith("right"):
+                linear_y = -linear_y
+        elif direction == "forward":
             linear_x = self._clamp_manual_speed(magnitude, self._manual_linear_limit)
             angular_z = self._scaled_trim(
                 self._manual_forward_yaw_trim,

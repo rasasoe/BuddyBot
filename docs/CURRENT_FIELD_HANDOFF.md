@@ -538,3 +538,16 @@ Manual stutter root cause and latest fix:
 - Default strafe-left and strafe-right yaw trims are now both `0.0`.
 - Forward/backward trims and Pico kinematics remain unchanged.
 - Rebuild `buddybot_voice` and `buddybot_panel`; Pico reflash is not required.
+
+## 2026-06-02 Add holonomic diagonal manual drive
+
+- Added four pure holonomic diagonal directions:
+  - forward-left
+  - forward-right
+  - backward-left
+  - backward-right
+- The panel manual pad is now an eight-direction pad. Rotation buttons moved to the auxiliary row below it.
+- Diagonal commands publish `x/y` components together with a default `0.7071` component scale, keeping the combined speed bounded.
+- Diagonal commands intentionally publish `wz=0.0` so they do not add unwanted rotation.
+- Pi-local voice aliases include `버디봇 왼쪽 앞으로`, `버디봇 오른쪽 앞으로`, `버디봇 왼쪽 뒤로`, and `버디봇 오른쪽 뒤로`.
+- Rebuild `buddybot_voice` and `buddybot_panel`; Pico reflash is not required.
