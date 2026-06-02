@@ -555,3 +555,13 @@ PRD 참조: PART 3 Cycle 5 실기검증 M3(사람추종), PRD Section 2.2 `/visi
   - default manual mode feels direct because manual avoidance is off
   - if the operator wants extra protection during slow indoor tests, manual avoidance can be turned on from the panel
   - checkpoint go should now either start moving or return a clear panel error instead of silently doing nothing
+
+## 2026-06-02 Lateral Drive Balance Note
+
+- Keep the field-proven direct kiwi mix and forward/backward baseline intact.
+- Mirrored strafe arcs remained after Pi-side lateral yaw trim was removed:
+  - left strafe curved clockwise
+  - right strafe curved counter-clockwise
+- Pico now applies `STRAFE_BACK_WHEEL_GAIN=1.30` only to the rear wheel's lateral component.
+- If field tuning is still needed, adjust that gain in small steps before changing wheel signs or global kinematics.
+- Voice mode stays OFF at presentation startup by design. When the panel ON command reaches the voice node, the Pi now says `음성 모드 켜짐`.

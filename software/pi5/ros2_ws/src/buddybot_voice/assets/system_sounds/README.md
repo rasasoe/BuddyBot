@@ -8,6 +8,7 @@ Supported names:
 ```text
 yes
 ready
+voice_enabled
 forward
 backward
 forward_left

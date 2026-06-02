@@ -82,6 +82,12 @@ WHEEL_COMMAND_SIGNS = {
     'back': 1.0,
 }
 
+# The rear wheel carries the full lateral component while the two front wheels
+# each carry half. On the real chassis its effective lateral drive is weaker,
+# which turns left/right strafes into opposite arcs. Boost only that component
+# so forward, backward, and pure rotation retain the field-proven baseline.
+STRAFE_BACK_WHEEL_GAIN = 1.30
+
 # Keep rotational commands in the same normalized space as vx/vy.
 ROTATION_MIX_GAIN = 1.5
 

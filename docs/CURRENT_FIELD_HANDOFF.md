@@ -551,3 +551,15 @@ Manual stutter root cause and latest fix:
 - Diagonal commands intentionally publish `wz=0.0` so they do not add unwanted rotation.
 - Pi-local voice aliases include `버디봇 왼쪽 앞으로`, `버디봇 오른쪽 앞으로`, `버디봇 왼쪽 뒤로`, and `버디봇 오른쪽 뒤로`.
 - Rebuild `buddybot_voice` and `buddybot_panel`; Pico reflash is not required.
+
+## 2026-06-02 Compensate lateral rear-wheel drive
+
+- Field feedback after removing Pi-side strafe yaw injection:
+  - strafe-left still moved slowly while rotating clockwise
+  - strafe-right still moved slowly while rotating counter-clockwise
+- Opposite arc directions for opposite lateral commands point to lateral wheel-balance loss rather than a fixed `wz` offset.
+- Added Pico `STRAFE_BACK_WHEEL_GAIN=1.30`, applied only to the rear wheel's lateral component.
+- Increased panel strafe profile and Pi voice `strafe_speed` slightly to recover useful horizontal movement.
+- Forward, backward, pure rotation, and Pi-side lateral `wz=0.0` remain unchanged.
+- Voice mode now speaks `음성 모드 켜짐` when the panel ON command reaches the voice node.
+- Pull main, run `bash scripts/flash_pico.sh`, rebuild `buddybot_voice buddybot_panel`, and restart presentation mode.

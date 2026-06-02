@@ -111,7 +111,7 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_speed", 0.46)
         self.declare_parameter("diagonal_speed", 0.42)
         self.declare_parameter("diagonal_component_scale", 0.7071)
-        self.declare_parameter("strafe_speed", 0.30)
+        self.declare_parameter("strafe_speed", 0.36)
         self.declare_parameter("rotate_speed", 0.60)
         self.declare_parameter("forward_yaw_trim", -0.003)
         self.declare_parameter("backward_yaw_trim", -0.003)
@@ -249,6 +249,7 @@ class VoiceInterface(Node):
         self._local_speech_allowlist = {
             "네.",
             "말씀하세요.",
+            "음성 모드 켜짐.",
             "전진.",
             "지속 전진.",
             "후진.",
@@ -287,6 +288,7 @@ class VoiceInterface(Node):
         )
         self.get_logger().info(
             f"Motion voice: manual_speed={self.manual_speed}, "
+            f"strafe_speed={self.strafe_speed}, "
             f"diagonal={self.diagonal_speed}@{self.diagonal_component_scale}, "
             f"yaw_trim f/b/sl/sr={self.forward_yaw_trim}/{self.backward_yaw_trim}/"
             f"{self.strafe_left_yaw_trim}/{self.strafe_right_yaw_trim}, "
@@ -331,6 +333,7 @@ class VoiceInterface(Node):
         self.enqueue_speech(text, category=category)
 
     def voice_enabled_callback(self, msg: Bool) -> None:
+        was_enabled = self.command_enabled
         self.command_enabled = bool(msg.data)
         if not self.command_enabled:
             self._last_wake_time = 0.0
@@ -338,6 +341,8 @@ class VoiceInterface(Node):
         state = "enabled" if self.command_enabled else "disabled"
         self._publish_status(f"voice_mode:{state}")
         self.get_logger().info(f"Voice command processing {state}")
+        if self.command_enabled and not was_enabled:
+            self.enqueue_speech("음성 모드 켜짐.", category="system")
 
     def voice_assistant_callback(self, msg: Bool) -> None:
         self.server_assistant_enabled = bool(msg.data)
@@ -1413,6 +1418,7 @@ class VoiceInterface(Node):
         sound_key = {
             "네.": "yes",
             "말씀하세요.": "ready",
+            "음성 모드 켜짐.": "voice_enabled",
             "전진.": "forward",
             "지속 전진.": "forward",
             "후진.": "backward",

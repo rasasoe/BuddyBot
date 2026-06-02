@@ -499,8 +499,8 @@
         backward: {offset:0.325, gain:0.11},
         backward_left: {offset:0.325, gain:0.11},
         backward_right: {offset:0.325, gain:0.11},
-        strafe_left: {offset:0.26, gain:0.14},
-        strafe_right: {offset:0.26, gain:0.14},
+        strafe_left: {offset:0.30, gain:0.16},
+        strafe_right: {offset:0.30, gain:0.16},
         rotate_left: {offset:0.096, gain:0.112},
         rotate_right: {offset:0.096, gain:0.112},
         stop: {offset:0.0, gain:0.0},
@@ -748,6 +748,12 @@
       const suffix = age == null ? "" : ` · ${age}s`;
       if(status === "waiting" || status === "idle"){
         return `대기 중${suffix}`;
+      }
+      if(status === "voice_mode:enabled"){
+        return `음성 모드 켜짐${suffix}`;
+      }
+      if(status === "voice_mode:disabled"){
+        return `음성 모드 꺼짐${suffix}`;
       }
       if(status.startsWith("recognized:google:") || status.startsWith("recognized:sphinx:")){
         return `인식됨: ${status.split(":").slice(2).join(":")}${suffix}`;

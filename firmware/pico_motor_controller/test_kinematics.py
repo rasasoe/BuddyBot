@@ -34,8 +34,28 @@ def test_strafe_left():
         wheels["left"] > 0
         and wheels["right"] > 0
         and wheels["back"] < 0
+        and abs(wheels["back"]) > abs(wheels["left"]) * 2.0
     )
     return passed, wheels
+
+
+def test_strafe_right():
+    wheels = kinematics.robot_to_wheel_velocities(0.0, -0.3, 0.0)
+    passed = (
+        wheels["left"] < 0
+        and wheels["right"] < 0
+        and wheels["back"] > 0
+        and abs(wheels["back"]) > abs(wheels["left"]) * 2.0
+    )
+    return passed, wheels
+
+
+def test_round_trip_strafe():
+    source = (0.0, 0.3, 0.0)
+    wheels = kinematics.robot_to_wheel_velocities(*source)
+    robot = kinematics.wheel_to_robot_velocities(wheels)
+    passed = all(_approx_equal(actual, expected) for actual, expected in zip(robot, source))
+    return passed, {"wheels": wheels, "robot": robot}
 
 
 def test_zero_command():
@@ -50,6 +70,8 @@ def main():
         ("pure_forward", test_pure_forward),
         ("pure_rotate", test_pure_rotate),
         ("strafe_left", test_strafe_left),
+        ("strafe_right", test_strafe_right),
+        ("round_trip_strafe", test_round_trip_strafe),
         ("zero_command", test_zero_command),
     ]
     failures = 0

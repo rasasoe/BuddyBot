@@ -1668,6 +1668,30 @@ Required Pi action:
 - Restart presentation mode.
 - Pico reflash is not required.
 
+## 2026-06-02 Compensate lateral rear-wheel drive
+
+Field feedback:
+- Strafe-left still rotated clockwise while moving left.
+- Strafe-right still rotated counter-clockwise while moving right.
+- Removing Pi-side lateral yaw trim reduced useful horizontal speed but did not remove the mirrored arcs.
+
+Interpretation:
+- Mirrored arc directions are consistent with the rear wheel contributing too little effective lateral drive.
+- This is not a fixed `wz` bias, so forward/backward and rotation baselines should stay intact.
+
+Changes:
+- Added `STRAFE_BACK_WHEEL_GAIN=1.30` in Pico config.
+- Applied the gain only to the rear wheel `vy` component in the direct kiwi mixer.
+- Updated inverse kinematics and added left/right strafe plus round-trip tests.
+- Raised the panel strafe profile and Pi voice strafe speed slightly.
+- Added Pi speaker confirmation when the panel enables voice mode.
+
+Required Pi action:
+- Pull main.
+- Reflash Pico with `bash scripts/flash_pico.sh`.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
+
 ## 2026-06-01 Voice mode default-off and wake-word retry
 
 Field feedback:
