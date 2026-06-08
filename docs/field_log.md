@@ -1696,6 +1696,32 @@ Required Pi action:
 - Restart presentation mode.
 - Pico reflash is not required.
 
+## 2026-06-08 Follow voice alias and strafe trim pass
+
+Field feedback:
+- Server-mode weather questions displayed raw server TTS connection exceptions in the robot voice panel card.
+- `사용자 추종` could be recognized as `사용자 조정`, and even when the robot answered `추종 시작`, follow did not always latch.
+- Backward motion rotated slightly counter-clockwise.
+- Left strafe rotated clockwise; right strafe rotated counter-clockwise.
+
+Changes:
+- Map `사용자 조정`, `사용자 조종`, `사용자 추정`, and related variants to follow-start intent.
+- Add follow aliases such as `나 따라와`, `사람 따라와`, `따라오기 시작`, and `쫓아와`.
+- Publish `/follow/enabled` three times from the voice node when changing follow mode.
+- Compact server chat/TTS failure statuses so the panel shows friendly Korean labels instead of raw HTTP exceptions.
+- Route AI-server-unavailable fallback speech through local TTS/system audio.
+- Reduce server TTS connect timeout to `0.8s`.
+- Tune Pi-side yaw trims:
+  - backward `-0.010`
+  - strafe-left `+0.035`
+  - strafe-right `-0.035`
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
+- Pico reflash is not required.
+
 ## 2026-06-02 Compensate lateral rear-wheel drive
 
 Field feedback:

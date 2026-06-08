@@ -589,3 +589,16 @@ PRD 참조: PART 3 Cycle 5 실기검증 M3(사람추종), PRD Section 2.2 `/visi
   - `BUDDYBOT_STT_MODE=local_whisper`
   - `BUDDYBOT_STT_MODE=hybrid_whisper`
 - Do not re-enable local/hybrid Whisper as the default until it is profiled under full ROS load and can consistently answer wake/command speech within field timing.
+
+## 2026-06-08 Field patch: follow aliases and drive trims
+
+- Treat `사용자 조정` / `사용자 조종` / `사용자 추정` as `사용자 추종` because Google STT commonly confuses the word.
+- Follow enable/disable from voice now republishes `/follow/enabled` three times to reduce missed commands.
+- Server AI/TTS failures should not expose raw `HTTPConnectionPool` text in the panel; compact statuses are used instead.
+- If AI chat fails, speak the fallback locally instead of attempting server TTS for the fallback.
+- Current Pi-side trim defaults:
+  - forward `-0.003`
+  - backward `-0.010`
+  - strafe-left `+0.035`
+  - strafe-right `-0.035`
+- This patch does not require Pico reflash.

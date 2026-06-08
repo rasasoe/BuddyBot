@@ -59,6 +59,41 @@ class VoiceInterface(Node):
         ("버디 보", "버디봇"),
         ("buddy bot", "buddybot"),
     )
+    COMMAND_ALIAS_REPLACEMENTS = (
+        ("사용자 조정", "사용자 추종"),
+        ("사용자조정", "사용자 추종"),
+        ("사용자 조종", "사용자 추종"),
+        ("사용자조종", "사용자 추종"),
+        ("사용자 추정", "사용자 추종"),
+        ("사용자추정", "사용자 추종"),
+        ("사용자 초종", "사용자 추종"),
+        ("사용자초종", "사용자 추종"),
+        ("사용자 추종시작", "사용자 추종 시작"),
+        ("사용자추종시작", "사용자 추종 시작"),
+        ("사용자 추종정지", "사용자 추종 정지"),
+        ("사용자추종정지", "사용자 추종 정지"),
+        ("유저 추종", "사용자 추종"),
+        ("유저 조정", "사용자 추종"),
+        ("유저 조종", "사용자 추종"),
+        ("사람 조정", "사용자 추종"),
+        ("사람조정", "사용자 추종"),
+        ("사람 조종", "사용자 추종"),
+        ("사람조종", "사용자 추종"),
+        ("사람 추종", "사용자 추종"),
+        ("사람추종", "사용자 추종"),
+        ("사람 따라 와", "사람 따라와"),
+        ("사람따라와", "사람 따라와"),
+        ("조정 시작", "추종 시작"),
+        ("조종 시작", "추종 시작"),
+        ("추정 시작", "추종 시작"),
+        ("추종시작", "추종 시작"),
+        ("추종정지", "추종 정지"),
+        ("추종중지", "추종 중지"),
+        ("따라 와", "따라와"),
+        ("따라 오지마", "따라오지마"),
+        ("따라 오지 마", "따라오지 마"),
+    )
+    AI_SERVER_UNAVAILABLE_RESPONSE = "AI 서버 연결이 안 됩니다. 로컬 명령만 사용할 수 있습니다."
 
     def __init__(self):
         super().__init__("voice_interface")
@@ -118,9 +153,9 @@ class VoiceInterface(Node):
         self.declare_parameter("strafe_speed", 0.36)
         self.declare_parameter("rotate_speed", 0.60)
         self.declare_parameter("forward_yaw_trim", -0.003)
-        self.declare_parameter("backward_yaw_trim", -0.003)
-        self.declare_parameter("strafe_left_yaw_trim", 0.0)
-        self.declare_parameter("strafe_right_yaw_trim", 0.0)
+        self.declare_parameter("backward_yaw_trim", -0.010)
+        self.declare_parameter("strafe_left_yaw_trim", 0.035)
+        self.declare_parameter("strafe_right_yaw_trim", -0.035)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")
@@ -130,6 +165,7 @@ class VoiceInterface(Node):
         self.declare_parameter("speak_command_responses", False)
         self.declare_parameter("server_tts_enabled", True)
         self.declare_parameter("server_tts_timeout_sec", 12.0)
+        self.declare_parameter("server_tts_connect_timeout_sec", 0.8)
         self.declare_parameter("system_sound_dir", "")
         self.declare_parameter("piper_model_path", "")
         self.declare_parameter("audio_player", "auto")
@@ -203,6 +239,7 @@ class VoiceInterface(Node):
         self.speak_command_responses = bool(self.get_parameter("speak_command_responses").value)
         self.server_tts_enabled = bool(self.get_parameter("server_tts_enabled").value)
         self.server_tts_timeout_sec = max(1.0, float(self.get_parameter("server_tts_timeout_sec").value))
+        self.server_tts_connect_timeout_sec = max(0.2, float(self.get_parameter("server_tts_connect_timeout_sec").value))
         system_sound_dir = str(self.get_parameter("system_sound_dir").value).strip()
         self.system_sound_dir: Optional[Path] = Path(system_sound_dir).expanduser() if system_sound_dir else None
         self.piper_model_path = str(self.get_parameter("piper_model_path").value).strip()
@@ -323,6 +360,8 @@ class VoiceInterface(Node):
         )
         self.get_logger().info(
             f"Hybrid TTS: server={'enabled' if self.server_tts_enabled else 'disabled'}, "
+            f"connect_timeout={self.server_tts_connect_timeout_sec:.1f}s, "
+            f"timeout={self.server_tts_timeout_sec:.1f}s, "
             f"system_sound_dir={self.system_sound_dir or '-'}, "
             f"piper_model={'configured' if self.piper_model_path else 'unset'}"
         )
@@ -452,7 +491,7 @@ class VoiceInterface(Node):
         category = "system"
         if not answer and self.server_assistant_enabled:
             answer = self._forward_to_ai(cleaned)
-            category = "ai"
+            category = "system" if answer == self.AI_SERVER_UNAVAILABLE_RESPONSE else "ai"
 
         if answer:
             self._publish_response(answer, category=category)
@@ -596,11 +635,11 @@ class VoiceInterface(Node):
             self._start_manual_motion(0.0, 0.0, -self.rotate_speed, self.nudge_duration_sec, mode="nudge", intent="rotate_right")
             return "우회전."
 
-        if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 정지", "추종 중지", "따라오지 마", "따라오지마", "그만 따라와", "추종 꺼")):
+        if self._matches_any(command_text, self.FOLLOW_STOP_WORDS):
             self._set_follow_enabled(False)
             return "추종 중지."
 
-        if any(keyword in command_text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
+        if self._matches_any(command_text, self.FOLLOW_START_WORDS):
             self._set_follow_enabled(True)
             return "추종 시작."
 
@@ -636,6 +675,8 @@ class VoiceInterface(Node):
     def _normalize_text(self, text: str) -> str:
         cleaned = self._normalize_basic_text(text)
         for alias, canonical in self.WAKE_ALIAS_REPLACEMENTS:
+            cleaned = cleaned.replace(alias, canonical)
+        for alias, canonical in self.COMMAND_ALIAS_REPLACEMENTS:
             cleaned = cleaned.replace(alias, canonical)
         return " ".join(cleaned.split())
 
@@ -742,6 +783,40 @@ class VoiceInterface(Node):
         "취소",
         "그만",
         "세워",
+    )
+    FOLLOW_STOP_WORDS = (
+        "follow stop",
+        "unfollow",
+        "stop following",
+        "추종 정지",
+        "추종 중지",
+        "추종 종료",
+        "추종 꺼",
+        "추종 끄기",
+        "사용자 추종 정지",
+        "사용자 추종 중지",
+        "따라오지 마",
+        "따라오지마",
+        "그만 따라와",
+        "따라오기 중지",
+    )
+    FOLLOW_START_WORDS = (
+        "follow",
+        "track user",
+        "follow me",
+        "따라와",
+        "나 따라와",
+        "사용자 추종",
+        "사용자 조정",
+        "사용자 조종",
+        "사용자 추정",
+        "사람 따라와",
+        "추종",
+        "추종 시작",
+        "추종 켜",
+        "추종해",
+        "따라오기 시작",
+        "쫓아와",
     )
     NEGATION_WORDS = (
         "하지 마",
@@ -866,9 +941,9 @@ class VoiceInterface(Node):
             return "rotate_left"
         if any(keyword in command_text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
             return "rotate_right"
-        if any(keyword in command_text for keyword in ("follow stop", "unfollow", "추종 정지", "추종 중지", "따라오지 마", "따라오지마", "그만 따라와", "추종 꺼")):
+        if self._matches_any(command_text, self.FOLLOW_STOP_WORDS):
             return "follow_stop"
-        if any(keyword in command_text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
+        if self._matches_any(command_text, self.FOLLOW_START_WORDS):
             return "follow_start"
         if "kitchen" in command_text or "주방" in command_text or "부엌" in command_text:
             return "waypoint_kitchen"
@@ -1026,7 +1101,9 @@ class VoiceInterface(Node):
         self.follow_enabled = enabled
         msg = Bool()
         msg.data = enabled
-        self.follow_pub.publish(msg)
+        for _ in range(3):
+            self.follow_pub.publish(msg)
+        self._publish_status(f"follow:{'enabled' if enabled else 'disabled'}")
         if enabled:
             self._clear_manual_motion()
             self._cancel_navigation()
@@ -1057,10 +1134,10 @@ class VoiceInterface(Node):
             answer = response.json().get("response", "").strip()
             return answer or "응답이 비어 있습니다."
         except requests.RequestException as exc:
-            error_message = f"voice_bridge_error:{exc}"
+            error_message = f"voice_bridge_error:{self._compact_exception(exc)}"
             self._publish_status(error_message)
             self.get_logger().error(error_message)
-            return "로컬 음성 명령만 사용할 수 있습니다."
+            return self.AI_SERVER_UNAVAILABLE_RESPONSE
 
     def start_microphone_listener(self) -> None:
         if sr is None:
@@ -1468,7 +1545,7 @@ class VoiceInterface(Node):
                 return
             except Exception as exc:
                 self.get_logger().warn(f"Server TTS failed, using local fallback: {exc}")
-                self._publish_status(f"speaker_ai_server_failed:{exc}")
+                self._publish_status(f"speaker_ai_server_failed:{self._compact_exception(exc)}")
                 text = "AI 서버 음성 연결이 원활하지 않습니다."
 
         if category in {"system", "emergency"} and self._speak_system_sound(text):
@@ -1488,7 +1565,7 @@ class VoiceInterface(Node):
         response = requests.post(
             f"{self.buddybot_ai_url}/tts",
             json={"text": text},
-            timeout=(2.0, self.server_tts_timeout_sec),
+            timeout=(self.server_tts_connect_timeout_sec, self.server_tts_timeout_sec),
         )
         response.raise_for_status()
         media_type = response.headers.get("content-type", "").lower()
@@ -1521,6 +1598,7 @@ class VoiceInterface(Node):
             "추종 시작.": "follow_start",
             "추종 중지.": "follow_stop",
             "로컬 음성 명령만 사용할 수 있습니다.": "server_offline",
+            self.AI_SERVER_UNAVAILABLE_RESPONSE: "server_offline",
         }.get(text)
         if not sound_key:
             return False
@@ -1628,6 +1706,19 @@ class VoiceInterface(Node):
         msg = String()
         msg.data = text
         self.command_pub.publish(msg)
+
+    @staticmethod
+    def _compact_exception(exc: Exception) -> str:
+        text = str(exc).replace("\n", " ").strip()
+        if "Connection to" in text and "timed out" in text:
+            return "connection_timeout"
+        if "Connection refused" in text:
+            return "connection_refused"
+        if "Max retries exceeded" in text:
+            return "connection_failed"
+        if "Service Unavailable" in text or "503" in text:
+            return "service_unavailable"
+        return text[:120] if text else exc.__class__.__name__
 
     def destroy_node(self):
         self._audio_stop.set()

@@ -840,6 +840,18 @@
       if(status.includes("speaker_backend_missing")){
         return `스피커 없음${suffix}`;
       }
+      if(status.startsWith("speaker_ai_server_failed")){
+        return `AI 서버 음성 연결 안 됨${suffix}`;
+      }
+      if(status.startsWith("voice_bridge_error")){
+        return `AI 서버 연결 안 됨${suffix}`;
+      }
+      if(status === "follow:enabled"){
+        return `추종 시작 명령 전송${suffix}`;
+      }
+      if(status === "follow:disabled"){
+        return `추종 중지 명령 전송${suffix}`;
+      }
       return `${status}${suffix}`;
     }
 

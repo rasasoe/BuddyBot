@@ -604,3 +604,26 @@ Manual stutter root cause and latest fix:
   - Rebuild `buddybot_voice` and `buddybot_panel`.
   - Restart presentation mode.
   - Pico reflash is not required for this voice-only change.
+
+## 2026-06-08 Follow aliases, server voice fallback, and lateral trim
+
+- Field feedback:
+  - Weather/server questions could show raw `HTTPConnectionPool` TTS errors in the panel.
+  - `사용자 추종` was sometimes recognized as `사용자 조정`, then did not reliably start following.
+  - Backward motion still drifted slightly counter-clockwise.
+  - Left strafe still curved clockwise; right strafe still curved counter-clockwise.
+- Changes:
+  - Normalize common follow STT variants such as `사용자 조정`, `사용자 조종`, and `사용자 추정` to `사용자 추종`.
+  - Added broader follow aliases including `나 따라와`, `사람 따라와`, `따라오기 시작`, and `쫓아와`.
+  - Voice follow start/stop now publishes `/follow/enabled` three times and logs `follow:enabled` / `follow:disabled`.
+  - Server chat/TTS failures now publish compact statuses instead of raw request exceptions.
+  - If AI server chat fails, the fallback response is spoken locally instead of being sent back through server TTS.
+  - Server TTS connect timeout default reduced to `0.8s`.
+  - Backward yaw trim changed to `-0.010`.
+  - Strafe-left yaw trim changed to `+0.035`.
+  - Strafe-right yaw trim changed to `-0.035`.
+- Required Pi action:
+  - Pull main.
+  - Rebuild `buddybot_voice` and `buddybot_panel`.
+  - Restart presentation mode.
+  - Pico reflash is not required.

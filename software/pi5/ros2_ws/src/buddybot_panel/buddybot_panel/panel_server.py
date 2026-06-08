@@ -218,9 +218,9 @@ class PanelBridge:
             )
         )
         self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.003"))
-        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.003"))
-        self._manual_strafe_left_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LEFT_YAW_TRIM", "0.0"))
-        self._manual_strafe_right_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_RIGHT_YAW_TRIM", "0.0"))
+        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.010"))
+        self._manual_strafe_left_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LEFT_YAW_TRIM", "0.035"))
+        self._manual_strafe_right_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_RIGHT_YAW_TRIM", "-0.035"))
         self._manual_diagonal_component_scale = max(
             0.0,
             min(1.0, float(os.getenv("BUDDYBOT_MANUAL_DIAGONAL_COMPONENT_SCALE", "0.7071"))),
@@ -1925,10 +1925,20 @@ class PanelBridge:
         if any(keyword in text for keyword in ("turn right", "rotate right", "우회전", "오른쪽 회전")):
             self.manual_command("rotate_right", 0.45)
             return "버디봇이 우회전합니다."
-        if any(keyword in text for keyword in ("follow stop", "unfollow", "추종 중지", "따라오지마", "추종 꺼")):
+        for alias, canonical in (
+            ("사용자 조정", "사용자 추종"),
+            ("사용자조정", "사용자 추종"),
+            ("사용자 조종", "사용자 추종"),
+            ("사용자조종", "사용자 추종"),
+            ("사용자 추정", "사용자 추종"),
+            ("사용자추정", "사용자 추종"),
+            ("사용자추종", "사용자 추종"),
+        ):
+            text = text.replace(alias, canonical)
+        if any(keyword in text for keyword in ("follow stop", "unfollow", "추종 중지", "추종 정지", "사용자 추종 중지", "사용자 추종 정지", "따라오지마", "따라오지 마", "추종 꺼")):
             self.set_follow_enabled(False)
             return "사용자 추종을 중지했습니다."
-        if any(keyword in text for keyword in ("follow", "track user", "따라와", "추종", "사용자 추종", "추종 시작", "추종 켜")):
+        if any(keyword in text for keyword in ("follow", "track user", "따라와", "나 따라와", "사람 따라와", "추종", "사용자 추종", "추종 시작", "추종 켜", "추종해")):
             self.set_follow_enabled(True)
             return "사용자 추종을 시작했습니다."
         if any(keyword in text for keyword in ("status", "state", "상태", "지금 상태")):
