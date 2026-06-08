@@ -66,12 +66,13 @@ class VoiceInterface(Node):
         self.declare_parameter("command_enabled", False)
         self.declare_parameter("enable_microphone", False)
         self.declare_parameter("allow_online_recognition", True)
-        self.declare_parameter("recognition_backend", "hybrid")
+        self.declare_parameter("stt_mode", "legacy_google")
+        self.declare_parameter("recognition_backend", "google")
         self.declare_parameter("recognition_language", "ko-KR")
-        self.declare_parameter("server_stt_enabled", True)
+        self.declare_parameter("server_stt_enabled", False)
         self.declare_parameter("server_stt_timeout_sec", 4.0)
         self.declare_parameter("server_stt_cooldown_sec", 10.0)
-        self.declare_parameter("local_whisper_enabled", True)
+        self.declare_parameter("local_whisper_enabled", False)
         self.declare_parameter("local_whisper_model_size", "tiny")
         self.declare_parameter("local_whisper_device", "cpu")
         self.declare_parameter("local_whisper_compute_type", "int8")
@@ -80,7 +81,7 @@ class VoiceInterface(Node):
         self.declare_parameter("phrase_time_limit", 2.6)
         self.declare_parameter("moving_phrase_time_limit", 1.2)
         self.declare_parameter("wake_timeout_sec", 10.0)
-        self.declare_parameter("wake_audio_fallback_enabled", True)
+        self.declare_parameter("wake_audio_fallback_enabled", False)
         self.declare_parameter("wake_audio_fallback_min_sec", 0.35)
         self.declare_parameter("wake_audio_fallback_max_sec", 1.60)
         self.declare_parameter("pause_threshold", 0.45)
@@ -139,7 +140,10 @@ class VoiceInterface(Node):
         self.server_assistant_enabled = not self.offline_mode
         self.enable_microphone = bool(self.get_parameter("enable_microphone").value)
         self.allow_online_recognition = bool(self.get_parameter("allow_online_recognition").value)
-        self.recognition_backend = str(self.get_parameter("recognition_backend").value).strip().lower()
+        requested_stt_mode = str(self.get_parameter("stt_mode").value).strip().lower()
+        requested_backend = str(self.get_parameter("recognition_backend").value).strip().lower()
+        self.stt_mode = requested_stt_mode or requested_backend or "legacy_google"
+        self.recognition_backend = self._normalize_recognition_backend(requested_backend or self.stt_mode)
         self.recognition_language = str(self.get_parameter("recognition_language").value).strip()
         self.server_stt_enabled = bool(self.get_parameter("server_stt_enabled").value)
         self.server_stt_timeout_sec = max(0.5, float(self.get_parameter("server_stt_timeout_sec").value))
@@ -289,7 +293,8 @@ class VoiceInterface(Node):
         self.get_logger().info(f"Command processing: {'enabled' if self.command_enabled else 'disabled'}")
         self.get_logger().info(f"Microphone listener: {'enabled' if self.enable_microphone else 'disabled'}")
         self.get_logger().info(
-            f"Recognition: backend={self.recognition_backend}, language={self.recognition_language}, "
+            f"Recognition: stt_mode={self.stt_mode}, backend={self.recognition_backend}, "
+            f"language={self.recognition_language}, "
             f"online={'enabled' if self.allow_online_recognition else 'disabled'}, "
             f"phrase={self.phrase_time_limit}s, pause={self.pause_threshold}s, "
             f"dynamic_energy={self.dynamic_energy_threshold}, ambient={self.ambient_adjust_duration}s, "
@@ -298,7 +303,7 @@ class VoiceInterface(Node):
             f"{self.wake_audio_fallback_min_sec:.2f}-{self.wake_audio_fallback_max_sec:.2f}s"
         )
         self.get_logger().info(
-            f"Hybrid STT: server={'enabled' if self.server_stt_enabled else 'disabled'} "
+            f"STT routing: server={'enabled' if self.server_stt_enabled else 'disabled'} "
             f"timeout={self.server_stt_timeout_sec:.1f}s cooldown={self.server_stt_cooldown_sec:.1f}s, "
             f"local_whisper={'enabled' if self.local_whisper_enabled else 'disabled'} "
             f"model={self.local_whisper_model_size}/{self.local_whisper_device}/{self.local_whisper_compute_type}, "
@@ -634,6 +639,23 @@ class VoiceInterface(Node):
             cleaned = cleaned.replace(alias, canonical)
         return " ".join(cleaned.split())
 
+    @staticmethod
+    def _normalize_recognition_backend(backend: str) -> str:
+        normalized = (backend or "").strip().lower()
+        aliases = {
+            "legacy_google": "google",
+            "google_stt": "google",
+            "hybrid_whisper": "hybrid",
+            "whisper_hybrid": "hybrid",
+            "server": "server_whisper",
+            "server_stt": "server_whisper",
+            "server_whisper_stt": "server_whisper",
+            "local": "local_whisper",
+            "local_stt": "local_whisper",
+            "local_whisper_stt": "local_whisper",
+        }
+        return aliases.get(normalized, normalized or "google")
+
     FORWARD_WORDS = (
         "forward",
         "go ahead",
@@ -883,27 +905,39 @@ class VoiceInterface(Node):
         sample_width = max(1, int(getattr(audio, "sample_width", 1)))
         return len(frame_data) / float(sample_rate * sample_width)
 
-    def _log_stt_observation(self, *, backend: str, phase: str, audio, transcript: str) -> None:
+    def _log_stt_observation(
+        self,
+        *,
+        backend: str,
+        phase: str,
+        audio,
+        transcript: str,
+        elapsed_sec: Optional[float] = None,
+    ) -> None:
         normalized = self._normalize_text(transcript)
         wake_alias = self._matched_wake_alias(transcript)
         wake_detected = bool(wake_alias)
         command_text = self._strip_wake_prefix(transcript) if wake_detected else normalized
         local_intent = self._preview_local_intent(transcript)
+        elapsed_text = "" if elapsed_sec is None else f" stt_elapsed_sec={elapsed_sec:.2f}"
         self.get_logger().info(
             "stt_observation "
-            f"backend={backend} phase={phase} raw_audio_duration={self._audio_duration_sec(audio):.2f}s "
+            f"stt_mode={self.stt_mode} backend={backend} phase={phase}"
+            f"{elapsed_text} raw_audio_duration={self._audio_duration_sec(audio):.2f}s "
             f"raw_stt_text={transcript!r} normalized_text={normalized!r} "
             f"wake_detected={str(wake_detected).lower()} wake_matched_alias={wake_alias or '-'} "
             f"command_text={command_text!r} local_intent={local_intent}"
         )
 
     def _recognize_local_observed(self, audio, *, phase: str) -> str:
+        started_at = time.monotonic()
         transcript = self._recognize_with_local_whisper(audio, phase=phase)
         self._log_stt_observation(
             backend="local_whisper",
             phase=phase,
             audio=audio,
             transcript=transcript,
+            elapsed_sec=time.monotonic() - started_at,
         )
         return transcript
 
@@ -1274,6 +1308,7 @@ class VoiceInterface(Node):
 
         started_at = time.monotonic()
         previous_socket_timeout = socket.getdefaulttimeout()
+        transcript = ""
         try:
             socket.setdefaulttimeout(max(0.5, self.google_timeout_sec))
             transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
@@ -1290,6 +1325,13 @@ class VoiceInterface(Node):
                 self.get_logger().warn(f"Google recognition failed: {exc}")
             return ""
         finally:
+            self._log_stt_observation(
+                backend="google",
+                phase=self._recognition_phase(),
+                audio=audio,
+                transcript=transcript,
+                elapsed_sec=time.monotonic() - started_at,
+            )
             socket.setdefaulttimeout(previous_socket_timeout)
 
     def _recognize_with_sphinx(self, recognizer, audio) -> str:

@@ -38,31 +38,33 @@ Pi 마이크 또는 /voice/text
 
 ## STT 우선순위
 
-기본 backend는 `hybrid`입니다.
+기본 발표 backend는 `legacy_google`입니다.
+Pi 5의 `faster-whisper tiny`는 ROS 발표 모드에서 카메라, LiDAR, 패널, 모터 브리지와 동시에 돌 때 현장 로그 기준 20~30초 이상 지연될 수 있어 기본값에서 제외했습니다.
+Whisper 계열 STT는 `BUDDYBOT_STT_MODE`로 명시적으로 켜는 테스트 모드입니다.
 
 ```text
-대기 중:
-Pi faster-whisper tiny로 웨이크워드 감지, 짧은 호출어에서는 VAD 완화
-→ 흔한 오인식 별칭 정규화
-→ 선택적 Google Web Speech fallback
-→ 그래도 놓치면 0.35~1.60초 짧은 음성을 호출 시도로만 인정
-→ 로컬 로봇 명령이면 서버 왕복 없이 즉시 처리
+legacy_google:
+Google Web Speech로 웨이크워드와 명령 문장 인식
+→ Pi 로컬 명령 분기
+→ 로봇 제어 또는 서버 AI 대화
 
-웨이크워드 이후 명령:
-Pi faster-whisper tiny 로컬 명령 우선
-→ BuddyBot-ai /stt 서버 Whisper
-→ 선택적 Google Web Speech fallback
+local_whisper:
+Pi faster-whisper tiny만 사용
+→ 오프라인 STT 실험용
+→ 발표 기본값으로 쓰지 않음
 
-주행 중:
-Pi faster-whisper tiny로 긴급 정지 우선 검사
-→ 서버 Whisper
-→ 선택적 Google Web Speech fallback
+hybrid_whisper:
+BuddyBot-ai /stt 서버 Whisper 우선
+→ Pi faster-whisper tiny fallback
+→ Google Web Speech fallback
+→ 발표 기본값으로 쓰지 않음
 ```
 
+기본 실행은 환경변수 없이 `legacy_google`로 동작합니다.
+Whisper를 실험하려면 `BUDDYBOT_STT_MODE=local_whisper` 또는 `BUDDYBOT_STT_MODE=hybrid_whisper`를 명시합니다.
 서버 `/stt`가 실패하면 일정 시간 cooldown을 적용해 네트워크 실패로 마이크 루프가 계속 지연되지 않게 합니다.
-짧은 웨이크워드는 서버 `/stt`를 기다리지 않습니다. 마지막 음성 fallback은 `네.` 응답과 다음 명령 창만 열고 모터 명령을 직접 만들지 않습니다.
 Pi 스피커 재생 중과 직후에는 C920 마이크 결과를 짧게 무시해 로봇 자신의 응답이 새 명령으로 재입력되지 않게 합니다.
-`voice.log`의 `stt_observation` 줄에는 Pi tiny의 raw 텍스트, 정규화 결과, 웨이크워드 별칭, 분리된 명령, 로컬 intent가 기록됩니다.
+`voice.log`의 `stt_observation` 줄에는 STT 모드, 사용 backend, 처리 시간, raw 텍스트, 정규화 결과, 웨이크워드 별칭, 분리된 명령, 로컬 intent가 기록됩니다.
 
 Pi 설치 및 tiny 모델 사전 다운로드:
 

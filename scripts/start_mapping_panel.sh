@@ -141,22 +141,55 @@ ENABLE_PI_SPEAKER="${BUDDYBOT_ENABLE_PI_SPEAKER:-1}"
 SPEAKER_VOLUME_PERCENT="${BUDDYBOT_SPEAKER_VOLUME_PERCENT:-60}"
 VOICE_COMMAND_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_COMMAND_ENABLED:-0}")"
 VOICE_AI_URL="${BUDDYBOT_AI_URL:-http://100.115.246.76:8000}"
-VOICE_RECOGNITION_BACKEND="${BUDDYBOT_VOICE_RECOGNITION_BACKEND:-hybrid}"
+VOICE_STT_MODE="${BUDDYBOT_STT_MODE:-${BUDDYBOT_VOICE_STT_MODE:-legacy_google}}"
+case "$VOICE_STT_MODE" in
+  legacy_google|google)
+    DEFAULT_VOICE_RECOGNITION_BACKEND="google"
+    DEFAULT_VOICE_SERVER_STT_ENABLED="0"
+    DEFAULT_VOICE_LOCAL_WHISPER_ENABLED="0"
+    DEFAULT_VOICE_GOOGLE_FALLBACK_ENABLED="1"
+    DEFAULT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED="0"
+    ;;
+  local_whisper)
+    DEFAULT_VOICE_RECOGNITION_BACKEND="local_whisper"
+    DEFAULT_VOICE_SERVER_STT_ENABLED="0"
+    DEFAULT_VOICE_LOCAL_WHISPER_ENABLED="1"
+    DEFAULT_VOICE_GOOGLE_FALLBACK_ENABLED="0"
+    DEFAULT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED="1"
+    ;;
+  hybrid_whisper|hybrid)
+    DEFAULT_VOICE_RECOGNITION_BACKEND="hybrid"
+    DEFAULT_VOICE_SERVER_STT_ENABLED="1"
+    DEFAULT_VOICE_LOCAL_WHISPER_ENABLED="1"
+    DEFAULT_VOICE_GOOGLE_FALLBACK_ENABLED="1"
+    DEFAULT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED="1"
+    ;;
+  *)
+    echo "[mapping] warning: unknown BUDDYBOT_STT_MODE=${VOICE_STT_MODE}, using legacy_google"
+    VOICE_STT_MODE="legacy_google"
+    DEFAULT_VOICE_RECOGNITION_BACKEND="google"
+    DEFAULT_VOICE_SERVER_STT_ENABLED="0"
+    DEFAULT_VOICE_LOCAL_WHISPER_ENABLED="0"
+    DEFAULT_VOICE_GOOGLE_FALLBACK_ENABLED="1"
+    DEFAULT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED="0"
+    ;;
+esac
+VOICE_RECOGNITION_BACKEND="${BUDDYBOT_VOICE_RECOGNITION_BACKEND:-$DEFAULT_VOICE_RECOGNITION_BACKEND}"
 VOICE_ALLOW_ONLINE_RECOGNITION_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_ALLOW_ONLINE_RECOGNITION:-1}")"
 VOICE_RECOGNITION_LANGUAGE="${BUDDYBOT_VOICE_RECOGNITION_LANGUAGE:-ko-KR}"
-VOICE_SERVER_STT_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_SERVER_STT_ENABLED:-1}")"
+VOICE_SERVER_STT_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_SERVER_STT_ENABLED:-$DEFAULT_VOICE_SERVER_STT_ENABLED}")"
 VOICE_SERVER_STT_TIMEOUT_SEC="${BUDDYBOT_VOICE_SERVER_STT_TIMEOUT_SEC:-4.0}"
 VOICE_SERVER_STT_COOLDOWN_SEC="${BUDDYBOT_VOICE_SERVER_STT_COOLDOWN_SEC:-10.0}"
-VOICE_LOCAL_WHISPER_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_LOCAL_WHISPER_ENABLED:-1}")"
+VOICE_LOCAL_WHISPER_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_LOCAL_WHISPER_ENABLED:-$DEFAULT_VOICE_LOCAL_WHISPER_ENABLED}")"
 VOICE_LOCAL_WHISPER_MODEL="${BUDDYBOT_VOICE_LOCAL_WHISPER_MODEL:-tiny}"
 VOICE_LOCAL_WHISPER_DEVICE="${BUDDYBOT_VOICE_LOCAL_WHISPER_DEVICE:-cpu}"
 VOICE_LOCAL_WHISPER_COMPUTE_TYPE="${BUDDYBOT_VOICE_LOCAL_WHISPER_COMPUTE_TYPE:-int8}"
 VOICE_LOCAL_WHISPER_LANGUAGE="${BUDDYBOT_VOICE_LOCAL_WHISPER_LANGUAGE:-ko}"
-VOICE_GOOGLE_FALLBACK_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED:-1}")"
+VOICE_GOOGLE_FALLBACK_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED:-$DEFAULT_VOICE_GOOGLE_FALLBACK_ENABLED}")"
 VOICE_PHRASE_TIME_LIMIT="${BUDDYBOT_VOICE_PHRASE_TIME_LIMIT:-2.6}"
 VOICE_MOVING_PHRASE_TIME_LIMIT="${BUDDYBOT_VOICE_MOVING_PHRASE_TIME_LIMIT:-1.2}"
 VOICE_WAKE_TIMEOUT="${BUDDYBOT_VOICE_WAKE_TIMEOUT:-10.0}"
-VOICE_WAKE_AUDIO_FALLBACK_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED:-1}")"
+VOICE_WAKE_AUDIO_FALLBACK_ENABLED_PARAM="$(bool_param_value "${BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED:-$DEFAULT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED}")"
 VOICE_WAKE_AUDIO_FALLBACK_MIN_SEC="${BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_MIN_SEC:-0.35}"
 VOICE_WAKE_AUDIO_FALLBACK_MAX_SEC="${BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_MAX_SEC:-1.60}"
 VOICE_PAUSE_THRESHOLD="${BUDDYBOT_VOICE_PAUSE_THRESHOLD:-0.45}"
@@ -439,7 +472,7 @@ echo "[mapping] pico disabled: ${DISABLE_PICO}"
 echo "[mapping] force lidar start: ${FORCE_LIDAR_START}"
 echo "[mapping] offline voice enabled: ${ENABLE_OFFLINE_VOICE}"
 echo "[mapping] microphone listener enabled: ${ENABLE_MIC_LISTENER}"
-echo "[mapping] voice recognition: backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s moving_phrase ${VOICE_MOVING_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s google_timeout ${VOICE_GOOGLE_TIMEOUT_SEC}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} strafe_speed ${VOICE_STRAFE_SPEED} diagonal ${VOICE_DIAGONAL_SPEED}@${VOICE_DIAGONAL_COMPONENT_SCALE} yaw_trim f/b/sl/sr ${VOICE_FORWARD_YAW_TRIM}/${VOICE_BACKWARD_YAW_TRIM}/${VOICE_STRAFE_LEFT_YAW_TRIM}/${VOICE_STRAFE_RIGHT_YAW_TRIM} nudge ${VOICE_NUDGE_DURATION_SEC}s continuous_max ${VOICE_CONTINUOUS_MAX_SEC}s tts_rate ${VOICE_SPEAKER_RATE_WPM} command_speech ${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
+echo "[mapping] voice recognition: stt_mode ${VOICE_STT_MODE}, backend ${VOICE_RECOGNITION_BACKEND}, online ${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}, language ${VOICE_RECOGNITION_LANGUAGE}, phrase ${VOICE_PHRASE_TIME_LIMIT}s moving_phrase ${VOICE_MOVING_PHRASE_TIME_LIMIT}s pause ${VOICE_PAUSE_THRESHOLD}s google_timeout ${VOICE_GOOGLE_TIMEOUT_SEC}s wake ${VOICE_WAKE_TIMEOUT}s manual_speed ${VOICE_MANUAL_SPEED} strafe_speed ${VOICE_STRAFE_SPEED} diagonal ${VOICE_DIAGONAL_SPEED}@${VOICE_DIAGONAL_COMPONENT_SCALE} yaw_trim f/b/sl/sr ${VOICE_FORWARD_YAW_TRIM}/${VOICE_BACKWARD_YAW_TRIM}/${VOICE_STRAFE_LEFT_YAW_TRIM}/${VOICE_STRAFE_RIGHT_YAW_TRIM} nudge ${VOICE_NUDGE_DURATION_SEC}s continuous_max ${VOICE_CONTINUOUS_MAX_SEC}s tts_rate ${VOICE_SPEAKER_RATE_WPM} command_speech ${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}"
 echo "[mapping] stt: server ${VOICE_SERVER_STT_ENABLED_PARAM} timeout ${VOICE_SERVER_STT_TIMEOUT_SEC}s cooldown ${VOICE_SERVER_STT_COOLDOWN_SEC}s, local_whisper ${VOICE_LOCAL_WHISPER_ENABLED_PARAM} ${VOICE_LOCAL_WHISPER_MODEL}/${VOICE_LOCAL_WHISPER_DEVICE}/${VOICE_LOCAL_WHISPER_COMPUTE_TYPE}, google_fallback ${VOICE_GOOGLE_FALLBACK_ENABLED_PARAM}, wake_audio_fallback ${VOICE_WAKE_AUDIO_FALLBACK_ENABLED_PARAM} ${VOICE_WAKE_AUDIO_FALLBACK_MIN_SEC}-${VOICE_WAKE_AUDIO_FALLBACK_MAX_SEC}s"
 echo "[mapping] tts: server ${VOICE_SERVER_TTS_ENABLED_PARAM}, timeout ${VOICE_SERVER_TTS_TIMEOUT_SEC}s, player ${VOICE_AUDIO_PLAYER}, system_sounds ${VOICE_SYSTEM_SOUND_DIR}, piper_model ${VOICE_PIPER_MODEL_PATH:-unset}"
 echo "[mapping] command mux timeout: ${COMMAND_TIMEOUT}s"
@@ -476,7 +509,7 @@ start_node safety_supervisor ros2 run buddybot_system safety_supervisor_node
 start_node lidar_avoidance ros2 run buddybot_system lidar_avoidance_node
 if is_truthy "$ENABLE_OFFLINE_VOICE"; then
   set_speaker_volume "$SPEAKER_VOLUME_PERCENT"
-  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p server_stt_enabled:="${VOICE_SERVER_STT_ENABLED_PARAM}" -p server_stt_timeout_sec:="${VOICE_SERVER_STT_TIMEOUT_SEC}" -p server_stt_cooldown_sec:="${VOICE_SERVER_STT_COOLDOWN_SEC}" -p local_whisper_enabled:="${VOICE_LOCAL_WHISPER_ENABLED_PARAM}" -p local_whisper_model_size:="${VOICE_LOCAL_WHISPER_MODEL}" -p local_whisper_device:="${VOICE_LOCAL_WHISPER_DEVICE}" -p local_whisper_compute_type:="${VOICE_LOCAL_WHISPER_COMPUTE_TYPE}" -p local_whisper_language:="${VOICE_LOCAL_WHISPER_LANGUAGE}" -p google_fallback_enabled:="${VOICE_GOOGLE_FALLBACK_ENABLED_PARAM}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p moving_phrase_time_limit:="${VOICE_MOVING_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p wake_audio_fallback_enabled:="${VOICE_WAKE_AUDIO_FALLBACK_ENABLED_PARAM}" -p wake_audio_fallback_min_sec:="${VOICE_WAKE_AUDIO_FALLBACK_MIN_SEC}" -p wake_audio_fallback_max_sec:="${VOICE_WAKE_AUDIO_FALLBACK_MAX_SEC}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p google_timeout_sec:="${VOICE_GOOGLE_TIMEOUT_SEC}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p strafe_speed:="${VOICE_STRAFE_SPEED}" -p diagonal_speed:="${VOICE_DIAGONAL_SPEED}" -p diagonal_component_scale:="${VOICE_DIAGONAL_COMPONENT_SCALE}" -p forward_yaw_trim:="${VOICE_FORWARD_YAW_TRIM}" -p backward_yaw_trim:="${VOICE_BACKWARD_YAW_TRIM}" -p strafe_left_yaw_trim:="${VOICE_STRAFE_LEFT_YAW_TRIM}" -p strafe_right_yaw_trim:="${VOICE_STRAFE_RIGHT_YAW_TRIM}" -p manual_command_timeout_sec:="${VOICE_MANUAL_TIMEOUT_SEC}" -p nudge_duration_sec:="${VOICE_NUDGE_DURATION_SEC}" -p continuous_command_max_sec:="${VOICE_CONTINUOUS_MAX_SEC}" -p zero_burst_count:="${VOICE_ZERO_BURST_COUNT}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}" -p speaker_echo_guard_sec:="${VOICE_SPEAKER_ECHO_GUARD_SEC}" -p speak_command_responses:="${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}" -p server_tts_enabled:="${VOICE_SERVER_TTS_ENABLED_PARAM}" -p server_tts_timeout_sec:="${VOICE_SERVER_TTS_TIMEOUT_SEC}" -p system_sound_dir:="${VOICE_SYSTEM_SOUND_DIR}" "${VOICE_PIPER_MODEL_ARGS[@]}" -p audio_player:="${VOICE_AUDIO_PLAYER}"
+  start_node voice ros2 run buddybot_voice voice_interface --ros-args -p offline_mode:=true -p command_enabled:="${VOICE_COMMAND_ENABLED_PARAM}" -p buddybot_ai_url:="${VOICE_AI_URL}" -p enable_microphone:="${VOICE_MIC_PARAM}" -p enable_speaker_output:="${VOICE_SPEAKER_PARAM}" -p stt_mode:="${VOICE_STT_MODE}" -p recognition_backend:="${VOICE_RECOGNITION_BACKEND}" -p allow_online_recognition:="${VOICE_ALLOW_ONLINE_RECOGNITION_PARAM}" -p recognition_language:="${VOICE_RECOGNITION_LANGUAGE}" -p server_stt_enabled:="${VOICE_SERVER_STT_ENABLED_PARAM}" -p server_stt_timeout_sec:="${VOICE_SERVER_STT_TIMEOUT_SEC}" -p server_stt_cooldown_sec:="${VOICE_SERVER_STT_COOLDOWN_SEC}" -p local_whisper_enabled:="${VOICE_LOCAL_WHISPER_ENABLED_PARAM}" -p local_whisper_model_size:="${VOICE_LOCAL_WHISPER_MODEL}" -p local_whisper_device:="${VOICE_LOCAL_WHISPER_DEVICE}" -p local_whisper_compute_type:="${VOICE_LOCAL_WHISPER_COMPUTE_TYPE}" -p local_whisper_language:="${VOICE_LOCAL_WHISPER_LANGUAGE}" -p google_fallback_enabled:="${VOICE_GOOGLE_FALLBACK_ENABLED_PARAM}" -p phrase_time_limit:="${VOICE_PHRASE_TIME_LIMIT}" -p moving_phrase_time_limit:="${VOICE_MOVING_PHRASE_TIME_LIMIT}" -p wake_timeout_sec:="${VOICE_WAKE_TIMEOUT}" -p wake_audio_fallback_enabled:="${VOICE_WAKE_AUDIO_FALLBACK_ENABLED_PARAM}" -p wake_audio_fallback_min_sec:="${VOICE_WAKE_AUDIO_FALLBACK_MIN_SEC}" -p wake_audio_fallback_max_sec:="${VOICE_WAKE_AUDIO_FALLBACK_MAX_SEC}" -p pause_threshold:="${VOICE_PAUSE_THRESHOLD}" -p non_speaking_duration:="${VOICE_NON_SPEAKING_DURATION}" -p google_timeout_sec:="${VOICE_GOOGLE_TIMEOUT_SEC}" -p manual_speed:="${VOICE_MANUAL_SPEED}" -p strafe_speed:="${VOICE_STRAFE_SPEED}" -p diagonal_speed:="${VOICE_DIAGONAL_SPEED}" -p diagonal_component_scale:="${VOICE_DIAGONAL_COMPONENT_SCALE}" -p forward_yaw_trim:="${VOICE_FORWARD_YAW_TRIM}" -p backward_yaw_trim:="${VOICE_BACKWARD_YAW_TRIM}" -p strafe_left_yaw_trim:="${VOICE_STRAFE_LEFT_YAW_TRIM}" -p strafe_right_yaw_trim:="${VOICE_STRAFE_RIGHT_YAW_TRIM}" -p manual_command_timeout_sec:="${VOICE_MANUAL_TIMEOUT_SEC}" -p nudge_duration_sec:="${VOICE_NUDGE_DURATION_SEC}" -p continuous_command_max_sec:="${VOICE_CONTINUOUS_MAX_SEC}" -p zero_burst_count:="${VOICE_ZERO_BURST_COUNT}" -p speaker_rate_wpm:="${VOICE_SPEAKER_RATE_WPM}" -p speaker_echo_guard_sec:="${VOICE_SPEAKER_ECHO_GUARD_SEC}" -p speak_command_responses:="${VOICE_SPEAK_COMMAND_RESPONSES_PARAM}" -p server_tts_enabled:="${VOICE_SERVER_TTS_ENABLED_PARAM}" -p server_tts_timeout_sec:="${VOICE_SERVER_TTS_TIMEOUT_SEC}" -p system_sound_dir:="${VOICE_SYSTEM_SOUND_DIR}" "${VOICE_PIPER_MODEL_ARGS[@]}" -p audio_player:="${VOICE_AUDIO_PLAYER}"
 fi
 if is_truthy "$DISABLE_CAMERA"; then
   echo "[mapping] camera pipeline disabled by BUDDYBOT_DISABLE_CAMERA=1"

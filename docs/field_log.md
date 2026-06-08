@@ -1668,6 +1668,34 @@ Required Pi action:
 - Restart presentation mode.
 - Pico reflash is not required.
 
+## 2026-06-08 Restore Google STT as presentation default
+
+Field feedback:
+- After the hybrid/local Whisper changes, Pi local STT showed delays around `20.88s` and `32.33s`.
+- Wake response could eventually happen, but the next command such as `전진` was too late or missed.
+- This made the robot worse than the earlier Google STT path for live driving.
+
+Decision:
+- Restore the default presentation STT path to the earlier Google Web Speech behavior.
+- Keep local Whisper and server Whisper as explicit test modes only.
+- This prioritizes immediate `버디봇 -> 네`, `전진`, `멈춰`, and `따라와` behavior over offline STT experiments.
+
+Changes:
+- Added `BUDDYBOT_STT_MODE`.
+- Default: `BUDDYBOT_STT_MODE=legacy_google`.
+- Test-only modes:
+  - `BUDDYBOT_STT_MODE=local_whisper`
+  - `BUDDYBOT_STT_MODE=hybrid_whisper`
+- Presentation and mapping startup scripts derive backend/server/local/google/wake-fallback defaults from that mode.
+- Voice node standalone defaults now also match the presentation default.
+- `stt_observation` logs include STT mode and elapsed time.
+
+Required Pi action:
+- Pull main.
+- Rebuild `buddybot_voice` and `buddybot_panel`.
+- Restart presentation mode.
+- Pico reflash is not required.
+
 ## 2026-06-02 Compensate lateral rear-wheel drive
 
 Field feedback:

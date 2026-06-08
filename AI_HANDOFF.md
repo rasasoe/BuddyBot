@@ -574,3 +574,18 @@ PRD 참조: PART 3 Cycle 5 실기검증 M3(사람추종), PRD Section 2.2 `/visi
 - Standalone wake calls no longer wait for server `/stt`.
 - A bounded `0.35-1.60s` local audio fallback can say `네` and open the command window only. It cannot create a motor command.
 - Pi speaker playback now has a short microphone echo guard.
+
+## 2026-06-08 Voice STT field rollback
+
+- Field result: local/hybrid Whisper on the Pi was too slow in full ROS presentation mode, with local STT delays reported around `20.88s` and `32.33s`.
+- Thonny can be faster because it does not run the full robot stack at the same time; presentation mode also runs LiDAR, camera, panel, detector/follow, Pico bridge, TTS, and browser load.
+- Default STT is now restored to the fast field path:
+  - `BUDDYBOT_STT_MODE=legacy_google`
+  - `recognition_backend=google`
+  - server `/stt` disabled by default
+  - Pi local Whisper disabled by default
+  - wake audio fallback disabled by default
+- Whisper modes remain available only when explicitly requested:
+  - `BUDDYBOT_STT_MODE=local_whisper`
+  - `BUDDYBOT_STT_MODE=hybrid_whisper`
+- Do not re-enable local/hybrid Whisper as the default until it is profiled under full ROS load and can consistently answer wake/command speech within field timing.

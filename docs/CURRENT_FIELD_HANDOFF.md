@@ -578,3 +578,29 @@ Manual stutter root cause and latest fix:
 - After Pi tiny and optional Google both miss, a bounded `0.35-1.60s` local phrase opens the command window as a wake attempt only. It says `네` but never executes motion by itself.
 - Added a short speaker echo guard so Pi responses are not fed back into the C920 microphone as new commands.
 - Rebuild `buddybot_voice` and `buddybot_panel`; Pico reflash is not required for this voice-only patch.
+
+## 2026-06-08 Restore fast Google STT default
+
+- Field feedback after the local/hybrid Whisper switch:
+  - Pi local STT displayed delays such as `20.88s` and `32.33s`.
+  - Wake sometimes produced `네`, but the follow-up `전진` command did not execute in time.
+  - This is unsuitable for field driving, even if standalone Thonny Whisper tests are faster.
+- Interpretation:
+  - Thonny tests run mostly microphone + Whisper only.
+  - Presentation mode runs LiDAR, camera, detector/follow, panel, ROS graph, Pico bridge, TTS, and browser load at the same time.
+  - Local Whisper remains useful for research, but not as the default real-time drive STT on the current Pi setup.
+- Defaults now favor field stability:
+  - `BUDDYBOT_STT_MODE=legacy_google`
+  - `recognition_backend=google`
+  - server `/stt` disabled by default
+  - Pi local Whisper disabled by default
+  - wake audio fallback disabled by default
+- Optional test modes remain available:
+  - `BUDDYBOT_STT_MODE=local_whisper`
+  - `BUDDYBOT_STT_MODE=hybrid_whisper`
+- `voice.log` now includes `stt_mode`, backend, elapsed STT time, raw text, wake match, command text, and local intent in `stt_observation` lines.
+- Required Pi action:
+  - Pull main.
+  - Rebuild `buddybot_voice` and `buddybot_panel`.
+  - Restart presentation mode.
+  - Pico reflash is not required for this voice-only change.

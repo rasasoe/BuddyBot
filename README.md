@@ -300,73 +300,75 @@ sudo apt install -y flac mpg123
 
 ### 11. 현재 STT 방식
 
-현재 기본 STT는 Whisper 하이브리드 구조입니다.
+현재 기본 STT는 발표 안정성을 위해 기존 Google Web Speech 경로입니다.
+Pi 5의 `faster-whisper tiny`는 ROS 발표 모드에서 LiDAR, 카메라, 패널, 모터 브리지와 함께 돌 때 20~30초 이상 지연될 수 있어 기본값에서 제외했습니다.
+Whisper 서버/로컬 STT는 연구 및 비교 테스트용 옵션으로 남겨 둡니다.
 
 발표 모드 시작 시 음성모드는 기본적으로 꺼져 있습니다. 패널에서 `음성모드 켜기`를 눌러야 웨이크워드와 일반 명령을 처리합니다. 음성모드가 꺼져 있어도 안전을 위해 Pi 로컬 `멈춰` 감지만 유지합니다.
 
 ```text
-대기 중 웨이크워드
-→ Pi faster-whisper tiny, 짧은 호출어에서는 VAD 완화
-→ 실패하면 선택적 Google Web Speech fallback
-→ 그래도 놓치면 0.35~1.60초 짧은 음성을 호출 시도로만 인정
+기본 발표 모드
+→ BUDDYBOT_STT_MODE=legacy_google
+→ Google Web Speech로 웨이크워드와 명령 문장 인식
+→ Pi 로컬 명령 분기
+→ 로봇 제어 또는 서버 AI 대화
 
-웨이크워드 이후 명령 문장
+로컬 Whisper 테스트 모드
+→ BUDDYBOT_STT_MODE=local_whisper
+→ Pi faster-whisper tiny만 사용
+→ 발표 기본값으로 쓰지 않음
+
+하이브리드 Whisper 테스트 모드
+→ BUDDYBOT_STT_MODE=hybrid_whisper
 → BuddyBot-ai /stt 서버 Whisper 우선
-→ 실패하면 Pi faster-whisper tiny
-→ 실패하면 선택적 Google Web Speech fallback
-
-주행 중 긴급 정지
-→ Pi faster-whisper tiny 우선
-→ 서버 Whisper
-→ 선택적 Google Web Speech fallback
+→ Pi faster-whisper tiny fallback
+→ Google Web Speech fallback
+→ 발표 기본값으로 쓰지 않음
 ```
 
-`버디봇 전진`처럼 웨이크워드와 명령을 한 번에 말하면 Pi가 먼저 웨이크워드와 로컬 명령을 확인합니다.
-`버디봇`처럼 짧은 호출어만 말하면 서버 `/stt`를 기다리지 않습니다. Pi tiny와 선택적 Google fallback이 호출어를 확인하고, 둘 다 놓쳐도 짧은 음성 fallback은 `네.` 응답과 다음 명령 대기만 열어 줍니다. 이 fallback 자체가 이동 명령을 실행하지는 않습니다.
-Whisper가 흔히 반환하는 `버디 봇`, `버디 봇아`, `바디봇`, `버디보`, `버디보트`, `buddy bot`도 웨이크워드로 정규화합니다.
-Pi tiny가 로컬 로봇 명령을 이미 인식했다면 서버 왕복 없이 바로 실행합니다. 서버 Whisper는 호출어 누락 재확인과 AI 질문 정확도 향상에 사용합니다.
-서버가 잠시 응답하지 않으면 10초 동안 서버 재시도를 쉬고 Pi fallback을 우선 사용합니다.
+`버디봇 전진`처럼 웨이크워드와 명령을 한 번에 말하면 Pi가 STT 결과를 로컬 명령 allowlist로 먼저 분류합니다.
+`멈춰`, `정지`, `스톱`, `그만`은 서버 AI 판단보다 먼저 로컬 정지로 처리합니다.
+Whisper 테스트 모드에서는 `버디 봇`, `버디 봇아`, `바디봇`, `버디보`, `버디보트`, `buddy bot`도 웨이크워드로 정규화합니다.
 
-Pi 로컬 음성 제어만 분리해서 시험하려면 서버 및 Google STT fallback을 잠시 끌 수 있습니다.
+기본 발표 모드는 별도 환경변수 없이 실행하면 됩니다.
 
 ```bash
-BUDDYBOT_VOICE_SERVER_STT_ENABLED=0 \
-BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0 \
 BUDDYBOT_FORCE_LIDAR_START=1 \
 bash scripts/start_presentation_mode.sh mapping
 ```
 
-`voice.log`에는 Pi tiny의 `raw_stt_text`, 정규화 결과, 웨이크워드 매칭 별칭, 분리된 명령, 로컬 intent가 기록됩니다.
+Whisper 모드를 실험하려면 명시적으로 켭니다.
+
+```bash
+BUDDYBOT_STT_MODE=local_whisper BUDDYBOT_FORCE_LIDAR_START=1 bash scripts/start_presentation_mode.sh mapping
+BUDDYBOT_STT_MODE=hybrid_whisper BUDDYBOT_FORCE_LIDAR_START=1 bash scripts/start_presentation_mode.sh mapping
+```
+
+`voice.log`에는 STT 모드, 사용 backend, 처리 시간, raw 텍스트, 웨이크워드 매칭, 분리된 명령, 로컬 intent가 기록됩니다.
 
 ```text
-BUDDYBOT_VOICE_RECOGNITION_BACKEND=hybrid
-BUDDYBOT_VOICE_SERVER_STT_ENABLED=1
+BUDDYBOT_STT_MODE=legacy_google
+BUDDYBOT_VOICE_RECOGNITION_BACKEND=google
+BUDDYBOT_VOICE_SERVER_STT_ENABLED=0
 BUDDYBOT_VOICE_SERVER_STT_TIMEOUT_SEC=4.0
 BUDDYBOT_VOICE_SERVER_STT_COOLDOWN_SEC=10.0
-BUDDYBOT_VOICE_LOCAL_WHISPER_ENABLED=1
+BUDDYBOT_VOICE_LOCAL_WHISPER_ENABLED=0
 BUDDYBOT_VOICE_LOCAL_WHISPER_MODEL=tiny
 BUDDYBOT_VOICE_LOCAL_WHISPER_DEVICE=cpu
 BUDDYBOT_VOICE_LOCAL_WHISPER_COMPUTE_TYPE=int8
 BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=1
-BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED=1
+BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_ENABLED=0
 BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_MIN_SEC=0.35
 BUDDYBOT_VOICE_WAKE_AUDIO_FALLBACK_MAX_SEC=1.60
 BUDDYBOT_VOICE_RECOGNITION_LANGUAGE=ko-KR
 BUDDYBOT_VOICE_GOOGLE_TIMEOUT_SEC=1.8
 ```
 
-Pi에서 한 번만 설치하고 tiny 모델을 미리 내려받습니다.
+Whisper 테스트 모드를 쓰려면 Pi에서 한 번만 설치하고 tiny 모델을 미리 내려받습니다.
 
 ```bash
 cd ~/BuddyBot
 bash scripts/setup_pi5_whisper.sh
-```
-
-서버와 인터넷이 모두 끊겨도 Pi에 tiny 모델이 준비되어 있으면 기본 음성 제어를 계속 사용할 수 있습니다.
-Google Web Speech는 마지막 선택 fallback일 뿐이며, 끄고 싶으면 아래처럼 실행합니다.
-
-```bash
-BUDDYBOT_VOICE_GOOGLE_FALLBACK_ENABLED=0 bash scripts/start_presentation_mode.sh mapping
 ```
 
 ### 12. 추천 시연 순서
