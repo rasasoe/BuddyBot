@@ -1538,6 +1538,7 @@ class VoiceInterface(Node):
                 self._microphone_ignore_until = time.monotonic() + self.speaker_echo_guard_sec
 
     def _speak_text(self, text: str, *, category: str = "system") -> None:
+        server_tts_failed = False
         if category == "ai" and self.server_assistant_enabled and self.server_tts_enabled:
             try:
                 self._speak_with_server_tts(text)
@@ -1547,6 +1548,8 @@ class VoiceInterface(Node):
                 self.get_logger().warn(f"Server TTS failed, using local fallback: {exc}")
                 self._publish_status(f"speaker_ai_server_failed:{self._compact_exception(exc)}")
                 text = "AI 서버 음성 연결이 원활하지 않습니다."
+                category = "system"
+                server_tts_failed = True
 
         if category in {"system", "emergency"} and self._speak_system_sound(text):
             self._publish_status(f"speaker_{category}:prerecorded")
@@ -1556,8 +1559,22 @@ class VoiceInterface(Node):
             self._publish_status(f"speaker_{category}:piper")
             return
 
+        if self._should_mute_local_tts(text, category=category, server_tts_failed=server_tts_failed):
+            self._publish_status(f"speaker_{category}:muted_local_tts")
+            return
+
         self._speak_with_local_backend(text)
         self._publish_status(f"speaker_{category}:local_tts")
+
+    def _should_mute_local_tts(self, text: str, *, category: str, server_tts_failed: bool) -> bool:
+        if not any("\uac00" <= ch <= "\ud7a3" for ch in text):
+            return False
+        backend = self._speaker_backend_command
+        if backend not in {"espeak-ng", "espeak", "spd-say"}:
+            return False
+        if server_tts_failed or category == "ai":
+            return True
+        return len(text) > 12
 
     def _speak_with_server_tts(self, text: str) -> None:
         if not self._audio_player_command:
@@ -1598,6 +1615,7 @@ class VoiceInterface(Node):
             "추종 시작.": "follow_start",
             "추종 중지.": "follow_stop",
             "로컬 음성 명령만 사용할 수 있습니다.": "server_offline",
+            "AI 서버 음성 연결이 원활하지 않습니다.": "server_offline",
             self.AI_SERVER_UNAVAILABLE_RESPONSE: "server_offline",
         }.get(text)
         if not sound_key:
