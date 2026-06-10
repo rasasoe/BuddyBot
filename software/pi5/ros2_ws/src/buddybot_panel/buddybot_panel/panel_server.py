@@ -218,9 +218,9 @@ class PanelBridge:
             )
         )
         self._manual_forward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_FORWARD_YAW_TRIM", "-0.003"))
-        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.010"))
-        self._manual_strafe_left_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LEFT_YAW_TRIM", "0.035"))
-        self._manual_strafe_right_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_RIGHT_YAW_TRIM", "-0.035"))
+        self._manual_backward_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_BACKWARD_YAW_TRIM", "-0.018"))
+        self._manual_strafe_left_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LEFT_YAW_TRIM", "0.0"))
+        self._manual_strafe_right_yaw_trim = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_RIGHT_YAW_TRIM", "0.0"))
         self._manual_diagonal_component_scale = max(
             0.0,
             min(1.0, float(os.getenv("BUDDYBOT_MANUAL_DIAGONAL_COMPONENT_SCALE", "0.7071"))),
@@ -1907,6 +1907,9 @@ class PanelBridge:
         if any(keyword in text for keyword in ("backward right", "diagonal backward right", "오른쪽 뒤로", "우측 뒤로", "오른쪽 뒤", "우측 뒤", "오른쪽 대각선 후진", "우측 대각선 후진")):
             self.manual_command("backward_right", 0.435)
             return "버디봇이 오른쪽 뒤로 이동합니다."
+        if any(keyword in text for keyword in ("come here", "come to me", "이리와", "일로와", "여기로와", "이쪽으로와", "내쪽으로와", "나한테 와", "나에게 와", "앞으로 와", "가까이 와")):
+            self.manual_command("forward", 0.46)
+            return "버디봇이 3초 동안 앞으로 이동합니다."
         if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self.manual_command("forward", 0.46)
             return "버디봇이 앞으로 이동합니다."
@@ -1933,12 +1936,16 @@ class PanelBridge:
             ("사용자 추정", "사용자 추종"),
             ("사용자추정", "사용자 추종"),
             ("사용자추종", "사용자 추종"),
+            ("사용자 조정 시작", "사용자 추종 시작"),
+            ("사용자 조종 시작", "사용자 추종 시작"),
+            ("사용자 추종시작", "사용자 추종 시작"),
+            ("사용자추종시작", "사용자 추종 시작"),
         ):
             text = text.replace(alias, canonical)
         if any(keyword in text for keyword in ("follow stop", "unfollow", "추종 중지", "추종 정지", "사용자 추종 중지", "사용자 추종 정지", "따라오지마", "따라오지 마", "추종 꺼")):
             self.set_follow_enabled(False)
             return "사용자 추종을 중지했습니다."
-        if any(keyword in text for keyword in ("follow", "track user", "따라와", "나 따라와", "사람 따라와", "추종", "사용자 추종", "추종 시작", "추종 켜", "추종해")):
+        if any(keyword in text for keyword in ("follow", "track user", "따라와", "따라와줘", "나 따라와", "나 따라와줘", "사람 따라와", "사람 따라와줘", "추종", "사용자 추종", "사용자 추종 시작", "사용자 추종 켜", "추종 시작", "추종 시작해", "추종 켜", "추종 켜줘", "추종해")):
             self.set_follow_enabled(True)
             return "사용자 추종을 시작했습니다."
         if any(keyword in text for keyword in ("status", "state", "상태", "지금 상태")):

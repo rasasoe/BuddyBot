@@ -52,11 +52,19 @@ class VoiceInterface(Node):
         ("바디 봇아", "버디봇아"),
         ("버디보트", "버디봇"),
         ("버디 보트", "버디봇"),
+        ("버디봇트", "버디봇"),
+        ("버디 봇트", "버디봇"),
+        ("버디봇이", "버디봇"),
         ("버디 봇", "버디봇"),
+        ("버디 못", "버디봇"),
         ("바디봇", "버디봇"),
         ("바디 봇", "버디봇"),
         ("버디보", "버디봇"),
         ("버디 보", "버디봇"),
+        ("버디봉", "버디봇"),
+        ("버디 봐", "버디봇"),
+        ("보디봇", "버디봇"),
+        ("부디봇", "버디봇"),
         ("buddy bot", "buddybot"),
     )
     COMMAND_ALIAS_REPLACEMENTS = (
@@ -70,8 +78,13 @@ class VoiceInterface(Node):
         ("사용자초종", "사용자 추종"),
         ("사용자 추종시작", "사용자 추종 시작"),
         ("사용자추종시작", "사용자 추종 시작"),
+        ("사용자추종", "사용자 추종"),
         ("사용자 추종정지", "사용자 추종 정지"),
         ("사용자추종정지", "사용자 추종 정지"),
+        ("사용자 조정 시작", "사용자 추종 시작"),
+        ("사용자 조종 시작", "사용자 추종 시작"),
+        ("사용자 조정 정지", "사용자 추종 정지"),
+        ("사용자 조종 정지", "사용자 추종 정지"),
         ("유저 추종", "사용자 추종"),
         ("유저 조정", "사용자 추종"),
         ("유저 조종", "사용자 추종"),
@@ -86,9 +99,18 @@ class VoiceInterface(Node):
         ("조정 시작", "추종 시작"),
         ("조종 시작", "추종 시작"),
         ("추정 시작", "추종 시작"),
+        ("추종을 시작", "추종 시작"),
+        ("추종 시작해", "추종 시작"),
+        ("추종 켜줘", "추종 켜"),
         ("추종시작", "추종 시작"),
         ("추종정지", "추종 정지"),
         ("추종중지", "추종 중지"),
+        ("추종을 정지", "추종 정지"),
+        ("추종 꺼줘", "추종 꺼"),
+        ("이리 와", "이리와"),
+        ("일로 와", "일로와"),
+        ("여기로 와", "여기로와"),
+        ("이쪽으로 와", "이쪽으로와"),
         ("따라 와", "따라와"),
         ("따라 오지마", "따라오지마"),
         ("따라 오지 마", "따라오지 마"),
@@ -127,6 +149,7 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter("manual_command_timeout_sec", 2.0)
         self.declare_parameter("nudge_duration_sec", 2.5)
+        self.declare_parameter("come_here_duration_sec", 3.0)
         self.declare_parameter("continuous_command_max_sec", 0.0)
         self.declare_parameter("zero_burst_count", 4)
         self.declare_parameter(
@@ -153,9 +176,9 @@ class VoiceInterface(Node):
         self.declare_parameter("strafe_speed", 0.36)
         self.declare_parameter("rotate_speed", 0.60)
         self.declare_parameter("forward_yaw_trim", -0.003)
-        self.declare_parameter("backward_yaw_trim", -0.010)
-        self.declare_parameter("strafe_left_yaw_trim", 0.035)
-        self.declare_parameter("strafe_right_yaw_trim", -0.035)
+        self.declare_parameter("backward_yaw_trim", -0.018)
+        self.declare_parameter("strafe_left_yaw_trim", 0.0)
+        self.declare_parameter("strafe_right_yaw_trim", 0.0)
         self.declare_parameter("enable_speaker_output", True)
         self.declare_parameter("speaker_backend", "auto")
         self.declare_parameter("speaker_voice_ko", "ko")
@@ -210,6 +233,7 @@ class VoiceInterface(Node):
         self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
         self.manual_command_timeout_sec = float(self.get_parameter("manual_command_timeout_sec").value)
         self.nudge_duration_sec = float(self.get_parameter("nudge_duration_sec").value)
+        self.come_here_duration_sec = float(self.get_parameter("come_here_duration_sec").value)
         self.continuous_command_max_sec = float(self.get_parameter("continuous_command_max_sec").value)
         self.zero_burst_count = max(1, int(self.get_parameter("zero_burst_count").value))
         normalized_wake_words = [
@@ -409,6 +433,7 @@ class VoiceInterface(Node):
     def voice_assistant_callback(self, msg: Bool) -> None:
         self.server_assistant_enabled = bool(msg.data)
         self.offline_mode = not self.server_assistant_enabled
+        self._last_wake_time = 0.0
         mode = "server-assistant" if self.server_assistant_enabled else "local-command"
         self._publish_status(f"voice_assistant:{mode}")
         self.get_logger().info(f"Voice assistant mode -> {mode}")
@@ -483,6 +508,7 @@ class VoiceInterface(Node):
             return
 
         self._publish_status(f"heard:{source}:{cleaned}")
+        local_intent = self._preview_local_intent(cleaned)
         answer = self._handle_offline_command(
             cleaned,
             allow_help=not self.server_assistant_enabled,
@@ -490,12 +516,30 @@ class VoiceInterface(Node):
 
         category = "system"
         if not answer and self.server_assistant_enabled:
-            answer = self._forward_to_ai(cleaned)
+            if source == "microphone" and not self._microphone_ai_allowed(cleaned):
+                self._publish_status(f"ignored:{source}:wake_required_for_ai")
+                self.get_logger().info(f"Ignored microphone AI text without wake word: {cleaned}")
+                return
+            ai_text = self._strip_wake_prefix(cleaned)
+            if not ai_text:
+                self._last_wake_time = time.time()
+                answer = "네."
+            else:
+                answer = self._forward_to_ai(ai_text)
+                if source == "microphone":
+                    self._last_wake_time = 0.0
             category = "system" if answer == self.AI_SERVER_UNAVAILABLE_RESPONSE else "ai"
 
         if answer:
+            if source == "microphone" and local_intent not in {"", "unknown", "wake", "status"}:
+                self._last_wake_time = 0.0
             self._publish_response(answer, category=category)
             self.get_logger().info(f"Voice handled ({source}): {cleaned} -> {answer}")
+
+    def _microphone_ai_allowed(self, text: str) -> bool:
+        if self._contains_wake_word(text):
+            return True
+        return (time.time() - self._last_wake_time) <= self.wake_timeout_sec
 
     def _handle_offline_command(self, message: str, *, allow_help: bool = True) -> str:
         text = self._normalize_text(message)
@@ -576,6 +620,25 @@ class VoiceInterface(Node):
         if self._matches_any(command_text, self.BACKWARD_RIGHT_WORDS):
             self._start_diagonal_motion(-1.0, -1.0, "backward_right")
             return "오른쪽 뒤로."
+
+        if self._matches_any(command_text, self.COME_HERE_WORDS):
+            self._log_voice_classification(
+                raw_text=message,
+                normalized_text=text,
+                matched_intent="come_here",
+                matched_keywords=self._matched_keywords(command_text, self.COME_HERE_WORDS),
+                command_mode="nudge",
+                stop_priority_applied=False,
+            )
+            self._start_manual_motion(
+                self.manual_speed,
+                0.0,
+                self.forward_yaw_trim,
+                self.come_here_duration_sec,
+                mode="nudge",
+                intent="come_here",
+            )
+            return "이리 갈게요."
 
         if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
             self._log_voice_classification(
@@ -759,6 +822,19 @@ class VoiceInterface(Node):
         "쭉 전진",
         "계속 직진",
     )
+    COME_HERE_WORDS = (
+        "come here",
+        "come to me",
+        "이리와",
+        "일로와",
+        "여기로와",
+        "이쪽으로와",
+        "내쪽으로와",
+        "나한테 와",
+        "나에게 와",
+        "앞으로 와",
+        "가까이 와",
+    )
     STOP_WORDS = (
         "stop",
         "halt",
@@ -807,13 +883,24 @@ class VoiceInterface(Node):
         "따라와",
         "나 따라와",
         "사용자 추종",
+        "사용자 추종 시작",
+        "사용자 추종 켜",
+        "사용자 추종 켜줘",
+        "사용자 조정 시작",
+        "사용자 조정 켜",
+        "사용자 조종 시작",
+        "사용자 조종 켜",
         "사용자 조정",
         "사용자 조종",
         "사용자 추정",
         "사람 따라와",
+        "사람 따라와줘",
+        "나 따라와줘",
         "추종",
         "추종 시작",
+        "추종 시작해",
         "추종 켜",
+        "추종 켜줘",
         "추종해",
         "따라오기 시작",
         "쫓아와",
@@ -855,6 +942,7 @@ class VoiceInterface(Node):
         + BACKWARD_RIGHT_WORDS
         + FORWARD_WORDS
         + CONTINUOUS_FORWARD_WORDS
+        + COME_HERE_WORDS
         + STOP_WORDS
         + (
             "후진",
@@ -927,6 +1015,8 @@ class VoiceInterface(Node):
             return "backward_left"
         if self._matches_any(command_text, self.BACKWARD_RIGHT_WORDS):
             return "backward_right"
+        if self._matches_any(command_text, self.COME_HERE_WORDS):
+            return "come_here"
         if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
             return "forward"
         if self._matches_any(command_text, self.FORWARD_WORDS):
@@ -1366,7 +1456,7 @@ class VoiceInterface(Node):
         if phase == "wake":
             return "버디봇. 버디 봇. 바디봇."
         return (
-            "버디봇. 전진. 앞으로. 멈춰. 정지. 따라와. 추종 시작. 추종 정지. "
+            "버디봇. 전진. 앞으로. 이리와. 일로와. 멈춰. 정지. 따라와. 사용자 추종. 추종 시작. 추종 정지. "
             "좌회전. 우회전. 왼쪽 이동. 오른쪽 이동."
         )
 
@@ -1602,6 +1692,7 @@ class VoiceInterface(Node):
             "음성 모드 켜짐.": "voice_enabled",
             "전진.": "forward",
             "지속 전진.": "forward",
+            "이리 갈게요.": "forward",
             "후진.": "backward",
             "왼쪽 앞으로.": "forward_left",
             "오른쪽 앞으로.": "forward_right",
