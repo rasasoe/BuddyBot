@@ -83,6 +83,16 @@ class VoiceInterface(Node):
     COMMAND_ALIAS_REPLACEMENTS = (
         ("사사용자", "사용자"),
         ("사용 자", "사용자"),
+        ("전진해", "전진"),
+        ("정진", "전진"),
+        ("전지", "전진"),
+        ("전짐", "전진"),
+        ("전 좀", "전진"),
+        ("앞으로가", "앞으로 가"),
+        ("앞으로 가줘", "앞으로 가"),
+        ("앞으로 가자", "앞으로 가"),
+        ("앞으로 가봐", "앞으로 가"),
+        ("앞으로 움직여", "앞으로 가"),
         ("사용자 조정", "사용자 추종"),
         ("사용자조정", "사용자 추종"),
         ("사용자 조종", "사용자 추종"),
@@ -785,8 +795,16 @@ class VoiceInterface(Node):
         "forward",
         "go ahead",
         "전진",
+        "전진해",
+        "정진",
+        "전지",
+        "전짐",
         "앞으로",
         "앞으로 가",
+        "앞으로 가줘",
+        "앞으로 가자",
+        "앞으로 가봐",
+        "앞으로 움직여",
         "가자",
         "직진",
     )
@@ -869,6 +887,33 @@ class VoiceInterface(Node):
         "세워줘",
         "정지",
         "정지해",
+        "멈춰",
+        "멈추어",
+        "멈춰라",
+        "멈춤",
+        "멈추",
+        "스톱",
+        "스탑",
+        "중지",
+        "취소",
+        "그만",
+        "세워",
+    )
+    AMBIGUOUS_STOP_WORDS = (
+        "정지",
+        "정지해",
+    )
+    STRONG_STOP_WORDS = (
+        "stop",
+        "halt",
+        "brake",
+        "cancel",
+        "멈춰줘",
+        "멈춰 줘",
+        "멈추세요",
+        "멈춰주세요",
+        "그만해",
+        "세워줘",
         "멈춰",
         "멈추어",
         "멈춰라",
@@ -1019,6 +1064,32 @@ class VoiceInterface(Node):
         if self._is_explanation_request(normalized):
             return False
         return True
+
+    def _is_strong_stop_command(self, text: str) -> bool:
+        normalized = self._strip_wake_prefix(text)
+        if not self._matches_any(normalized, self.STRONG_STOP_WORDS):
+            return False
+        if self._is_motion_negation(normalized):
+            return False
+        if self._is_explanation_request(normalized):
+            return False
+        return True
+
+    def _is_ambiguous_stop_command(self, text: str) -> bool:
+        normalized = self._strip_wake_prefix(text)
+        if not self._matches_any(normalized, self.AMBIGUOUS_STOP_WORDS):
+            return False
+        if self._is_motion_negation(normalized):
+            return False
+        if self._is_explanation_request(normalized):
+            return False
+        return True
+
+    def _robot_motion_active(self) -> bool:
+        if self._manual_active or self.follow_enabled:
+            return True
+        navigation = (self._navigation_status or "").strip().lower()
+        return navigation not in {"", "idle", "cancelled", "canceled", "done", "complete", "completed"}
 
     def _preview_local_intent(self, text: str) -> str:
         command_text = self._strip_wake_prefix(text)
@@ -1486,6 +1557,40 @@ class VoiceInterface(Node):
             return ""
         return self._recognize_with_google(recognizer, audio)
 
+    def _select_google_transcript(self, candidates: List[str]) -> str:
+        cleaned_candidates = [candidate.strip() for candidate in candidates if candidate and candidate.strip()]
+        if not cleaned_candidates:
+            return ""
+
+        for candidate in cleaned_candidates:
+            if self._is_strong_stop_command(candidate):
+                return candidate
+
+        if self._robot_motion_active():
+            for candidate in cleaned_candidates:
+                if self._is_stop_command(candidate):
+                    return candidate
+
+        forward_intents = {
+            "forward",
+            "come_here",
+            "forward_left",
+            "forward_right",
+            "backward_left",
+            "backward_right",
+        }
+        has_ambiguous_stop = any(self._is_ambiguous_stop_command(candidate) for candidate in cleaned_candidates)
+        if has_ambiguous_stop:
+            for candidate in cleaned_candidates:
+                if self._preview_local_intent(candidate) in forward_intents:
+                    self.get_logger().info(
+                        "Google STT candidate override: ambiguous stop candidate "
+                        f"{cleaned_candidates[0]!r} -> forward candidate {candidate!r}"
+                    )
+                    return candidate
+
+        return cleaned_candidates[0]
+
     def _recognize_with_google(self, recognizer, audio) -> str:
         if not self.allow_online_recognition:
             return ""
@@ -1499,9 +1604,29 @@ class VoiceInterface(Node):
         transcript = ""
         try:
             socket.setdefaulttimeout(max(0.5, self.google_timeout_sec))
-            transcript = recognizer.recognize_google(audio, language=self.recognition_language).strip()
+            raw_result = recognizer.recognize_google(
+                audio,
+                language=self.recognition_language,
+                show_all=True,
+            )
+            candidates: List[str] = []
+            if isinstance(raw_result, dict):
+                for alternative in raw_result.get("alternative", []):
+                    if isinstance(alternative, dict):
+                        candidate = str(alternative.get("transcript", "")).strip()
+                        if candidate:
+                            candidates.append(candidate)
+            elif isinstance(raw_result, list):
+                candidates = [str(item).strip() for item in raw_result if str(item).strip()]
+            elif isinstance(raw_result, str) and raw_result.strip():
+                candidates = [raw_result.strip()]
+
+            transcript = self._select_google_transcript(candidates)
             if transcript:
                 self._publish_status(f"recognized:google:{transcript}")
+                if candidates and transcript != candidates[0]:
+                    self._publish_status(f"recognized:google_selected:{transcript}")
+                    self.get_logger().info(f"Google STT candidates: {candidates!r}; selected={transcript!r}")
             return transcript
         except Exception as exc:
             elapsed = time.monotonic() - started_at
