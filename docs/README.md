@@ -14,6 +14,7 @@ BuddyBot은 라즈베리 파이 5 + 라즈베리 파이 피코 기반 자율 주
 - **[CODEX_RESUME_WORKFLOW.md](CODEX_RESUME_WORKFLOW.md)**: 다른 노트북/다음날/새 Codex 세션에서 바로 이어가기 위한 재개 절차
 - **[TEAM_SETUP_PI5_AND_PICO.md](TEAM_SETUP_PI5_AND_PICO.md)**: Pi5/Pico 설치, 빌드, 시연 순서
 - **[bringup.md](bringup.md)**: 현장 Bring-up 체크리스트
+- **[voice_commands.md](voice_commands.md)**: 호출어, 이동, 정지, 추종, 체크포인트, 서버 AI 음성 명령 전체 목록
 
 최근 Pi5 실기에서 가장 중요한 문서 흐름:
 1. `../AI_HANDOFF.md`
