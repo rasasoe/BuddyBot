@@ -576,11 +576,12 @@ class VoiceInterface(Node):
             if not ai_text:
                 self._last_wake_time = time.time()
                 answer = "네."
+                category = "system"
             else:
                 answer = self._forward_to_ai(ai_text)
                 if source == "microphone":
                     self._last_wake_time = 0.0
-            category = "system" if answer == self.AI_SERVER_UNAVAILABLE_RESPONSE else "ai"
+                category = "system" if answer == self.AI_SERVER_UNAVAILABLE_RESPONSE else "ai"
 
         if answer:
             if source == "microphone" and local_intent not in {"", "unknown", "wake", "status"}:

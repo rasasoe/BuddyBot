@@ -367,18 +367,48 @@
       window.speechSynthesis.speak(utterance);
     }
 
+    const BROWSER_VOICE_WAKE_WORDS = [
+      "버디봇아",
+      "버디봇",
+      "버디보트",
+      "버디보",
+      "버디",
+      "buddybot",
+      "buddy",
+    ];
+
     function normalizeVoiceTranscript(text){
       return String(text || "")
         .toLowerCase()
         .replace(/[,.?!:;，。？！、~…]/g, " ")
         .replace(/\s+/g, " ")
         .split("버디 봇").join("버디봇")
+        .split("바디 봇").join("버디봇")
+        .split("바디봇").join("버디봇")
+        .split("버디 보트").join("버디보트")
+        .split("버디 보").join("버디보")
+        .split("buddy bot").join("buddybot")
         .trim();
     }
 
-    function voiceHasWakeWord(text){
+    function splitBrowserWakeCommand(text){
       const normalized = normalizeVoiceTranscript(text);
-      return ["버디봇아", "버디봇", "버디", "buddybot", "buddy"].some((word) => normalized === word || normalized.startsWith(`${word} `));
+      for(const word of BROWSER_VOICE_WAKE_WORDS){
+        if(normalized === word){
+          return {hasWake:true, commandText:""};
+        }
+        if(normalized.startsWith(`${word} `)){
+          return {hasWake:true, commandText:normalized.slice(word.length).trim()};
+        }
+        if(normalized.startsWith(word) && normalized.length > word.length){
+          return {hasWake:true, commandText:normalized.slice(word.length).trim()};
+        }
+      }
+      return {hasWake:false, commandText:normalized};
+    }
+
+    function voiceHasWakeWord(text){
+      return splitBrowserWakeCommand(text).hasWake;
     }
 
     function setVoiceButtonLabel(text){
@@ -395,10 +425,17 @@
     async function handleBrowserVoiceTranscript(transcript){
       const normalized = normalizeVoiceTranscript(transcript);
       if(!normalized){ return; }
-      const hasWake = voiceHasWakeWord(normalized);
-      if(hasWake){
+      const wake = splitBrowserWakeCommand(normalized);
+      if(wake.hasWake){
         browserVoiceWakeUntil = Date.now() + BROWSER_VOICE_WAKE_MS;
-        await sendChat(normalized);
+        if(!wake.commandText){
+          addMsg("user", normalized);
+          addMsg("bot", "네.");
+          speak("네.");
+          setVoiceButtonLabel("명령 대기 중");
+          return;
+        }
+        await sendChat(wake.commandText);
         return;
       }
       if(Date.now() <= browserVoiceWakeUntil){

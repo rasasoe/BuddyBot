@@ -206,6 +206,8 @@ class PanelBridge:
         self.voice_mode_enabled = self._env_flag("BUDDYBOT_VOICE_COMMAND_ENABLED", False)
         self.manual_avoidance_enabled = self._env_flag("BUDDYBOT_MANUAL_AVOIDANCE_ENABLED", False)
         self.server_url = os.getenv("BUDDYBOT_AI_URL", "http://127.0.0.1:8000")
+        self._chat_wake_timeout_sec = float(os.getenv("BUDDYBOT_PANEL_CHAT_WAKE_TIMEOUT_SEC", "10.0"))
+        self._chat_wake_until = 0.0
         self._scan_forward_center_deg = float(os.getenv("BUDDYBOT_SCAN_FORWARD_CENTER_DEG", "180.0"))
         self._manual_linear_limit = float(os.getenv("BUDDYBOT_MANUAL_LINEAR_LIMIT", "0.52"))
         self._manual_strafe_limit = float(os.getenv("BUDDYBOT_MANUAL_STRAFE_LIMIT", "0.46"))
@@ -1681,6 +1683,8 @@ class PanelBridge:
     def set_voice_mode(self, enabled: bool, use_server: bool, server_url: str = "") -> Dict[str, Any]:
         self.voice_mode_enabled = bool(enabled)
         self.assistant_enabled = bool(use_server)
+        if not self.voice_mode_enabled:
+            self._chat_wake_until = 0.0
         cleaned_server_url = (server_url or self.server_url).strip().rstrip("/")
         if cleaned_server_url:
             self.server_url = cleaned_server_url
@@ -1764,6 +1768,7 @@ class PanelBridge:
     def set_assistant(self, enabled: bool, server_url: str) -> Dict[str, Any]:
         self.assistant_enabled = enabled
         self.server_url = server_url.rstrip("/")
+        self._chat_wake_until = 0.0
         self.last_command = f"assistant:{'on' if enabled else 'off'}"
         self._server_check_at = 0.0
         self._publish_voice_mode_state()
@@ -1788,6 +1793,15 @@ class PanelBridge:
             return False
 
     def handle_chat(self, message: str) -> str:
+        wake_detected, command_text = self._split_wake_command(message)
+        if wake_detected:
+            self._chat_wake_until = time.time() + self._chat_wake_timeout_sec
+            if not command_text:
+                answer = "네."
+                self._publish_voice_response(answer)
+                return answer
+            message = command_text
+
         local_response = self._handle_local_command(message, allow_help=False)
         if local_response:
             self._publish_voice_response(local_response)
@@ -1834,22 +1848,42 @@ class PanelBridge:
         for mark in (",", ".", "?", "!", ":", ";", "，", "。", "？", "！", "、", "~", "…"):
             text = text.replace(mark, " ")
         text = " ".join(text.split())
-        text = text.replace("버디 봇", "버디봇")
+        for source, target in (
+            ("버디 봇", "버디봇"),
+            ("바디 봇", "버디봇"),
+            ("바디봇", "버디봇"),
+            ("버디 보트", "버디보트"),
+            ("버디 보", "버디보"),
+            ("buddy bot", "buddybot"),
+        ):
+            text = text.replace(source, target)
         return text
+
+    @staticmethod
+    def _wake_words() -> tuple[str, ...]:
+        return (
+            "버디봇아",
+            "버디봇",
+            "버디보트",
+            "버디보",
+            "버디",
+            "buddybot",
+            "buddy",
+        )
+
+    def _split_wake_command(self, message: str) -> tuple[bool, str]:
+        text = self._normalize_panel_command_text(message)
+        for wake_word in self._wake_words():
+            if text == wake_word:
+                return True, ""
+            if text.startswith(f"{wake_word} "):
+                return True, text[len(wake_word):].strip()
+            if text.startswith(wake_word) and len(text) > len(wake_word):
+                return True, text[len(wake_word):].strip()
+        return False, text
 
     def _strip_wake_prefix(self, message: str) -> str:
-        text = self._normalize_panel_command_text(message)
-        wake_words = ("버디봇아", "버디봇", "버디", "buddybot", "buddy")
-
-        if text in wake_words:
-            return ""
-
-        for wake_word in wake_words:
-            if text.startswith(f"{wake_word} "):
-                return text[len(wake_word):].strip()
-            if text.startswith(wake_word) and len(text) > len(wake_word):
-                return text[len(wake_word):].strip()
-        return text
+        return self._split_wake_command(message)[1]
 
     def _resolve_navigation_target(self, text: str) -> Optional[tuple[str, str]]:
         data = self._load_waypoints()
@@ -1887,12 +1921,12 @@ class PanelBridge:
 
     def _handle_local_command(self, message: str, *, allow_help: bool = True) -> str:
         raw_text = self._normalize_panel_command_text(message)
-        wake_words = ("버디봇아", "버디봇", "버디", "buddybot", "buddy")
+        wake_detected, wake_command = self._split_wake_command(raw_text)
 
-        if raw_text in wake_words:
+        if wake_detected and not wake_command:
             return "네."
 
-        text = self._strip_wake_prefix(message)
+        text = wake_command if wake_detected else self._strip_wake_prefix(message)
 
         if not text:
             return "네, 말씀하세요."
