@@ -1912,7 +1912,36 @@ class PanelBridge:
         if any(keyword in text for keyword in ("backward right", "diagonal backward right", "오른쪽 뒤로", "우측 뒤로", "오른쪽 뒤", "우측 뒤", "오른쪽 대각선 후진", "우측 대각선 후진")):
             self.manual_command("backward_right", 0.435)
             return "버디봇이 오른쪽 뒤로 이동합니다."
-        if any(keyword in text for keyword in ("come here", "come to me", "이리와", "일로와", "여기로와", "이쪽으로와", "내쪽으로와", "나한테 와", "나에게 와", "앞으로 와", "가까이 와")):
+        if any(keyword in text for keyword in (
+            "come here",
+            "come to me",
+            "이리와",
+            "이리 와",
+            "이리와줘",
+            "이리 와줘",
+            "일로와",
+            "일로 와",
+            "일로와줘",
+            "일로 와줘",
+            "일루와",
+            "일루 와",
+            "이루와",
+            "이루 와",
+            "여기로와",
+            "여기로 와",
+            "이쪽으로와",
+            "이쪽으로 와",
+            "내쪽으로와",
+            "내 쪽으로 와",
+            "나한테 와",
+            "나한테와",
+            "나에게 와",
+            "나에게와",
+            "앞으로 와",
+            "앞으로와",
+            "가까이 와",
+            "가까이와",
+        )):
             self.manual_command("forward", 0.46)
             return "버디봇이 3초 동안 앞으로 이동합니다."
         if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
