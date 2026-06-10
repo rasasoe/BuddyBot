@@ -57,8 +57,21 @@ class VoiceInterface(Node):
         ("버디봇이", "버디봇"),
         ("버디 봇", "버디봇"),
         ("버디 못", "버디봇"),
+        ("버디복", "버디봇"),
+        ("버디 봄", "버디봇"),
+        ("버디봄", "버디봇"),
+        ("버디본", "버디봇"),
+        ("버디 본", "버디봇"),
+        ("버디볼", "버디봇"),
+        ("버디 볼", "버디봇"),
+        ("버디벗", "버디봇"),
+        ("버디 벗", "버디봇"),
         ("바디봇", "버디봇"),
         ("바디 봇", "버디봇"),
+        ("바디복", "버디봇"),
+        ("바디본", "버디봇"),
+        ("바디봄", "버디봇"),
+        ("바디볼", "버디봇"),
         ("버디보", "버디봇"),
         ("버디 보", "버디봇"),
         ("버디봉", "버디봇"),
@@ -68,6 +81,8 @@ class VoiceInterface(Node):
         ("buddy bot", "buddybot"),
     )
     COMMAND_ALIAS_REPLACEMENTS = (
+        ("사사용자", "사용자"),
+        ("사용 자", "사용자"),
         ("사용자 조정", "사용자 추종"),
         ("사용자조정", "사용자 추종"),
         ("사용자 조종", "사용자 추종"),
@@ -276,12 +291,18 @@ class VoiceInterface(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
         )
+        command_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
         self.response_pub = self.create_publisher(String, "/voice/response", 10)
         self.command_pub = self.create_publisher(String, "/voice/command_status", status_qos)
-        self.manual_pub = self.create_publisher(Twist, "/cmd_vel_manual", 10)
-        self.follow_pub = self.create_publisher(Bool, "/follow/enabled", 10)
-        self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", 10)
-        self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", 10)
+        self.manual_pub = self.create_publisher(Twist, "/cmd_vel_manual", command_qos)
+        self.follow_pub = self.create_publisher(Bool, "/follow/enabled", command_qos)
+        self.nav_cancel_pub = self.create_publisher(String, "/nav/cancel", command_qos)
+        self.waypoint_goal_pub = self.create_publisher(String, "/nav/waypoint_goal", command_qos)
         self.create_subscription(String, "/voice/text", self.text_callback, 10)
         self.create_subscription(Bool, "/voice/enabled", self.voice_enabled_callback, status_qos)
         self.create_subscription(Bool, "/voice/assistant_enabled", self.voice_assistant_callback, status_qos)

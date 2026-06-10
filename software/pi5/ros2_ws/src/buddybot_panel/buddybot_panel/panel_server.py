@@ -373,6 +373,7 @@ class PanelBridge:
             self._manual_pub = self._node.create_publisher(Twist, "/cmd_vel_manual", command_qos)
             self._manual_avoidance_pub = self._node.create_publisher(Bool, "/system/manual_avoidance_enabled", state_qos)
             self._follow_pub = self._node.create_publisher(Bool, "/follow/enabled", command_qos)
+            self._node.create_subscription(Bool, "/follow/enabled", self._follow_enabled_callback, command_qos)
             self._voice_enabled_pub = self._node.create_publisher(Bool, "/voice/enabled", state_qos)
             self._voice_assistant_pub = self._node.create_publisher(Bool, "/voice/assistant_enabled", state_qos)
             self._voice_server_url_pub = self._node.create_publisher(String, "/voice/server_url", state_qos)
@@ -1431,12 +1432,6 @@ class PanelBridge:
         self._explore_last_sweep_at = started_at
 
     def _mini_map_timer(self) -> None:
-        # Always publish follow-enable state so follow_controller stays in sync.
-        if self.ros2_connected and self._follow_pub is not None:
-            fmsg = Bool()
-            fmsg.data = self.follow_enabled
-            self._follow_pub.publish(fmsg)
-
         with self._lock:
             active = bool(self._mini_map_active)
             auto_drive = bool(self._mini_map_auto_drive)
@@ -1719,6 +1714,16 @@ class PanelBridge:
         if update_last_command:
             self.last_command = "follow_on" if self.follow_enabled else "follow_off"
         self._publish_follow_state(self.follow_enabled)
+
+    def _follow_enabled_callback(self, msg: Bool) -> None:
+        enabled = bool(msg.data)
+        if self.follow_enabled == enabled:
+            return
+        self.follow_enabled = enabled
+        if enabled:
+            self._clear_manual_motion()
+            self.cancel_navigation()
+        self.last_command = "follow_on_external" if enabled else "follow_off_external"
 
     def _manual_publish_timer(self) -> None:
         with self._lock:
