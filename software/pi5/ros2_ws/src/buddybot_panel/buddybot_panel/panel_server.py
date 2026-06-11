@@ -1976,8 +1976,8 @@ class PanelBridge:
             "가까이 와",
             "가까이와",
         )):
-            self.manual_command("forward", 0.46)
-            return "버디봇이 3초 동안 앞으로 이동합니다."
+            self.set_follow_enabled(True)
+            return "사용자 추종을 시작했습니다."
         if any(keyword in text for keyword in ("forward", "go ahead", "앞으로", "전진")):
             self.manual_command("forward", 0.46)
             return "버디봇이 앞으로 이동합니다."
@@ -2008,6 +2008,18 @@ class PanelBridge:
             ("사용자 조종 시작", "사용자 추종 시작"),
             ("사용자 추종시작", "사용자 추종 시작"),
             ("사용자추종시작", "사용자 추종 시작"),
+            ("나 따라 와줘", "나 따라와"),
+            ("나따라와줘", "나 따라와"),
+            ("나 따라와줘", "나 따라와"),
+            ("나 따라 와", "나 따라와"),
+            ("나따라와", "나 따라와"),
+            ("날 따라와", "나 따라와"),
+            ("날 따라 와", "나 따라와"),
+            ("저 따라와", "나 따라와"),
+            ("저 따라 와", "나 따라와"),
+            ("따라 와줘", "따라와"),
+            ("따라와줘", "따라와"),
+            ("따라 와", "따라와"),
         ):
             text = text.replace(alias, canonical)
         if any(keyword in text for keyword in ("follow stop", "unfollow", "추종 중지", "추종 정지", "사용자 추종 중지", "사용자 추종 정지", "따라오지마", "따라오지 마", "추종 꺼")):

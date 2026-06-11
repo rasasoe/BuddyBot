@@ -121,6 +121,17 @@ class VoiceInterface(Node):
         ("사람추종", "사용자 추종"),
         ("사람 따라 와", "사람 따라와"),
         ("사람따라와", "사람 따라와"),
+        ("나 따라 와줘", "나 따라와"),
+        ("나 따라와줘", "나 따라와"),
+        ("나 따라 와", "나 따라와"),
+        ("나따라와", "나 따라와"),
+        ("날 따라와", "나 따라와"),
+        ("날 따라 와", "나 따라와"),
+        ("저 따라와", "나 따라와"),
+        ("저 따라 와", "나 따라와"),
+        ("따라 와줘", "따라와"),
+        ("따라와줘", "따라와"),
+        ("따라 와", "따라와"),
         ("조정 시작", "추종 시작"),
         ("조종 시작", "추종 시작"),
         ("추정 시작", "추종 시작"),
@@ -157,7 +168,6 @@ class VoiceInterface(Node):
         ("가까이와", "가까이 와"),
         ("가까이 와줘", "가까이 와"),
         ("가까이와줘", "가까이 와"),
-        ("따라 와", "따라와"),
         ("따라 오지마", "따라오지마"),
         ("따라 오지 마", "따라오지 마"),
     )
@@ -195,7 +205,6 @@ class VoiceInterface(Node):
         self.declare_parameter("manual_override_ignore_sec", 2.0)
         self.declare_parameter("manual_command_timeout_sec", 2.0)
         self.declare_parameter("nudge_duration_sec", 2.5)
-        self.declare_parameter("come_here_duration_sec", 3.0)
         self.declare_parameter("continuous_command_max_sec", 0.0)
         self.declare_parameter("zero_burst_count", 4)
         self.declare_parameter(
@@ -279,7 +288,6 @@ class VoiceInterface(Node):
         self.manual_override_ignore_sec = float(self.get_parameter("manual_override_ignore_sec").value)
         self.manual_command_timeout_sec = float(self.get_parameter("manual_command_timeout_sec").value)
         self.nudge_duration_sec = float(self.get_parameter("nudge_duration_sec").value)
-        self.come_here_duration_sec = float(self.get_parameter("come_here_duration_sec").value)
         self.continuous_command_max_sec = float(self.get_parameter("continuous_command_max_sec").value)
         self.zero_burst_count = max(1, int(self.get_parameter("zero_burst_count").value))
         normalized_wake_words = [
@@ -678,20 +686,13 @@ class VoiceInterface(Node):
             self._log_voice_classification(
                 raw_text=message,
                 normalized_text=text,
-                matched_intent="come_here",
+                matched_intent="follow_start",
                 matched_keywords=self._matched_keywords(command_text, self.COME_HERE_WORDS),
-                command_mode="nudge",
+                command_mode="follow",
                 stop_priority_applied=False,
             )
-            self._start_manual_motion(
-                self.manual_speed,
-                0.0,
-                self.forward_yaw_trim,
-                self.come_here_duration_sec,
-                mode="nudge",
-                intent="come_here",
-            )
-            return "이리 갈게요."
+            self._set_follow_enabled(True)
+            return "추종 시작."
 
         if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
             self._log_voice_classification(
@@ -1133,7 +1134,7 @@ class VoiceInterface(Node):
         if self._matches_any(command_text, self.BACKWARD_RIGHT_WORDS):
             return "backward_right"
         if self._matches_any(command_text, self.COME_HERE_WORDS):
-            return "come_here"
+            return "follow_start"
         if self._matches_any(command_text, self.CONTINUOUS_FORWARD_WORDS) or self._is_continuous_forward(command_text):
             return "forward"
         if self._matches_any(command_text, self.FORWARD_WORDS):
@@ -1598,7 +1599,6 @@ class VoiceInterface(Node):
 
         forward_intents = {
             "forward",
-            "come_here",
             "forward_left",
             "forward_right",
             "backward_left",
