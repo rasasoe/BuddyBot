@@ -42,6 +42,9 @@
 버디 보
 버디보트
 버디
+비디봇
+비디 벗
+비디벗
 buddybot
 buddy bot
 buddy

@@ -37,6 +37,9 @@ BuddyBot의 음성 명령은 Raspberry Pi 5의 `buddybot_voice` 노드가 처리
 버디 보
 버디보트
 버디
+비디봇
+비디 벗
+비디벗
 buddybot
 buddy bot
 buddy

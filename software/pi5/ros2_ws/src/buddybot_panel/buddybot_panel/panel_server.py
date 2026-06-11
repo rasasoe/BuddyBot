@@ -1596,7 +1596,8 @@ class PanelBridge:
             return
         msg = Bool()
         msg.data = bool(enabled)
-        self._follow_pub.publish(msg)
+        for _ in range(3):
+            self._follow_pub.publish(msg)
 
     def _publish_manual_twist(self, linear_x: float, linear_y: float, angular_z: float) -> None:
         if not self.ros2_connected or self._manual_pub is None:
@@ -1852,6 +1853,10 @@ class PanelBridge:
             ("버디 봇", "버디봇"),
             ("바디 봇", "버디봇"),
             ("바디봇", "버디봇"),
+            ("비디 봇", "버디봇"),
+            ("비디봇", "버디봇"),
+            ("비디 벗", "버디봇"),
+            ("비디벗", "버디봇"),
             ("버디 보트", "버디보트"),
             ("버디 보", "버디보"),
             ("buddy bot", "buddybot"),
@@ -1867,6 +1872,8 @@ class PanelBridge:
             "버디보트",
             "버디보",
             "버디",
+            "비디봇",
+            "비디벗",
             "buddybot",
             "buddy",
         )
