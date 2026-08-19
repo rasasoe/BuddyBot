@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/portfolio/buddybot-hero.png" width="420" alt="완성된 BuddyBot 로봇">
+  <img src="docs/assets/portfolio/buddybot-hero-v2.jpg" width="420" alt="하단 옴니휠까지 온전히 보이는 완성된 BuddyBot 로봇">
 </p>
 
 <p align="center">
@@ -28,15 +28,16 @@ BuddyBot은 AI 객체·사람 인식, 음성 인터페이스와 ROS 2 자율주�
 
 이 프로젝트의 핵심은 기능을 단순히 한 보드에 연결한 것이 아니라, **변동성이 큰 Linux/AI 계층과 결정론적 모터·안전 계층의 책임을 분리**하고 여러 제어 입력이 충돌하지 않도록 하나의 최종 명령 경로로 통합한 것입니다.
 
-> 서버 AI는 대화와 음성 응답을 보조할 뿐 모터를 직접 제어하지 않습니다. 이동·정지·추종·체크포인트 명령은 로봇 내부의 로컬 제어 경로에서 처리합니다.
+> 서버컴 모드의 `BuddyBot-ai`는 음성 인식·통합 GUI를 통해 전진·정지·추종·체크포인트 이동 같은 **고수준 동작을 요청**할 수 있습니다. 다만 서버의 LLM이나 웹앱이 모터 PWM을 직접 생성하는 구조는 아닙니다. Pi 5가 요청을 ROS 2 제어 명령으로 판별·변환하고 `command_mux_node`가 최종 명령을 선택한 뒤, Pico가 운동학·PID·PWM과 watchdog 안전 제어를 수행합니다.
 
 ### AI 활용 범위
 
 | 영역 | AI 활용 방식 | 제어 연결 방식 |
 | --- | --- | --- |
 | 객체·사람 인식 | 카메라 영상에서 객체와 사용자를 검출해 추종 입력 생성 | 검출 결과를 `follow_controller`가 ROS 2 속도 명령으로 변환 |
-| 음성 인식 | “전진”, “멈춰”, “따라와”, 목적지 명령 등을 음성에서 텍스트로 변환 | 인식된 문장을 로컬 allowlist로 분류한 뒤 해당 ROS 2 명령 실행 |
-| 질의응답·음성 출력 | 서버 PC의 `BuddyBot-ai`가 간단한 질문에 답하고 STT/TTS를 보조 | 답변만 반환하며 모터 명령에는 직접 접근하지 않음 |
+| 음성 인식 | 서버컴 또는 Pi 5의 STT 경로가 “전진”, “멈춰”, “따라와”, 목적지 명령 등을 텍스트로 변환 | Pi 5가 인식 문장을 로컬 allowlist로 분류해 수동 주행·추종·내비게이션 ROS 2 명령으로 변환 |
+| 서버컴 통합 제어 | `BuddyBot-ai`의 음성 인터페이스·웹 GUI에서 수동 이동, 추종 시작·중지, 체크포인트 이동 요청 | 서버는 고수준 명령을 전달하고 Pi 5의 제어 노드와 command mux가 실제 실행 경로를 결정 |
+| 질의응답·음성 출력 | 서버 PC의 `BuddyBot-ai`가 간단한 질문에 답하고 STT/TTS를 제공 | LLM 대화 응답과 모터의 저수준 제어를 분리 |
 | 자율주행·안전 | ROS 2 내비게이션, LiDAR 회피, command mux와 Pico watchdog 사용 | AI 판단과 분리된 결정론적 제어 경로 유지 |
 
 ## 동작 데모
@@ -59,7 +60,7 @@ BuddyBot은 AI 객체·사람 인식, 음성 인터페이스와 ROS 2 자율주�
   <sub>이미지를 누르면 소리가 포함된 전체 영상이 열립니다.</sub>
 </p>
 
-호출어와 전진 명령을 로컬에서 분류하여 ROS 2 속도 명령으로 변환하고, Pi 5–Pico 제어 경로를 거쳐 실제 모터를 구동했습니다.
+서버컴 또는 Pi 5의 STT가 호출어와 전진 음성을 텍스트로 변환하면, Pi 5가 로봇 명령을 로컬에서 판별해 ROS 2 속도 명령으로 변환하고 Pi 5–Pico 제어 경로를 거쳐 실제 모터를 구동했습니다.
 
 ## 핵심 기능
 
@@ -77,9 +78,11 @@ BuddyBot은 AI 객체·사람 인식, 음성 인터페이스와 ROS 2 자율주�
 
 ```mermaid
 flowchart TB
-    User["사용자"] --> UI["음성 · 웹/모바일 패널"]
+    User["사용자"] --> LocalUI["Pi 음성 · 로컬 패널"]
+    User --> Server["BuddyBot-ai · 서버컴<br/>STT/TTS · 대화 · 통합 GUI"]
     Sensors["LiDAR · Camera · Encoders"] --> Brain
-    UI --> Brain
+    LocalUI --> Brain
+    Server -->|"고수준 동작 요청<br/>수동 · 추종 · 체크포인트"| Brain
 
     subgraph Brain["Raspberry Pi 5 · ROS 2 Brain"]
         Behaviors["Navigation · Follow · Manual"] --> Mux["Command Mux"]
@@ -94,8 +97,6 @@ flowchart TB
     end
 
     Control --> Drive["3× Motor · Omni Wheel"]
-    UI -. "일반 대화" .-> Server["BuddyBot-ai · Optional"]
-    Server -. "STT/TTS · 응답" .-> UI
 ```
 
 ### 계층별 책임
@@ -104,7 +105,7 @@ flowchart TB
 | --- | --- |
 | Raspberry Pi 5 | ROS 2 노드 오케스트레이션, LiDAR/비전 처리, 추종·내비게이션, 명령 중재, 상태 패널 |
 | Raspberry Pi Pico | 옴니휠 운동학, 엔코더 피드백, PID/PWM 모터 제어, watchdog 및 정지 래치 |
-| BuddyBot-ai | 선택적 대화·STT·TTS 서버. 모터 제어 경로와 분리 |
+| BuddyBot-ai | 선택적 대화·STT·TTS·통합 GUI 및 고수준 로봇 명령 요청. 저수준 모터 제어는 Pi 5–Pico 경로에 위임 |
 
 ## 주요 설계 결정
 
@@ -133,9 +134,9 @@ Pico → Pi 5 : ACK,* | STAT,* | RPM,* | SAFE,*
 
 잘못된 패킷은 무시하고, 속도 값은 허용 범위로 제한하며, 연결이 복구되면 bridge가 자동 재연결합니다.
 
-### 4. AI 서버와 로봇 제어의 분리
+### 4. 서버컴의 고수준 명령과 저수준 모터 제어의 분리
 
-일반 대화와 긴 TTS 응답은 [BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)로 보낼 수 있습니다. 그러나 정지·주행·추종·체크포인트 이동은 Pi 5에서 allowlist 기반 로컬 명령으로 먼저 판별합니다. 네트워크나 서버 장애가 로봇의 기본 이동·정지 기능을 막지 않도록 한 설계입니다.
+[BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)는 일반 대화와 STT/TTS뿐 아니라 서버 GUI·음성을 통한 수동 이동, 추종 시작·중지, 체크포인트 이동 같은 고수준 요청을 제공합니다. 음성 명령은 서버컴이 텍스트로 변환하더라도 Pi 5에서 allowlist 기반 로봇 명령으로 판별하며, 서버가 보낸 동작 요청 역시 Pi 5의 ROS 2 제어 노드와 command mux를 거쳐 실행됩니다. 서버의 LLM·웹앱은 Pico의 운동학·PID·PWM에 직접 접근하지 않으며, 서버가 없어도 로컬 패널과 기본 제어 경로를 사용할 수 있도록 분리했습니다.
 
 ## 시스템 통합 화면
 
@@ -246,4 +247,4 @@ bash scripts/start_presentation_mode.sh mapping
 
 ## Companion Repository
 
-[BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)는 서버 PC에서 실행되는 선택적 AI 서비스입니다. 대화, STT/TTS 실험과 응답 생성을 담당하며 실제 로봇 제어와 안전 로직은 이 저장소에 유지합니다.
+[BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)는 서버 PC에서 실행되는 선택적 AI·관제 서비스입니다. 대화와 STT/TTS, 통합 GUI, 수동 이동·추종·체크포인트 이동 같은 고수준 명령 요청을 담당합니다. 요청의 ROS 2 명령 변환·중재와 Pico의 모터·안전 제어는 이 저장소의 Pi 5–Pico 경로가 담당합니다.
