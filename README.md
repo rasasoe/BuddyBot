@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:0f766e,100:84cc16&height=190&section=header&text=BuddyBot&fontSize=62&fontColor=ffffff&animation=fadeIn&fontAlignY=36&desc=ROS%202%20Indoor%20Autonomous%20%26%20Interactive%20Robot&descAlignY=58&descAlign=50" alt="BuddyBot animated banner" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:0f766e,100:84cc16&height=190&section=header&text=BuddyBot&fontSize=62&fontColor=ffffff&animation=fadeIn&fontAlignY=36&desc=ROS%202%20Indoor%20Autonomous%20and%20Interactive%20Robot&descAlignY=58&descAlign=50" alt="BuddyBot animated banner" />
 
 <br>
 
