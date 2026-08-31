@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:0f766e,100:84cc16&height=190&section=header&text=BuddyBot&fontSize=62&fontColor=ffffff&animation=fadeIn&fontAlignY=36&desc=ROS%202%20Indoor%20Autonomous%20and%20Interactive%20Robot&descAlignY=58&descAlign=50" alt="BuddyBot animated banner" />
+<img src="docs/assets/portfolio/buddybot-banner.svg" alt="BuddyBot ROS 2 indoor robot banner" />
 
 <br>
 
@@ -257,7 +257,7 @@ Pico → Pi 5 : ACK,* | STAT,* | RPM,* | SAFE,*
 - Raspberry Pi 5
 - Raspberry Pi Pico (RP2040)
 - RPLIDAR A1M8
-- Logitech C920e USB 웹캠 — 객체·사람 인식용 카메라와 웨이크워드·음성 명령·AI 질의 입력용 내장 마이크
+- Logitech C920e (USB 웹캠·내장 마이크) — 사용자 추종 영상과 음성 입력
 - VL53L0X ToF 센서와 I2C multiplexer
 - 3륜 옴니휠, DC 기어드 모터와 엔코더
 - 모터 드라이버 및 전원 계통
