@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:0f766e,100:84cc16&height=190&section=header&text=BuddyBot&fontSize=62&fontColor=ffffff&animation=fadeIn&fontAlignY=36&desc=ROS%202%20Indoor%20Autonomous%20and%20Interactive%20Robot&descAlignY=58&descAlign=50" alt="BuddyBot animated banner" />
+<img src="docs/assets/portfolio/buddybot-banner.svg" alt="BuddyBot ROS 2 indoor robot banner" />
 
 <br>
 
@@ -44,6 +44,7 @@ Raspberry Pi 5의 인지·계획과 Raspberry Pi Pico의 모터·안전 제어�
 ## 목차
 
 - [프로젝트 소개](#프로젝트-소개)
+- [로봇 개발 계보](#로봇-개발-계보)
 - [동작 데모](#동작-데모)
 - [핵심 기능](#핵심-기능)
 - [전체 아키텍처](#전체-아키텍처)
@@ -63,6 +64,45 @@ BuddyBot은 카메라·마이크 입력, AI 객체·사람 인식, 음성 인터
 이 프로젝트의 핵심은 기능을 단순히 한 보드에 연결한 것이 아니라, **변동성이 큰 Linux/AI 계층과 결정론적 모터·안전 계층의 책임을 분리**하고 여러 제어 입력이 충돌하지 않도록 하나의 최종 명령 경로로 통합한 것입니다.
 
 > 서버컴 모드의 `BuddyBot-ai`는 음성 인식·통합 GUI를 통해 전진·정지·추종·체크포인트 이동 같은 **고수준 동작을 요청**할 수 있습니다. 다만 서버의 LLM이나 웹앱이 모터 PWM을 직접 생성하는 구조는 아닙니다. Pi 5가 요청을 ROS 2 제어 명령으로 판별·변환하고 `command_mux_node`가 최종 명령을 선택한 뒤, Pico가 운동학·PID·PWM과 watchdog 안전 제어를 수행합니다.
+
+## 로봇 개발 계보
+
+BuddyBot은 독립적으로 갑자기 만들어진 결과물이 아니라, 앞선 두 로봇 프로젝트에서 쌓은 구동·센서·피드백 제어 경험을 ROS 2 기반 시스템 통합으로 확장한 프로젝트입니다.
+
+```mermaid
+flowchart LR
+    M["MRP3MV4<br/>AVR · LM629<br/>PSD · Camera Demo"]
+    A["AMR<br/>RP2040 · Encoder<br/>P Control · Kinematics"]
+    B["BuddyBot<br/>ROS 2 · LiDAR · Vision/Voice<br/>Command Mux · Watchdog"]
+
+    M -->|"센서 기반 구동 경험"| A
+    A -->|"피드백 제어를 시스템으로 확장"| B
+```
+
+<table>
+  <tr>
+    <th width="30%"><a href="https://github.com/rasasoe/MRP3MV4">1. MRP3MV4</a></th>
+    <th width="30%"><a href="https://github.com/rasasoe/AMR">2. AMR</a></th>
+    <th width="40%">3. BuddyBot</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/portfolio/evolution-mrp3mv4.gif" width="260" alt="MRP3MV4 센서 기반 주행 데모"></td>
+    <td align="center"><img src="docs/assets/portfolio/evolution-amr.gif" width="260" alt="AMR 엔코더 피드백 제어 개발 장면"></td>
+    <td align="center"><img src="docs/assets/portfolio/checkpoint-navigation.gif" width="300" alt="BuddyBot 체크포인트 자율이동과 장애물 회피"></td>
+  </tr>
+  <tr>
+    <td><b>보드 중심 동작 실험</b><br>AVR·LM629 기반 3륜 홀로노믹 구동과 PSD·카메라 데모</td>
+    <td><b>직접 구현한 피드백 제어</b><br>Pico·엔코더·P제어와 역기구학을 이용한 바퀴별 속도 제어</td>
+    <td><b>분산형 로봇 시스템 통합</b><br>Pi 5–Pico 책임 분리, ROS 2, LiDAR, 추종·음성, 명령 중재와 안전 제어</td>
+  </tr>
+</table>
+
+| 전환 | 새로 해결한 문제 | BuddyBot으로 이어진 경험 |
+| --- | --- | --- |
+| MRP3MV4 → AMR | 완성 보드의 데모 호출에서 벗어나 모터·엔코더·운동학을 직접 구성 | 3륜 옴니휠 구동 원리와 센서 피드백 제어 이해 |
+| AMR → BuddyBot | 단일 MCU 제어를 상위 인지·계획과 하위 실시간 제어로 분리 | Pi 5–Pico 구조, ROS 2 명령 경로, command mux와 watchdog 설계 |
+
+> 세 저장소는 하나의 코드베이스를 그대로 이어 붙인 버전 관계가 아닙니다. 각 단계에서 검증한 제어 원리와 통합 경험이 다음 프로젝트의 설계 기반으로 이어진 **기술 발전 과정**입니다.
 
 ### AI 활용 범위
 
@@ -217,7 +257,7 @@ Pico → Pi 5 : ACK,* | STAT,* | RPM,* | SAFE,*
 - Raspberry Pi 5
 - Raspberry Pi Pico (RP2040)
 - RPLIDAR A1M8
-- Logitech C920e USB 웹캠 — 객체·사람 인식용 카메라와 웨이크워드·음성 명령·AI 질의 입력용 내장 마이크
+- Logitech C920e (USB 웹캠·내장 마이크) — 사용자 추종 영상과 음성 입력
 - VL53L0X ToF 센서와 I2C multiplexer
 - 3륜 옴니휠, DC 기어드 모터와 엔코더
 - 모터 드라이버 및 전원 계통

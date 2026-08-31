@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="260" viewBox="0 0 1200 260" role="img" aria-labelledby="title desc">
+  <title id="title">BuddyBot</title>
+  <desc id="desc">ROS 2 indoor autonomous and interactive robot</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0.52" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#84cc16"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="260" rx="22" fill="url(#background)"/>
+  <circle cx="1040" cy="38" r="180" fill="url(#glow)"/>
+  <circle cx="80" cy="235" r="150" fill="#ffffff" opacity="0.05"/>
+
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.14">
+    <path d="M0 52H1200"/>
+    <path d="M0 104H1200"/>
+    <path d="M0 156H1200"/>
+    <path d="M0 208H1200"/>
+    <path d="M150 0V260"/>
+    <path d="M300 0V260"/>
+    <path d="M450 0V260"/>
+    <path d="M600 0V260"/>
+    <path d="M750 0V260"/>
+    <path d="M900 0V260"/>
+    <path d="M1050 0V260"/>
+  </g>
+
+  <text x="600" y="105" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="68" font-weight="750" text-anchor="middle">BuddyBot</text>
+  <text x="600" y="148" fill="#ecfeff" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="500" text-anchor="middle">ROS 2 Indoor Autonomous &amp; Interactive Robot</text>
+  <text x="600" y="185" fill="#f7fee7" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="16" text-anchor="middle">MRP3MV4  →  AMR  →  Distributed Robot System</text>
+
+  <path d="M0 218 C180 185 310 252 510 222 C700 194 842 250 1015 217 C1080 204 1145 198 1200 204 V260 H0 Z" fill="#ffffff" opacity="0.13"/>
+  <path d="M0 236 C220 206 360 269 585 235 C790 204 963 250 1200 221 V260 H0 Z" fill="#ffffff" opacity="0.24"/>
+</svg>
