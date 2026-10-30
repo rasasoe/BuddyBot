@@ -1,5 +1,8 @@
 # BuddyBot
 
+<p align="center"><b>🌐 Language</b> &nbsp; <strong>🇰🇷 한국어</strong> &nbsp; | &nbsp; <a href="README.en.md">🇺🇸 English</a></p>
+
+
 <div align="center">
 
 <img src="docs/assets/portfolio/buddybot-banner.svg" alt="BuddyBot ROS 2 indoor robot banner" />
