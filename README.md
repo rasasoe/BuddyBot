@@ -1,289 +1,187 @@
-# BuddyBot
+<p align="right"><strong>한국어</strong> &nbsp; / &nbsp; <a href="README.en.md">English</a></p>
 
-<p align="center"><b>🌐 Language</b> &nbsp; <strong>🇰🇷 한국어</strong> &nbsp; | &nbsp; <a href="README.en.md">🇺🇸 English</a></p>
+<p align="center">
+  <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot — home AI serving robot prototype">
+</p>
 
+**가정용 AI 서빙 로봇 프로토타입**  
+2025.03–2026.06 · 3인 팀 · **팀장 / 시스템 아키텍처 설계·통합**
 
-<div align="center">
+<p align="center">
+  <img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" width="100%" alt="실제 제작된 BuddyBot의 로봇 전체 모습. 상단 센서부터 하단 옴니휠까지 보이는 사진">
+</p>
 
-<img src="docs/assets/portfolio/buddybot-banner.svg" alt="BuddyBot ROS 2 indoor robot banner" />
+가정에서 음성으로 요청하면 주변을 인식하고, 장애물을 피해 이동하며, 필요할 때 사람을 따라오는 **AI 서빙 로봇을 직접 만들어보자**는 아이디어에서 시작했습니다. 그 목표에 필요한 구동·센서·음성·인지 기능을 단계적으로 구현하고 ROS 2 기반의 실물 프로토타입으로 통합했습니다.
 
-<br>
-
-<b>가정용 AI 서빙 로봇을 목표로 개발한 실내 자율주행·상호작용 프로토타입</b><br>
-Raspberry Pi 5의 인지·계획과 Raspberry Pi Pico의 모터·안전 제어를 분리한<br>
-<b>Brain–Spinal 분산 제어 아키텍처</b>
-
-</div>
-
-<br>
-
-<p align="center"><img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" width="100%" alt="실제 제작한 BuddyBot 3륜 옴니휠 로봇"></p>
-
-**개발:** 2025.03–2026.06 · 3인 팀  
-**역할:** 팀장, 시스템 아키텍처 설계 및 ROS 2·MCU 통합  
-**결과:** 실물 체크포인트 주행·회피·추종·음성 제어·비상정지 시연
+[로봇 개발 과정](#개발의-흐름-mrp3mv4--amr--buddybot) · [실물 주행 영상](#실제-동작-시연) · [시스템 아키텍처](#시스템-아키텍처) · [내 역할](#팀-구성과-담당-역할)
 
 ---
 
-[개발 배경](#기획-배경과-개발-목표) · [실물 시연](#동작-데모) · [시스템 구조](#전체-아키텍처) · [실행 방법](#실행-및-문서)
+## 기획: 무엇을 만들고 싶었나
 
-## 기획 배경과 개발 목표
+집에서 사용자의 요청에 반응하는 로봇을 만들려면, 단순히 바퀴만 움직이는 것으로는 부족합니다. **공간 인식, 사람 인식, 목적지 이동, 음성 상호작용, 안전한 정지**가 한 시스템 안에서 동작해야 합니다.
 
-**개발 기간:** 2025.03–2026.06 · **3인 팀 / 팀장·아키텍처·통합 담당**
+그래서 다음 기능을 개발 과제로 정했습니다.
 
-**출발점은 '가정용 AI 서빙 로봇을 직접 만들어보자'는 아이디어**였습니다. 사람이 집 안에서 음성으로 요청하면 로봇이 주변 환경을 인식하고 장애물을 피하며 목적지로 이동하고, 필요할 때 사용자를 따라오는 형태를 구상했습니다.
+- **이동:** 3륜 옴니휠, 엔코더 기반 모터 제어, 목적지 주행
+- **주변 인식:** LiDAR·ToF 센서로 장애물 감지 및 회피
+- **사람 인식:** 카메라 기반 검출과 사용자 추종
+- **상호작용:** 마이크·STT 음성 명령, 응답 및 제어 패널
+- **통합·안전:** 서로 다른 입력을 중재하고, 통신 이상 시 정지하는 제어 구조
 
-이를 구현하기 위해 필요한 기술과 기능을 다음과 같이 나누었습니다.
+이 프로젝트의 결과물은 **이동·인지·상호작용 기능을 갖춘 실물 로봇 프로토타입**입니다. 실제 물품의 적재·운반·전달까지 완성한 상용 서빙 로봇으로 소개하지 않습니다.
 
-| 필요 기능 | 선택한 기술과 구현 방향 |
-| --- | --- |
-| 실내 공간 인식 및 안전한 이동 | LiDAR·ToF 센서, 장애물 감지·회피, ROS 2 내비게이션 |
-| 사람·주변 객체 인식 | 카메라, 객체·사람 검출 및 사용자 추종 |
-| 자연스러운 명령과 상호작용 | 마이크·음성 인식(STT), 음성 명령·응답 |
-| 실제 이동과 정지 | 3륜 옴니휠, 모터·엔코더 제어, command mux·watchdog |
-| 제어 기능 통합 | Raspberry Pi 5의 인지·주행 처리와 Pico의 모터 제어를 분리하고 UART로 연동 |
+## 개발의 흐름: MRP3MV4 → AMR → BuddyBot
 
-**구현 결과:** 체크포인트 자율이동·장애물 회피, 사람 인식·추종, 음성 명령, 수동 제어, 비상정지를 실물 로봇에서 시연했습니다. 세부 동작과 영상은 아래 [동작 데모](#동작-데모)에서 확인할 수 있습니다.
+한 번에 완성형 로봇을 만든 것이 아닙니다. 별도 프로젝트를 거치며 **보드 기반 주행 경험 → 직접 구현한 피드백 제어 → ROS 2 기반 분산 시스템 통합**으로 개발 역량을 확장했습니다. 세 프로젝트는 같은 소스코드를 버전업한 관계가 아니라, 앞선 경험이 다음 설계에 활용된 과정입니다.
 
-**프로토타입의 범위:** 가정용 서빙 로봇이라는 기획 목표를 바탕으로 이동·인지·상호작용의 핵심 기능을 구현한 결과입니다. 실제 물품 적재·운반·전달의 전 과정이나 가정용 제품 수준의 신뢰성·안전성까지 완성했다고 주장하지 않습니다.
-
-## 프로젝트 소개
-
-BuddyBot은 카메라·마이크 입력, AI 객체·사람 인식, 음성 인터페이스와 ROS 2 자율주행을 결합해 실내에서 사람과 상호작용하며 이동하는 3륜 옴니휠 로봇 프로토타입입니다.
-상위 Raspberry Pi 5는 ROS 2 기반의 센서 처리·인지·경로 계획·명령 중재를 담당하고, 하위 Raspberry Pi Pico는 50 Hz 모터 제어 루프와 watchdog 기반 fail-safe를 담당합니다.
-
-이 프로젝트의 핵심은 기능을 단순히 한 보드에 연결한 것이 아니라, **변동성이 큰 Linux/AI 계층과 결정론적 모터·안전 계층의 책임을 분리**하고 여러 제어 입력이 충돌하지 않도록 하나의 최종 명령 경로로 통합한 것입니다.
-
-> 서버컴 모드의 `BuddyBot-ai`는 음성 인식·통합 GUI를 통해 전진·정지·추종·체크포인트 이동 같은 **고수준 동작을 요청**할 수 있습니다. 다만 서버의 LLM이나 웹앱이 모터 PWM을 직접 생성하는 구조는 아닙니다. Pi 5가 요청을 ROS 2 제어 명령으로 판별·변환하고 `command_mux_node`가 최종 명령을 선택한 뒤, Pico가 운동학·PID·PWM과 watchdog 안전 제어를 수행합니다.
-
-## 이전 로봇 제작 경험
-
-앞선 **[MRP3MV4](https://github.com/rasasoe/MRP3MV4)**에서 센서 기반 구동을, **[AMR](https://github.com/rasasoe/AMR)**에서 엔코더 피드백과 바퀴별 속도 제어를 경험했습니다. 이 경험을 BuddyBot의 ROS 2·MCU 통합 설계에 활용했습니다. 세 프로젝트는 서로 별도 저장소입니다.
-
-## 동작 데모
-
-### 체크포인트 자율이동 및 LiDAR 장애물 회피
+### 01 / [MRP3MV4 — AVR 기반 로봇 구동 경험](https://github.com/rasasoe/MRP3MV4)
 
 <p align="center">
-  <img src="docs/assets/portfolio/checkpoint-navigation-polished.gif" width="560" alt="실제 BuddyBot의 체크포인트 주행과 LiDAR 장애물 회피 애니메이션">
+  <img src="docs/assets/portfolio/evolution-mrp3mv4.gif" width="460" alt="MRP3MV4 AVR·LM629 기반 홀로노믹 로봇 주행 데모">
 </p>
 
-[원본 주행 GIF](docs/assets/portfolio/checkpoint-navigation.gif) · [색감 보정본](docs/assets/portfolio/checkpoint-navigation-polished.gif)
+**무엇을 했나:** AVR·LM629 기반 3륜 홀로노믹 로봇의 구동과 PSD 센서·카메라를 이용한 동작 실험을 수행했습니다. 보드와 제공된 제어·데모 구조를 활용하면서 센서 입력이 이동 동작으로 연결되는 과정을 익혔습니다.
 
-저장된 체크포인트로 이동하는 동안 LiDAR 스캔을 이용해 진행 방향의 장애물을 감지하고 회피 명령을 우선 적용했습니다.
+**다음 과제:** 미리 구성된 제어 기능을 사용하는 데서 나아가, 모터 속도 제어와 엔코더 피드백을 직접 구현해보고 싶었습니다.
 
-### 사용자 추종 — 인식 화면과 실물 주행
-
-**인식·추종 화면**
-
-<p align="center"><img src="docs/assets/portfolio/person-follow-panel.gif" width="360" alt="카메라 기반 사람 검출 및 추종 상태 화면"></p>
-
-**실물 사용자 추종**
-
-<p align="center"><a href="docs/assets/portfolio/person-follow-physical.mp4"><img src="docs/assets/portfolio/person-follow-physical-cover.jpg" width="360" alt="BuddyBot 사용자 추종 실제 영상 미리보기"></a></p>
-
-[사용자 추종 실물 영상 재생](docs/assets/portfolio/person-follow-physical.mp4)
-
-### 음성 명령 주행
+### 02 / [AMR — Pico 기반 엔코더·P제어 구현](https://github.com/rasasoe/AMR)
 
 <p align="center">
-  <a href="docs/assets/portfolio/voice-command.mp4">
-    <img src="docs/assets/portfolio/voice-command-cover.jpg" width="430" alt="음성 명령으로 전진하는 BuddyBot">
-  </a>
-  <br>
-  <sub>이미지를 누르면 소리가 포함된 전체 영상이 열립니다.</sub>
+  <img src="docs/assets/portfolio/evolution-amr.gif" width="460" alt="AMR 프로젝트의 3륜 로봇 제작과 모터 제어 실험">
 </p>
 
-서버컴 또는 Pi 5의 STT가 호출어와 전진 음성을 텍스트로 변환하면, Pi 5가 로봇 명령을 로컬에서 판별해 ROS 2 속도 명령으로 변환하고 Pi 5–Pico 제어 경로를 거쳐 실제 모터를 구동했습니다.
+**무엇을 했나:** Raspberry Pi Pico에서 바퀴별 엔코더 값을 읽고, **P제어**로 목표 속도와 실제 속도의 차이를 줄이는 로직을 구현했습니다. 역기구학을 이용해 로봇의 이동 방향·회전 요구를 각 바퀴의 목표 RPM으로 변환했습니다.
 
-### 서버 AI 질의응답 — 날씨
+**다음 과제:** 로봇이 바퀴를 안정적으로 돌리는 것만으로는 실내 서비스가 불가능합니다. 환경·사람을 인식하고, 자율주행·음성 명령과 모터 제어를 하나의 시스템으로 연결해야 했습니다.
+
+### 03 / BuddyBot — ROS 2 기반 실내 AI 로봇 통합
+
+**무엇을 했나:** Raspberry Pi 5에서 LiDAR·카메라·음성 입력과 ROS 2 주행·추종 기능을 처리하고, Raspberry Pi Pico에 모터 구동과 watchdog을 분리했습니다. 서로 다른 명령은 `command_mux`에서 우선순위를 결정하도록 설계했습니다.
+
+**결과:** 실물 로봇으로 체크포인트 자율이동, 장애물 회피, 사용자 추종, 음성·수동 제어 및 비상정지를 시연했습니다. 아래 영상에서 실제 동작을 볼 수 있습니다.
+
+## 실제 동작 시연
+
+### 체크포인트 이동 · LiDAR 장애물 회피
 
 <p align="center">
-  <a href="docs/assets/portfolio/weather-assistant.mp4">
-    <img src="docs/assets/portfolio/weather-assistant-cover.jpg" width="700" alt="서버 AI에 날씨를 질문하고 음성 응답을 확인하는 BuddyBot">
-  </a>
-  <br>
-  <sub>이미지를 누르면 질문과 음성 응답이 포함된 전체 영상이 열립니다.</sub>
+  <img src="docs/assets/portfolio/checkpoint-navigation-polished.gif" width="560" alt="실제 BuddyBot 로봇의 체크포인트 주행과 LiDAR 장애물 회피 애니메이션">
 </p>
 
-웹캠의 내장 마이크로 질문을 입력하고, 서버 PC의 `BuddyBot-ai`가 질의를 처리해 음성으로 응답하는 상호작용 경로를 검증했습니다.
+[색감 보정 GIF](docs/assets/portfolio/checkpoint-navigation-polished.gif) · [촬영 원본에서 만든 기존 GIF](docs/assets/portfolio/checkpoint-navigation.gif)
 
-## 핵심 기능
+저장한 체크포인트를 향해 주행하면서 LiDAR로 장애물을 감지하고, 회피·정지 명령을 반영하는 실물 데모입니다.
 
-- **자율이동과 장애물 회피:** LiDAR로 이동 방향의 장애물 감지 및 회피·정지
-- **사용자 인식과 추종:** 카메라로 사람을 인식하고 추종 제어에 반영
-- **음성 및 수동 조작:** 웨이크워드·음성 명령·웹 패널 입력 처리
-- **상태 확인:** LiDAR 미니맵과 로봇 운용 상태 표시, 서버 AI 질의응답
-- **비상정지:** 명령 우선순위 중재 및 watchdog 기반 안전 제어
+### 카메라 기반 사용자 추종
 
-실제 동작은 위 [시연](#동작-데모)과 아래 [개발 과정](#개발-및-검증-과정)에서 확인할 수 있습니다.
+<p align="center"><img src="docs/assets/portfolio/person-follow-panel.gif" width="480" alt="실시간 카메라 인식 및 사용자 추종 제어 패널"></p>
 
-## 전체 아키텍처
+<p align="center">
+  <a href="docs/assets/portfolio/person-follow-physical.mp4"><img src="docs/assets/portfolio/person-follow-physical-cover.jpg" width="480" alt="사용자 추종 실물 주행 영상 재생"></a>
+</p>
+
+[실물 사용자 추종 영상 보기](docs/assets/portfolio/person-follow-physical.mp4) — 위는 인식·제어 화면, 아래는 실제 로봇의 움직임입니다.
+
+### 음성 명령으로 로봇 이동
+
+<p align="center">
+  <a href="docs/assets/portfolio/voice-command.mp4"><img src="docs/assets/portfolio/voice-command-cover.jpg" width="480" alt="음성 명령 주행 시연 영상 재생"></a>
+</p>
+
+[음성 포함 원본 영상 보기](docs/assets/portfolio/voice-command.mp4) — 음성 인식 결과를 Pi 5에서 로봇 명령으로 판단하고 ROS 2–Pico 제어 경로로 연결했습니다.
+
+### 서버 AI 질의응답
+
+<p align="center">
+  <a href="docs/assets/portfolio/weather-assistant.mp4"><img src="docs/assets/portfolio/weather-assistant-cover.jpg" width="580" alt="서버 AI 날씨 질의응답 시연 영상 재생"></a>
+</p>
+
+[음성 질의응답 영상 보기](docs/assets/portfolio/weather-assistant.mp4) — 선택적 [BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai) 서버가 STT/TTS와 고수준 요청을 처리합니다.
+
+## 시스템 아키텍처
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/portfolio/architecture-mobile.svg">
-  <img src="docs/assets/portfolio/architecture-desktop.svg" width="100%" alt="센서·음성 입력에서 Raspberry Pi 5의 ROS 2 명령 중재와 Pico의 모터 제어까지의 구조">
+  <img src="docs/assets/portfolio/architecture-desktop.svg" width="100%" alt="LiDAR·카메라·마이크와 입력 명령 → Raspberry Pi 5 ROS 2 의사결정·안전 중재 → Raspberry Pi Pico 모터 구동과 watchdog">
 </picture>
 
-### 계층별 책임
+**Raspberry Pi 5 · Brain** — ROS 2 Jazzy에서 LiDAR·카메라·음성 입력을 처리하고 자율이동, 추종, 수동 명령 및 안전 제어의 우선순위를 중재합니다.
 
-| 계층 | 책임 |
-| --- | --- |
-| Raspberry Pi 5 | ROS 2 노드 오케스트레이션, LiDAR와 카메라·마이크 입력 처리, 추종·내비게이션, 명령 중재, 상태 패널 |
-| Raspberry Pi Pico | 옴니휠 운동학, 엔코더 피드백, PID/PWM 모터 제어, watchdog 및 정지 래치 |
-| BuddyBot-ai | 선택적 대화·STT·TTS·통합 GUI 및 고수준 로봇 명령 요청. 저수준 모터 제어는 Pi 5–Pico 경로에 위임 |
+**Raspberry Pi Pico · Motor/Safety** — 운동학, 엔코더 피드백, PWM 구동, heartbeat 감시와 watchdog 정지를 담당합니다. Pi 5와는 USB CDC 기반 텍스트 프로토콜로 연결했습니다.
 
-## 주요 설계 결정
+**BuddyBot-ai · Optional server** — STT/TTS, 대화형 응답, 웹 GUI 및 고수준 동작 요청을 제공합니다. 서버 AI는 모터 PWM을 직접 만들지 않습니다.
 
-### 1. Brain–Spinal 책임 분리
+### 특히 신경 쓴 기술 문제
 
-Linux 기반 Pi 5는 센서와 AI 처리를 유연하게 확장할 수 있지만 프로세스 지연이나 장애 가능성이 있습니다. 모터 출력과 통신 단절 감지는 Pico에 분리해 상위 계층 이상 시에도 하위 계층이 정지 상태로 전환하도록 구성했습니다.
+1. **명령 충돌:** 자율주행·추종·수동 명령이 동시에 발생할 수 있어 `command_mux`를 통해 최종 속도 명령을 하나로 결정했습니다. 우선순위는 `E-STOP > Safety Override > Manual > Navigation > Follow > Idle`입니다.
+2. **Linux 프로세스와 모터 제어의 분리:** 센서·AI 처리가 느려지거나 통신이 끊겨도 Pico의 watchdog이 정지하도록 상·하위 제어 책임을 나눴습니다.
+3. **현장 디버깅:** Pi 5–Pico 사이에 `HB`, `CMD`, `ACK`, `STAT`, `SAFE` 등의 line-based 메시지를 사용해 통신과 장애 상태를 확인할 수 있게 했습니다.
 
-### 2. 단일 최종 명령 경로
+### 실제 통합 화면과 하드웨어
 
-추종, 내비게이션, 수동 조작, 장애물 회피가 각각 속도 명령을 만들지만 모터로 직접 전달하지 않습니다. `command_mux_node`가 아래 우선순위로 한 소스만 선택하고 `/cmd_vel_final`을 발행합니다.
-
-```text
-E-STOP > Safety Override > Manual > Navigation > Follow > Idle
-```
-
-명령이 갱신되지 않으면 Pi 5의 command timeout이 오래된 명령을 폐기하고, Pi 5–Pico heartbeat가 끊기면 Pico watchdog이 모터를 정지합니다.
-
-### 3. 디버깅 가능한 Pi 5–Pico 프로토콜
-
-실물에서 검증된 USB CDC 연결과 사람이 읽을 수 있는 line-based text protocol을 사용했습니다.
-
-```text
-Pi 5 → Pico : HB | CMD,vx,vy,wz | BRAKE | CLEAR
-Pico → Pi 5 : ACK,* | STAT,* | RPM,* | SAFE,*
-```
-
-잘못된 패킷은 무시하고, 속도 값은 허용 범위로 제한하며, 연결이 복구되면 bridge가 자동 재연결합니다.
-
-### 4. 서버컴의 고수준 명령과 저수준 모터 제어의 분리
-
-[BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)는 일반 대화와 STT/TTS뿐 아니라 서버 GUI·음성을 통한 수동 이동, 추종 시작·중지, 체크포인트 이동 같은 고수준 요청을 제공합니다. 음성 명령은 서버컴이 텍스트로 변환하더라도 Pi 5에서 allowlist 기반 로봇 명령으로 판별하며, 서버가 보낸 동작 요청 역시 Pi 5의 ROS 2 제어 노드와 command mux를 거쳐 실행됩니다. 서버의 LLM·웹앱은 Pico의 운동학·PID·PWM에 직접 접근하지 않으며, 서버가 없어도 로컬 패널과 기본 제어 경로를 사용할 수 있도록 분리했습니다.
-
-## 시스템 통합 화면
-
-<p align="center">
-  <img src="docs/assets/portfolio/system-dashboard.png" width="900" alt="카메라 추종과 LiDAR 미니맵을 통합한 BuddyBot 패널">
-</p>
-
-패널에서 카메라 상태, 사람 추종, LiDAR 로컬 미니맵, 체크포인트, 수동 주행 및 안전 상태를 한 화면에서 확인하도록 통합했습니다.
-
-## 하드웨어 통합
-
-**Pi 5 — 상위 인지·주행 제어**
-
-<p align="center"><img src="docs/assets/portfolio/hardware-pi5.jpg" width="400" alt="Raspberry Pi 5 센서 및 전원 배선 실제 사진"></p>
-
-**Pico — 모터·안전 제어**
-
-<p align="center"><img src="docs/assets/portfolio/hardware-pico.jpg" width="400" alt="Pico 모터 드라이버 및 엔코더 실제 사진"></p>
-
-### 주요 구성
-
-- Raspberry Pi 5
-- Raspberry Pi Pico (RP2040)
-- RPLIDAR A1M8
-- Logitech C920e (USB 웹캠·내장 마이크) — 사용자 추종 영상과 음성 입력
-- VL53L0X ToF 센서와 I2C multiplexer
-- 3륜 옴니휠, DC 기어드 모터와 엔코더
-- 모터 드라이버 및 전원 계통
-
-## 개발 및 검증 과정
-
-<p align="center">
-  <img src="docs/assets/portfolio/rviz-gazebo.png" width="900" alt="RViz와 Gazebo 기반 시뮬레이션 검증">
-</p>
-
-1. Gazebo/RViz에서 로봇 모델과 센서·SLAM 흐름 검증
-2. Pico 단독 모터·엔코더·운동학 테스트
-3. Pi 5–Pico USB CDC bridge 및 heartbeat 통합
-4. 추종·내비게이션·수동 명령을 command mux로 통합
-5. LiDAR 장애물 회피와 정지 경로 추가
-6. 웹·모바일 패널과 음성 인터페이스 통합
-7. 실제 실내 환경에서 전체 기능 검증
+<p align="center"><img src="docs/assets/portfolio/system-dashboard.png" width="100%" alt="LiDAR 미니맵·카메라·추종 상태를 통합한 로봇 운용 화면"></p>
 
 <details>
-<summary><strong>초기 센서 bring-up 기록 보기</strong></summary>
+<summary><strong>Raspberry Pi 5 / Pico 배선 및 초기 센서 테스트 보기</strong></summary>
 
-**LiDAR 초기 반응 테스트**
+**Pi 5 · 센서와 상위 제어**
 
-<p align="center"><img src="docs/assets/portfolio/lidar-bringup.gif" width="400" alt="LiDAR 실제 스캔 반응 테스트"></p>
+<p align="center"><img src="docs/assets/portfolio/hardware-pi5.jpg" width="500" alt="실제 Raspberry Pi 5 센서 및 전원 배선"></p>
 
-**카메라 객체 인식 테스트**
+**Pico · 모터·엔코더 제어**
 
-<p align="center"><img src="docs/assets/portfolio/vision-bringup.jpg" width="400" alt="카메라 객체 검출 테스트"></p>
+<p align="center"><img src="docs/assets/portfolio/hardware-pico.jpg" width="500" alt="실제 Raspberry Pi Pico 모터 제어 배선"></p>
 
-초기에는 각 센서의 입력과 시각화부터 독립적으로 검증하고, 이후 ROS 2 노드와 최종 운용 패널로 통합했습니다.
+**LiDAR 스캔 초기 테스트**
+
+<p align="center"><img src="docs/assets/portfolio/lidar-bringup.gif" width="480" alt="LiDAR 스캔 반응 초기 실험"></p>
+
+**카메라 객체 인식 초기 테스트**
+
+<p align="center"><img src="docs/assets/portfolio/vision-bringup.jpg" width="480" alt="카메라 객체 검출 초기 실험"></p>
 
 </details>
 
-## 담당 역할
+## 팀 구성과 담당 역할
 
-3인 팀의 팀장으로서 전체 시스템 아키텍처 설계와 통합을 담당했습니다.
+**3인 팀 · 팀장 / 전체 아키텍처 설계와 시스템 통합**
 
-- Pi 5와 Pico의 책임 경계 및 통신 구조 설계
-- ROS 2 노드·토픽과 최종 제어 흐름 통합
-- 추종·내비게이션·수동·안전 명령의 우선순위 설계
-- LiDAR, 카메라, 모터, 엔코더 등 하드웨어–소프트웨어 통합
-- 웹/모바일 패널과 음성 인터페이스의 시스템 연결
-- 실물 bring-up, 장애 원인 추적 및 최종 시연 조율
+- Pi 5와 Pico의 책임 분리, 통신 구조 및 ROS 2 노드 간 최종 제어 흐름 설계
+- LiDAR·카메라·모터·엔코더와 추종·자율주행·음성 기능의 시스템 통합
+- 명령 우선순위 및 안전정지 경로 구성, 실물 bring-up·장애 분석·시연 조율
 
-세부 기능 개발은 팀원들과 분담했으며, 이 저장소는 최종 통합된 로봇 측 소프트웨어와 펌웨어를 담고 있습니다.
+각 기능의 세부 구현은 팀원들과 분담했으며, 팀 전체 결과를 개인 단독 개발로 주장하지 않습니다.
 
-## 저장소 구성
+## 결과와 한계
+
+**확인한 결과:** 체크포인트 이동, 회피·추종, 음성 제어, 상태 패널, 소프트웨어 비상정지 등 실제 로봇의 동작을 영상과 통합 화면으로 남겼습니다.
+
+**남은 과제:** 물품 적재·전달의 전체 서빙 과정, 독립적인 물리 E-STOP, 반복 실험 기반 주행·정지 성능 수치화, 하드웨어 회귀 테스트, 웹 패널 접근 제어 고도화.
+
+시연 영상은 구현 결과의 근거이지, 모든 조건에서의 안정성·안전성 인증이나 정량적 성공률을 뜻하지 않습니다.
+
+## 저장소 구성과 실행 문서
 
 ```text
 BuddyBot/
-├── firmware/pico_motor_controller/    # Pico 모터·엔코더·안전 펌웨어
-├── software/pi5/ros2_ws/src/           # Pi 5 ROS 2 패키지
-│   ├── buddybot_base/                  # Pico serial bridge와 odometry
-│   ├── buddybot_system/                # command mux, safety, LiDAR avoidance
-│   ├── buddybot_nav/                   # waypoint 관리
-│   ├── buddybot_vision/                # 사람 검출·추종
-│   ├── buddybot_voice/                 # 음성 인터페이스
-│   └── buddybot_panel/                 # 웹·모바일 운용 패널
-├── scripts/                            # 설치·진단·시연 실행 스크립트
-└── docs/                               # 아키텍처·프로토콜·운용 문서
+├── firmware/pico_motor_controller/      # Pico 모터·엔코더·안전 제어
+├── software/pi5/ros2_ws/src/             # Pi 5 ROS 2 패키지
+│   ├── buddybot_base/                    # Serial bridge, odometry
+│   ├── buddybot_system/                  # Command mux, safety, LiDAR
+│   ├── buddybot_nav/                     # Waypoint navigation
+│   ├── buddybot_vision/                  # Person following
+│   ├── buddybot_voice/                   # Voice commands
+│   └── buddybot_panel/                   # Web/mobile dashboard
+├── scripts/
+└── docs/
 ```
 
-## 실행 및 문서
-
-README에는 프로젝트 핵심만 남기고 상세 운용 절차는 문서로 분리했습니다.
-
-- [아키텍처](docs/architecture.md)
-- [Pi 5·Pico 설치](docs/TEAM_SETUP_PI5_AND_PICO.md)
-- [Bring-up](docs/bringup.md)
-- [USB serial protocol](docs/uart_protocol.md)
-- [음성 명령](docs/voice_commands.md)
-- [핀 매핑](docs/pin_mapping.md)
-
-대표 실행:
+[시스템 설계](docs/architecture.md) · [Pi 5·Pico 설치](docs/TEAM_SETUP_PI5_AND_PICO.md) · [실물 구동](docs/bringup.md) · [USB 프로토콜](docs/uart_protocol.md) · [음성 명령](docs/voice_commands.md)
 
 ```bash
 cd ~/BuddyBot
 bash scripts/start_presentation_mode.sh mapping
 ```
 
-> 실제 하드웨어, ROS 2 Jazzy 환경, 장치별 권한과 설정이 필요합니다. 상세 절차는 위 문서를 확인해 주세요.
-
-## 검증 근거와 범위
-
-- **담당:** 3인 팀의 팀장·전체 아키텍처 설계·시스템 통합. 세부 기능은 팀원들과 분담했습니다.
-- **증거:** 위 주행·추종 영상과 통합 패널은 실제 시연 기록입니다. [포트폴리오 문서·자료 변경](https://github.com/rasasoe/BuddyBot/pull/9/files)은 로봇 코드 전체의 개인 저작 증거와 구분합니다.
-- **이번 점검:** README의 경로·이미지와 담당 역할·안전 한계 표현을 점검했습니다. 실물 주행을 새로 실행하거나 성능을 재측정한 것은 아닙니다.
-- **재현 조건:** Pi 5·Pico·센서·모터, ROS 2 Jazzy 및 장치별 설정이 필요합니다. 영상 한 번의 성공을 반복 시험 성공률로 해석하지 않습니다.
-
-## 한계와 다음 개선
-
-- 현재 비상정지는 소프트웨어 명령과 Pico watchdog 중심이며, 독립적인 물리 E-STOP 입력은 후속 하드웨어 개선 항목입니다.
-- 장애물 회피·추종 성공률과 정지 응답 시간을 표준화된 반복 시험으로 수치화하지 못했습니다.
-- 웹 패널 접근 제어, 전송 구간 보호, 설정·비밀정보 분리를 강화할 필요가 있습니다.
-- 실물 hardware-in-the-loop 테스트와 CI 자동화를 추가하면 회귀 검증 신뢰도를 높일 수 있습니다.
-
-## Companion Repository
-
-[BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)는 서버 PC에서 실행되는 선택적 AI·관제 서비스입니다. 대화와 STT/TTS, 통합 GUI, 수동 이동·추종·체크포인트 이동 같은 고수준 명령 요청을 담당합니다. 요청의 ROS 2 명령 변환·중재와 Pico의 모터·안전 제어는 이 저장소의 Pi 5–Pico 경로가 담당합니다.
+실행에는 Raspberry Pi 5·Pico·센서와 ROS 2 Jazzy 환경이 필요합니다. 서버 AI의 고수준 인터페이스는 [BuddyBot-ai](https://github.com/rasasoe/BuddyBot-ai)에서 확인할 수 있습니다.
