@@ -1,4 +1,4 @@
-# BuddyBot — ROS 2 Autonomous Indoor Robot
+# BuddyBot — Home AI Serving Robot Prototype
 
 <div align="center">
   <sub>🌐 README language · <a href="README.md">🇰🇷 한국어</a> · <strong>🇺🇸 English</strong></sub>
@@ -7,16 +7,16 @@
 
 <div align="center">
   <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot ROS 2 mobile robot"/>
-  <p><strong>Home AI serving robot concept · Indoor navigation and interaction prototype</strong></p>
+  <p><strong>Mobile robot prototype · ROS 2 / Perception / Interaction</strong></p>
 
 </div>
 
-<table>
-<tr>
-<td width="42%" align="center"><img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" alt="Physical BuddyBot robot" width="320"/></td>
-<td valign="top"><strong>Project snapshot</strong><br/><br/>2025.03 – 2026.06<br/>Three-person team<br/><br/><strong>My role:</strong> Team lead, overall system architecture and integration<br/><br/><strong>Outcome:</strong> Integrated indoor mobile robot, with documented physical demonstrations.</td>
-</tr>
-</table>
+<p align="center"><img src="docs/assets/portfolio/buddybot-hero-v2.jpg" width="360" alt="Physical BuddyBot robot photographed after integration"></p>
+
+**Development:** March 2025–June 2026 · 3-person team  
+**My role:** Team lead, system architecture, ROS 2 and microcontroller integration  
+**Outcome:** Physical demonstrations of autonomous navigation, obstacle avoidance, following, voice control and emergency stopping.
+
 
 ## Project origin and development goals
 
