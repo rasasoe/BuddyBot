@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="840" viewBox="0 0 560 840" role="img" aria-labelledby="title desc">
+<title id="title">BuddyBot mobile system architecture</title>
+<desc id="desc">Input sensors, Raspberry Pi 5 ROS 2, Raspberry Pi Pico motor control and emergency stopping in a vertical flow.</desc>
+<rect width="560" height="840" fill="#F8F8F6"/><rect x="1" y="1" width="558" height="838" fill="none" stroke="#D6D7D5"/>
+<g font-family="Arial,Helvetica,sans-serif">
+<text x="26" y="48" font-size="24" font-weight="700" fill="#17191A">SYSTEM ARCHITECTURE</text>
+<text x="26" y="78" font-size="16" fill="#646A6D">Sensing / Decisions / Motor control</text>
+<path d="M26 97H534" stroke="#BABDBD"/>
+<rect x="26" y="121" width="508" height="174" fill="#FFFFFF" stroke="#B7BABB"/>
+<text x="44" y="151" font-size="15" font-weight="700" fill="#73797B">01 / INPUT</text>
+<text x="44" y="187" font-size="24" font-weight="700" fill="#1C1F20">LiDAR / Camera / ToF</text>
+<text x="44" y="220" font-size="19" fill="#505658">Voice &amp; manual commands</text>
+<text x="44" y="254" font-size="19" fill="#505658">Optional server AI</text>
+<path d="M280 302V343M272 335L280 343L288 335" stroke="#35393B" stroke-width="2" fill="none"/>
+<rect x="26" y="350" width="508" height="175" fill="#171A1D"/>
+<text x="44" y="381" font-size="15" font-weight="700" fill="#A7ACAF">02 / BRAIN</text>
+<text x="44" y="420" font-size="26" font-weight="700" fill="#FFFFFF">Raspberry Pi 5</text>
+<text x="44" y="454" font-size="19" fill="#D5D8DA">ROS 2 / Navigation / Following</text>
+<text x="44" y="488" font-size="19" fill="#D5D8DA">Command mux / Safety</text>
+<path d="M280 533V572M272 564L280 572L288 564" stroke="#35393B" stroke-width="2" fill="none"/>
+<rect x="26" y="579" width="508" height="171" fill="#FFFFFF" stroke="#B7BABB"/>
+<text x="44" y="610" font-size="15" font-weight="700" fill="#73797B">03 / MOTOR CONTROL</text>
+<text x="44" y="645" font-size="26" font-weight="700" fill="#1C1F20">Raspberry Pi Pico</text>
+<text x="44" y="680" font-size="19" fill="#505658">Watchdog / Encoders / PWM</text>
+<text x="44" y="714" font-size="19" fill="#505658">3-wheel omni drive</text>
+<text x="26" y="795" font-size="16" fill="#61676A">Server AI never directly drives the motors.</text>
+</g></svg>
