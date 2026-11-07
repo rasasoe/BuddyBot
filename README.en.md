@@ -23,6 +23,15 @@
 </tr>
 </table>
 
+## Development period and validation
+
+**Development period:** March 2025–June 2026 · **Three-person team; team lead, architecture, and integration**
+
+**Validation question:** Can ROS 2 perception/navigation and a 50 Hz microcontroller motor/safety loop be separated while retaining **real-hardware navigation, command arbitration, person following, and emergency stopping**?
+
+- **Demonstrated:** Checkpoint navigation, obstacle avoidance, person following, voice/manual control, and software emergency stop on the physical robot.
+- **Boundary:** The demonstrations validate integrated behavior, not safety under every hardware or sensor-failure scenario.
+
 ## The engineering problem
 
 The robot needs AI perception and ROS 2 planning without letting nondeterministic Linux processes directly compromise motor responsiveness or emergency stopping.
