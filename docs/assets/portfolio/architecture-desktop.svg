@@ -1,32 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="470" viewBox="0 0 1100 470" role="img" aria-labelledby="title desc">
-<title id="title">BuddyBot system architecture</title>
-<desc id="desc">Sensors and optional server feed into ROS 2 Raspberry Pi 5 command arbitration, which controls Pico motor drivers and watchdog, then three omni wheels.</desc>
-<rect width="1100" height="470" fill="#F8F8F6"/><rect x="1" y="1" width="1098" height="468" fill="none" stroke="#D6D7D5"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460" role="img" aria-labelledby="title desc">
+<title id="title">BuddyBot control architecture — Sensors, ROS 2, Pico</title>
+<desc id="desc">A consistent dark, high-contrast architecture diagram showing sensors and user requests entering Raspberry Pi 5 command arbitration and safety control, then Pico motor control and watchdog.</desc>
+<rect width="1200" height="460" fill="#0D0F10"/>
+<g font-family="Georgia,'Times New Roman',serif" fill="#F1EFEA">
+  <text x="48" y="55" font-size="27" letter-spacing="0.5">System Architecture</text>
+  <text x="1152" y="53" font-family="Arial,sans-serif" font-size="13" text-anchor="end" letter-spacing="2.1" fill="#AEB0AC">BUDDYBOT / ROS 2</text>
+</g>
+<line x1="48" y1="77" x2="1152" y2="77" stroke="#525655" stroke-width="1"/>
 <g font-family="Arial,Helvetica,sans-serif">
-<text x="36" y="52" font-size="26" font-weight="700" fill="#16181A">SYSTEM ARCHITECTURE</text>
-<text x="36" y="79" font-size="16" fill="#626669">Sensing  /  Decision  /  Motor control</text>
-<path d="M36 101H1064" stroke="#B4B6B8"/>
-<rect x="36" y="137" width="282" height="230" rx="6" fill="#FFFFFF" stroke="#B2B4B7"/>
-<text x="58" y="172" font-size="16" font-weight="700" letter-spacing="1.5" fill="#5F6669">01 / INPUT</text>
-<text x="58" y="210" font-size="23" font-weight="700" fill="#16181A">LiDAR  /  Camera</text>
-<text x="58" y="242" font-size="19" fill="#444A4E">ToF  /  Microphone</text>
-<path d="M58 266H294" stroke="#D2D5D5"/>
-<text x="58" y="299" font-size="18" fill="#444A4E">Voice  /  Manual control</text>
-<text x="58" y="333" font-size="17" fill="#7E8386">Optional server AI</text>
-<rect x="408" y="137" width="282" height="230" rx="6" fill="#171A1D" stroke="#171A1D"/>
-<text x="430" y="172" font-size="16" font-weight="700" letter-spacing="1.5" fill="#A9ADB0">02 / BRAIN</text>
-<text x="430" y="211" font-size="25" font-weight="700" fill="#FFFFFF">Raspberry Pi 5</text>
-<text x="430" y="244" font-size="19" fill="#D3D6D8">ROS 2 Jazzy</text>
-<path d="M430 265H668" stroke="#777D81"/>
-<text x="430" y="300" font-size="19" fill="#E7E8E8">Navigation  /  Follow</text>
-<text x="430" y="334" font-size="19" fill="#E7E8E8">Command mux  /  Safety</text>
-<rect x="780" y="137" width="284" height="230" rx="6" fill="#FFFFFF" stroke="#B2B4B7"/>
-<text x="802" y="172" font-size="16" font-weight="700" letter-spacing="1.5" fill="#5F6669">03 / MOTOR CONTROL</text>
-<text x="802" y="211" font-size="25" font-weight="700" fill="#16181A">Raspberry Pi Pico</text>
-<text x="802" y="243" font-size="18" fill="#444A4E">Watchdog  /  Encoder</text>
-<path d="M802 265H1042" stroke="#D2D5D5"/>
-<text x="802" y="298" font-size="19" fill="#444A4E">Kinematics  /  PWM</text>
-<text x="802" y="333" font-size="19" fill="#444A4E">3-wheel omni drive</text>
-<g fill="none" stroke="#34393C" stroke-width="2"><path d="M324 252H398M389 245L398 252L389 259"/><path d="M698 252H770M761 245L770 252L761 259"/></g>
-<text x="36" y="419" fill="#646B6D" font-size="16">The server issues high-level requests only. Motor outputs remain within the Pi 5 / Pico control path.</text>
-</g></svg>
+  <rect x="48" y="112" width="330" height="250" fill="#181B1C" stroke="#5B605F" stroke-width="1.2"/>
+  <rect x="435" y="112" width="330" height="250" fill="#181B1C" stroke="#5B605F" stroke-width="1.2"/>
+  <rect x="822" y="112" width="330" height="250" fill="#181B1C" stroke="#5B605F" stroke-width="1.2"/>
+  <g fill="#B7BDBB" font-size="15" letter-spacing="2">
+    <text x="72" y="147">01 / SENSING &amp; REQUESTS</text>
+    <text x="459" y="147">02 / DECISION &amp; SAFETY</text>
+    <text x="846" y="147">03 / ACTUATION</text>
+  </g>
+  <g fill="#F2F1ED" font-weight="600" font-size="26">
+    <text x="72" y="198">Sensors &amp; User</text>
+    <text x="459" y="198">Raspberry Pi 5</text>
+    <text x="846" y="198">Raspberry Pi Pico</text>
+  </g>
+  <g fill="#CAD0CE" font-size="19">
+    <text x="72" y="243">LiDAR / ToF / Camera</text>
+    <text x="72" y="276">Microphone / Manual UI</text>
+    <text x="72" y="309">Optional server requests</text>
+    <text x="459" y="243">ROS 2 navigation &amp; follow</text>
+    <text x="459" y="276">Command arbitration</text>
+    <text x="459" y="309">Safety override &amp; bridge</text>
+    <text x="846" y="243">Encoder / Motor control</text>
+    <text x="846" y="276">Watchdog &amp; stop latch</text>
+    <text x="846" y="309">3-wheel omni drive</text>
+  </g>
+  <g stroke="#A9AFAC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M384 242H427M416 232L427 242L416 252"/>
+    <path d="M771 242H814M803 232L814 242L803 252"/>
+  </g>
+  <line x1="48" y1="390" x2="1152" y2="390" stroke="#525655"/>
+  <text x="48" y="423" font-size="16" fill="#BFC5C1">AI and server software request actions; the Pi 5 / Pico path remains responsible for motor output.</text>
+</g>
+</svg>
