@@ -11,7 +11,7 @@
 
 </div>
 
-<p align="center"><img src="docs/assets/portfolio/buddybot-hero-v2.jpg" width="360" alt="Physical BuddyBot robot photographed after integration"></p>
+<p align="center"><img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" width="100%" alt="Physical BuddyBot robot photographed after integration"></p>
 
 **Development:** March 2025–June 2026 · 3-person team  
 **My role:** Team lead, system architecture, ROS 2 and microcontroller integration  
