@@ -1,10 +1,11 @@
 <p align="right"><strong>한국어</strong> &nbsp; / &nbsp; <a href="README.en.md">English</a></p>
 
-<p align="center">
-  <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot — home AI serving robot prototype">
-</p>
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/portfolio/buddybot-banner-mobile.svg">
+  <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot — 가정용 AI 서빙 로봇 프로토타입">
+</picture>
 
-**가정용 AI 서빙 로봇 프로토타입**  
+# BuddyBot — 가정용 AI 서빙 로봇 프로토타입  
 2025.03–2026.06 · 3인 팀 · **팀장 / 시스템 아키텍처 설계·통합**
 
 <p align="center">
