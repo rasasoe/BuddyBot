@@ -1,0 +1,47 @@
+name: Polish portfolio media from original sources
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/portfolio-media-polish.yml
+      - scripts/portfolio_media.py
+      - docs/assets/portfolio/checkpoint-navigation.gif
+      - docs/assets/portfolio/buddybot-hero-v2.jpg
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out original demo sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Install media processing tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg python3-pil fonts-liberation
+
+      - name: Color-grade original GIF and photograph, then update README
+        run: python3 scripts/portfolio_media.py
+
+      - name: Publish reproducible corrected assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/portfolio/checkpoint-navigation-polished.gif \
+                  docs/assets/portfolio/buddybot-hero-editorial.jpg \
+                  README.md README.en.md
+          if ! git diff --cached --quiet; then
+            git commit -m "media(buddybot): polish authentic navigation GIF and robot-photo title card"
+            git push
+          else
+            echo "No media changes"
+          fi
