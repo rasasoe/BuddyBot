@@ -1,8 +1,11 @@
 <p align="right"><a href="README.md">한국어</a> &nbsp; / &nbsp; <strong>English</strong></p>
 
-<p align="center"><img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot — home AI serving robot prototype"></p>
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/portfolio/buddybot-banner-mobile.svg">
+  <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot — home AI serving robot prototype">
+</picture>
 
-**Home AI Serving Robot Prototype**  
+# BuddyBot — Home AI Serving Robot Prototype  
 March 2025–June 2026 · Three-person team · **Team lead / system architect / integrator**
 
 <p align="center"><img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" width="100%" alt="Actual BuddyBot robot, showing the complete upper sensor and lower omnidirectional wheels"></p>
