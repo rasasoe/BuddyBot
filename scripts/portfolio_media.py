@@ -63,32 +63,28 @@ def polish_gif():
 
 
 def polish_hero():
+    """Create a generous, photo-only, black-matte portrait.
+
+    This is the original photograph, scaled and adjusted gently. No regenerated
+    robot, typography, frame, artificial shadows, or duplicated banner.
+    """
     assert ORIGINAL_PHOTO.exists(), f"Source photo not found: {ORIGINAL_PHOTO}"
-    base = Image.new("RGB", (1200, 430), "#101010")
-    d = ImageDraw.Draw(base)
-    ivory, muted = "#F2EFE8", "#BEB8AF"
-    small = glyph_font(23)
-    heading = glyph_font(91)
-    sub = glyph_font(24)
-    d.text((66, 44), "RASASOE", fill=ivory, font=small, spacing=8)
-    d.text((66, 155), "BuddyBot", fill=ivory, font=heading)
-    d.text((69, 274), "Home AI Serving Robot Prototype", fill=muted, font=sub)
-    d.line((66, 340, 656, 340), fill="#6B6763", width=1)
-    d.text((68, 361), "ROS 2    /    LiDAR    /    Vision    /    Voice", fill=muted, font=glyph_font(17))
+    width, height = 1000, 1060
+    base = Image.new("RGB", (width, height), "#090B0D")
     with Image.open(ORIGINAL_PHOTO) as source:
         photo = ImageOps.exif_transpose(source).convert("RGB")
-        photo = ImageEnhance.Color(photo).enhance(0.77)
-        photo = ImageEnhance.Contrast(photo).enhance(1.08)
-        photo = ImageEnhance.Sharpness(photo).enhance(1.12)
-        contained = ImageOps.contain(photo, (430, 358), Image.Resampling.LANCZOS)
-        x = 730 + (430 - contained.width) // 2
-        y = 36 + (358 - contained.height) // 2
-        base.paste(contained, (x, y))
-        d = ImageDraw.Draw(base)
-        d.rectangle([x - 1, y - 1, x + contained.width, y + contained.height],
-                    outline="#645F59", width=1)
-    base.save(OUTPUT_HERO, "JPEG", quality=94, subsampling=0, optimize=True)
-    print("Actual-photo title card:", OUTPUT_HERO, OUTPUT_HERO.stat().st_size)
+        photo = ImageEnhance.Color(photo).enhance(0.88)
+        photo = ImageEnhance.Contrast(photo).enhance(1.05)
+        photo = ImageEnhance.Sharpness(photo).enhance(1.08)
+
+        # Let the photographed robot dominate the canvas on desktop AND mobile.
+        # Preserve the complete top sensor and three wheels instead of cropping.
+        fitted = ImageOps.contain(photo, (984, 1044), Image.Resampling.LANCZOS)
+        x = (width - fitted.width) // 2
+        y = (height - fitted.height) // 2
+        base.paste(fitted, (x, y))
+    base.save(OUTPUT_HERO, "JPEG", quality=95, subsampling=0, optimize=True)
+    print("Photo-only BuddyBot hero:", OUTPUT_HERO, OUTPUT_HERO.stat().st_size)
 
 
 def update_readmes():
