@@ -8,12 +8,7 @@
 <div align="center">
   <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot ROS 2 mobile robot"/>
   <p><strong>Home AI serving robot concept · Indoor navigation and interaction prototype</strong></p>
-  <p>
-    <img alt="ROS 2" src="https://img.shields.io/badge/ROS_2-Jazzy-22314E?logo=ros&logoColor=white"/>
-    <img alt="Raspberry Pi" src="https://img.shields.io/badge/Raspberry_Pi-5-A22846?logo=raspberrypi&logoColor=white"/>
-    <img alt="RP2040" src="https://img.shields.io/badge/RP2040-Pico-56C2E1"/>
-    <img alt="OpenCV" src="https://img.shields.io/badge/OpenCV-5C3EE8?logo=opencv&logoColor=white"/>
-  </p>
+
 </div>
 
 <table>
