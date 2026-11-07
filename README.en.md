@@ -13,7 +13,7 @@
 
 <table>
 <tr>
-<td width="42%" align="center"><img src="docs/assets/portfolio/buddybot-hero-v2.jpg" alt="Physical BuddyBot robot" width="320"/></td>
+<td width="42%" align="center"><img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" alt="Physical BuddyBot robot" width="320"/></td>
 <td valign="top"><strong>Project snapshot</strong><br/><br/>2025.03 – 2026.06<br/>Three-person team<br/><br/><strong>My role:</strong> Team lead, overall system architecture and integration<br/><br/><strong>Outcome:</strong> Integrated indoor mobile robot, with documented physical demonstrations.</td>
 </tr>
 </table>

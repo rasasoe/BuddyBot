@@ -17,7 +17,7 @@ Raspberry Pi 5의 인지·계획과 Raspberry Pi Pico의 모터·안전 제어�
 
 <br>
 
-<p align="center"><img src="docs/assets/portfolio/buddybot-hero-v2.jpg" width="370" alt="실제 제작한 BuddyBot 3륜 옴니휠 로봇"></p>
+<p align="center"><img src="docs/assets/portfolio/buddybot-hero-editorial.jpg" width="100%" alt="실제 제작한 BuddyBot 3륜 옴니휠 로봇"></p>
 
 **개발:** 2025.03–2026.06 · 3인 팀  
 **역할:** 팀장, 시스템 아키텍처 설계 및 ROS 2·MCU 통합  
@@ -65,10 +65,10 @@ BuddyBot은 카메라·마이크 입력, AI 객체·사람 인식, 음성 인터
 ### 체크포인트 자율이동 및 LiDAR 장애물 회피
 
 <p align="center">
-  <img src="docs/assets/portfolio/checkpoint-navigation.gif" width="560" alt="실제 BuddyBot의 체크포인트 주행과 LiDAR 장애물 회피 애니메이션">
+  <img src="docs/assets/portfolio/checkpoint-navigation-polished.gif" width="560" alt="실제 BuddyBot의 체크포인트 주행과 LiDAR 장애물 회피 애니메이션">
 </p>
 
-[원본 주행 GIF 열기](docs/assets/portfolio/checkpoint-navigation.gif)
+[원본 주행 GIF](docs/assets/portfolio/checkpoint-navigation.gif) · [색감 보정본](docs/assets/portfolio/checkpoint-navigation-polished.gif)
 
 저장된 체크포인트로 이동하는 동안 LiDAR 스캔을 이용해 진행 방향의 장애물을 감지하고 회피 명령을 우선 적용했습니다.
 
