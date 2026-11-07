@@ -13,16 +13,6 @@
 Raspberry Pi 5의 인지·계획과 Raspberry Pi Pico의 모터·안전 제어를 분리한<br>
 <b>Brain–Spinal 분산 제어 아키텍처</b>
 
-<br>
-<br>
-
-[![ROS 2](https://img.shields.io/badge/ROS%202-Jazzy-22314E?style=for-the-badge&logo=ros&logoColor=white)](#전체-아키텍처)
-[![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-5-A22846?style=for-the-badge&logo=raspberrypi&logoColor=white)](#하드웨어-통합)
-[![RP2040](https://img.shields.io/badge/RP2040-Pico-56C2E1?style=for-the-badge&logo=raspberrypi&logoColor=white)](#하드웨어-통합)
-[![OpenCV](https://img.shields.io/badge/OpenCV-Vision-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](#ai-활용-범위)
-[![Python](https://img.shields.io/badge/Python-3-3776AB?style=for-the-badge&logo=python&logoColor=white)](#저장소-구성)
-[![AI](https://img.shields.io/badge/AI-Vision%20%2B%20Voice-22c55e?style=for-the-badge)](#동작-데모)
-
 </div>
 
 <br>
