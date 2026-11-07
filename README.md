@@ -65,12 +65,10 @@ BuddyBot은 카메라·마이크 입력, AI 객체·사람 인식, 음성 인터
 ### 체크포인트 자율이동 및 LiDAR 장애물 회피
 
 <p align="center">
-  <a href="docs/assets/portfolio/checkpoint-navigation.gif">
-    <img src="docs/assets/portfolio/buddybot-hero-v2.jpg" width="380" alt="실제 BuddyBot 실물 사진. 클릭하면 주행·장애물 회피 GIF가 열립니다.">
-  </a>
+  <img src="docs/assets/portfolio/checkpoint-navigation.gif" width="560" alt="실제 BuddyBot의 체크포인트 주행과 LiDAR 장애물 회피 애니메이션">
 </p>
 
-**[주행·장애물 회피 GIF 보기](docs/assets/portfolio/checkpoint-navigation.gif)** — 기존 GIF는 저해상도·붉은 바닥색 때문에 첫 화면에서는 실물 사진을 대표 이미지로 사용합니다. 시연 자료는 그대로 보존합니다.
+[원본 주행 GIF 열기](docs/assets/portfolio/checkpoint-navigation.gif)
 
 저장된 체크포인트로 이동하는 동안 LiDAR 스캔을 이용해 진행 방향의 장애물을 감지하고 회피 명령을 우선 적용했습니다.
 
