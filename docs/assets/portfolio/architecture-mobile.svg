@@ -1,27 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="560" height="840" viewBox="0 0 560 840" role="img" aria-labelledby="title desc">
-<title id="title">BuddyBot mobile system architecture</title>
-<desc id="desc">Input sensors, Raspberry Pi 5 ROS 2, Raspberry Pi Pico motor control and emergency stopping in a vertical flow.</desc>
-<rect width="560" height="840" fill="#F8F8F6"/><rect x="1" y="1" width="558" height="838" fill="none" stroke="#D6D7D5"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="930" viewBox="0 0 600 930" role="img" aria-labelledby="title desc">
+<title id="title">BuddyBot mobile control architecture</title>
+<desc id="desc">A vertical dark diagram with consistently styled panels for sensors, Raspberry Pi 5 ROS 2, and Raspberry Pi Pico motor control. No alternating black-white panels.</desc>
+<rect width="600" height="930" fill="#0D0F10"/>
+<g font-family="Georgia,'Times New Roman',serif" fill="#F1EFEA">
+ <text x="34" y="57" font-size="29">System Architecture</text>
+</g>
+<text x="34" y="90" fill="#ABB1AE" font-size="15" font-family="Arial,sans-serif" letter-spacing="1.2">BUDDYBOT / ROS 2 / CONTROL FLOW</text>
+<line x1="34" y1="111" x2="566" y2="111" stroke="#525655"/>
 <g font-family="Arial,Helvetica,sans-serif">
-<text x="26" y="48" font-size="24" font-weight="700" fill="#17191A">SYSTEM ARCHITECTURE</text>
-<text x="26" y="78" font-size="16" fill="#646A6D">Sensing / Decisions / Motor control</text>
-<path d="M26 97H534" stroke="#BABDBD"/>
-<rect x="26" y="121" width="508" height="174" fill="#FFFFFF" stroke="#B7BABB"/>
-<text x="44" y="151" font-size="15" font-weight="700" fill="#73797B">01 / INPUT</text>
-<text x="44" y="187" font-size="24" font-weight="700" fill="#1C1F20">LiDAR / Camera / ToF</text>
-<text x="44" y="220" font-size="19" fill="#505658">Voice &amp; manual commands</text>
-<text x="44" y="254" font-size="19" fill="#505658">Optional server AI</text>
-<path d="M280 302V343M272 335L280 343L288 335" stroke="#35393B" stroke-width="2" fill="none"/>
-<rect x="26" y="350" width="508" height="175" fill="#171A1D"/>
-<text x="44" y="381" font-size="15" font-weight="700" fill="#A7ACAF">02 / BRAIN</text>
-<text x="44" y="420" font-size="26" font-weight="700" fill="#FFFFFF">Raspberry Pi 5</text>
-<text x="44" y="454" font-size="19" fill="#D5D8DA">ROS 2 / Navigation / Following</text>
-<text x="44" y="488" font-size="19" fill="#D5D8DA">Command mux / Safety</text>
-<path d="M280 533V572M272 564L280 572L288 564" stroke="#35393B" stroke-width="2" fill="none"/>
-<rect x="26" y="579" width="508" height="171" fill="#FFFFFF" stroke="#B7BABB"/>
-<text x="44" y="610" font-size="15" font-weight="700" fill="#73797B">03 / MOTOR CONTROL</text>
-<text x="44" y="645" font-size="26" font-weight="700" fill="#1C1F20">Raspberry Pi Pico</text>
-<text x="44" y="680" font-size="19" fill="#505658">Watchdog / Encoders / PWM</text>
-<text x="44" y="714" font-size="19" fill="#505658">3-wheel omni drive</text>
-<text x="26" y="795" font-size="16" fill="#61676A">Server AI never directly drives the motors.</text>
-</g></svg>
+ <g fill="#181B1C" stroke="#5B605F" stroke-width="1.4">
+ <rect x="34" y="139" width="532" height="206"/>
+ <rect x="34" y="398" width="532" height="206"/>
+ <rect x="34" y="657" width="532" height="206"/>
+ </g>
+ <g font-size="15" letter-spacing="2" fill="#B7BDBB">
+  <text x="56" y="174">01 / SENSING &amp; REQUESTS</text>
+  <text x="56" y="433">02 / DECISION &amp; SAFETY</text>
+  <text x="56" y="692">03 / ACTUATION</text>
+ </g>
+ <g font-size="28" fill="#F2F1ED" font-weight="600">
+  <text x="56" y="216">Sensors &amp; User</text>
+  <text x="56" y="475">Raspberry Pi 5</text>
+  <text x="56" y="734">Raspberry Pi Pico</text>
+ </g>
+ <g font-size="21" fill="#CAD0CE">
+  <text x="56" y="257">LiDAR / ToF / Camera</text>
+  <text x="56" y="287">Voice / Manual / Server request</text>
+  <text x="56" y="516">ROS 2 navigation / follow</text>
+  <text x="56" y="546">Command mux / safety override</text>
+  <text x="56" y="775">Encoder / PWM / watchdog</text>
+  <text x="56" y="805">3-wheel omni drive</text>
+ </g>
+ <g fill="none" stroke="#B3B8B5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M300 352V384M290 374L300 384L310 374"/>
+  <path d="M300 611V643M290 633L300 643L310 633"/>
+ </g>
+ <text x="34" y="905" fill="#AEB4B0" font-size="15">High-level AI requests never directly actuate motors.</text>
+</g>
+</svg>
