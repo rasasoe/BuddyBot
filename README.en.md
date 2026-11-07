@@ -7,7 +7,7 @@
 
 <div align="center">
   <img src="docs/assets/portfolio/buddybot-banner.svg" width="100%" alt="BuddyBot ROS 2 mobile robot"/>
-  <p><strong>Vision · Navigation · Voice · Embedded Motor Control</strong></p>
+  <p><strong>Home AI serving robot concept · Indoor navigation and interaction prototype</strong></p>
   <p>
     <img alt="ROS 2" src="https://img.shields.io/badge/ROS_2-Jazzy-22314E?logo=ros&logoColor=white"/>
     <img alt="Raspberry Pi" src="https://img.shields.io/badge/Raspberry_Pi-5-A22846?logo=raspberrypi&logoColor=white"/>
@@ -23,14 +23,23 @@
 </tr>
 </table>
 
-## Development period and validation
+## Project origin and development goals
 
 **Development period:** March 2025–June 2026 · **Three-person team; team lead, architecture, and integration**
 
-**Validation question:** Can ROS 2 perception/navigation and a 50 Hz microcontroller motor/safety loop be separated while retaining **real-hardware navigation, command arbitration, person following, and emergency stopping**?
+**Original concept:** Build a home AI serving robot that could respond to spoken requests, perceive an indoor environment, avoid obstacles, navigate to locations, and follow people when needed. We broke this goal into the capabilities required for a functional mobile robot prototype.
 
-- **Demonstrated:** Checkpoint navigation, obstacle avoidance, person following, voice/manual control, and software emergency stop on the physical robot.
-- **Boundary:** The demonstrations validate integrated behavior, not safety under every hardware or sensor-failure scenario.
+| Required capability | Selected approach |
+| --- | --- |
+| Indoor sensing and obstacle avoidance | LiDAR, ToF sensors, ROS 2 navigation |
+| Object and person recognition | Camera-based detection and person following |
+| Spoken interaction | Microphone, speech-to-text, voice commands and responses |
+| Motion and stopping | Three-wheel omni drive, encoders, command mux, watchdog |
+| Integration | Raspberry Pi 5 for perception/navigation; Pico for motor control over UART |
+
+**Built and demonstrated:** Checkpoint navigation, obstacle avoidance, person following, voice/manual control, and software emergency stop on the physical robot.
+
+**Boundary:** This is a prototype of indoor mobility, perception, and interaction features. End-to-end physical item carrying/delivery and consumer-grade reliability or safety have not been demonstrated.
 
 ## The engineering problem
 
